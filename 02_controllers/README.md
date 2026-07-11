@@ -118,16 +118,19 @@ u(t) = u_LQG(x̂) + α · c_lock(t) · NN_FF(φ̂(t), x̂)
 ```
 
 **New components** (`darc_mpc_v4_plad_controller.py`):
-1. **`SpindlePhaseObserver`** — band-pass + digital PLL locks onto the
-   tooth-passing fundamental in the displacement signal (sensorless,
-   pull-in ±7 %, lock ≈ 0.1 s).
+1. **`SpindlePhaseObserver`** — band-pass (Q = 4) + digital PLL locks onto
+   the tooth-passing fundamental in the displacement signal (sensorless;
+   PLL frequency clamp = pull-in range ±7 %; lock time measured per
+   scenario as `t_lock_s` in `results_gap_sync/metrics.json`, ≈ 0.1 s).
 2. **Model-based phase referencing** — closed-loop FRF from the cutting
    force fundamental to the sensor, scheduled over tool position
    (`enable_gs` solver hook) and frequency; one-shot calibration at
    nominal absorbs residual bias.
 3. **Confidence gating** — PLL lock quality (amplitude-independent
    cos Δθ metric) scales the feedforward continuously; falls back to
-   pure LQG when lock is lost. Replaces the inert v3 adaptation.
+   pure LQG when lock is lost, and clamp saturation is detected
+   explicitly so offsets beyond the pull-in range retract the
+   feedforward (no pseudo-lock). Replaces the inert v3 adaptation.
 
 ```python
 from darc_mpc_v4_plad_controller import DARC_MPC_v4_PLAD_Controller
@@ -146,5 +149,6 @@ v4.reset_runtime()                            # before each deployment run
 ```
 
 **Result** (steady state, `main_gap_spindle_sync.py`): a 1–2.5 % spindle
-speed error erases the whole v3 feedforward benefit (+4.6 % → ≈0 %),
-while v4 retains it (+4.6…+6.8 %) at zero cost at nominal speed.
+speed error erases the v3 feedforward benefit (+4.6…4.9 % → −0.3…+1.0 %),
+while v4 retains it (+4.7…+6.8 %) with no steady-state cost at nominal
+speed; beyond the ±7 % pull-in range v4 falls back to the LQG baseline.

@@ -21,10 +21,32 @@ Scenario matrix
      realised by the discrete simulation (the disturbance period is
      exactly n_per_act·dt).
   B. Sinusoidal spindle-speed fluctuation ±1 % @ 2 Hz (untiled,
-     phase-continuous coefficients), ap = 0.3 mm, T = 1 s.
+     phase-continuous coefficients), ap = 0.3 mm, T = 1 s.  B2 repeats
+     with the opposite modulation sign, so the clock/disturbance
+     misalignment is exercised on BOTH sides.
   C. Long pass (T = 4 s) with +2.5 % offset, ap = 0.3 mm — sustained
      lock while the tool travels along the plate (position-scheduled
      phase reference).
+  D. δ = +2.5 % WITH realistic sensor noise (0.1 µm RMS) and 50 µs
+     sensor delay (actuator kept near-ideal) — exercises the phase
+     observer on a noisy measurement.
+  E. δ = +9.3 % — beyond the PLL pull-in range (±7 %): the confidence
+     gate must retract the feedforward (graceful fallback to LQG),
+     while v3 keeps injecting at a drifting wrong phase.
+
+Disclosures (see also docs/research_gap.md §5):
+  * A1/A5 are BY CONSTRUCTION the training condition of the NN (the
+    experiment isolates what happens when deployment deviates from it);
+  * the steady-state window t > T_STEADY excludes both the mechanical
+    transient and the v4 lock-in (~0.1 s, measured as t_lock in
+    metrics.json); full-window numbers are stored alongside;
+  * windows are not integer multiples of the beat period, so v3 gains
+    within ±1 % of zero should be read as "benefit erased", not as a
+    precise below-baseline margin;
+  * v4 uses two pieces of known process data that v3 does not: the
+    nominal alpha3(φ) profile (phase-reference model) and the commanded
+    tool position x_p (position scheduling).  Neither requires extra
+    sensors.  A seed-sensitivity appendix (3 NN seeds) is included.
 
 Controllers
 -----------
@@ -62,6 +84,7 @@ from lqg_controller import LQGController
 from darc_mpc_v3_controller import DARC_MPC_v3_Controller
 from darc_mpc_v4_plad_controller import DARC_MPC_v4_PLAD_Controller
 from newmark_solver import NewmarkSimulator
+from piezo_actuator import PiezoActuator
 
 # ============================================================
 # Physical parameters (identical to main_simulation.py)
@@ -178,15 +201,32 @@ def reset_v3(v3):
     v3.history_phase = []; v3.history_safety = []
 
 
-def run_all(sim, kp_idx, a3, a4, lqg, v3, v4):
+def make_noisy_sensor():
+    """Near-ideal actuator + realistic sensor (noise 0.1 µm RMS, 50 µs)."""
+    return PiezoActuator(V_max=150.0, V_min=-150.0,
+                         slew_rate=1e9, omega_amp=2*np.pi*1e6,
+                         hysteresis_pct=0.0,
+                         sensor_noise_rms=1e-7, sensor_delay=50e-6,
+                         dt=DT, verbose=False)
+
+
+def run_all(sim, kp_idx, a3, a4, lqg, v3, v4, noisy_sensor=False,
+            noise_seed=1234):
+    piezo = make_noisy_sensor() if noisy_sensor else None
+
+    def _sim(ctrl):
+        rng = np.random.default_rng(noise_seed)      # same noise for all
+        return sim.simulate(a3, a4, kp_idx, controller=ctrl,
+                            piezo=piezo, rng=rng, progress=False)
+
     res = {}
-    res["LQG"] = sim.simulate(a3, a4, kp_idx, controller=lqg, progress=False)
+    res["LQG"] = _sim(lqg)
     reset_v3(v3)
-    res["DARC v3"] = sim.simulate(a3, a4, kp_idx, controller=v3, progress=False)
+    res["DARC v3"] = _sim(v3)
     res["DARC v3"]["u_ff"] = np.array(v3.history_u_ff)
     res["DARC v3"]["phase_used"] = np.array(v3.history_phase)
     v4.reset_runtime()
-    res["DARC v4"] = sim.simulate(a3, a4, kp_idx, controller=v4, progress=False)
+    res["DARC v4"] = _sim(v4)
     res["DARC v4"]["u_ff"] = np.array(v4.history_u_ff)
     res["DARC v4"]["phase_used"] = np.array(v4.history_phase_est)
     res["DARC v4"]["conf"] = np.array(v4.history_conf)
@@ -210,6 +250,8 @@ def metrics_of(res, T_end):
         }
         if "conf" in r:
             m["conf_mean"] = float(r["conf"][i0:].mean())
+            locked = np.nonzero(r["conf"] > 0.9)[0]
+            m["t_lock_s"] = float((locked[0]+1)*DT) if len(locked) else None
         out[name] = m
     for name in ("DARC v3", "DARC v4"):
         out[name]["gain_vs_LQG_pct"] = float(
@@ -322,6 +364,21 @@ print(f"  B : LQG {m_b['LQG']['y_rms_steady_um']:.4f} µm | "
       f"({m_b['DARC v4']['gain_vs_LQG_pct']:+.1f}%)  "
       f"conf={m_b['DARC v4'].get('conf_mean', 0):.2f}")
 
+# B2 : opposite modulation sign (misalignment on the other side)
+sim_b2, kp_b2, a3_b2, a4_b2, _ = setup_ssv(c["plate"], ap, N_PER_NOM,
+                                           A_ssv=-0.01, f_ssv=2.0,
+                                           T_end=1.0)
+res_b2 = run_all(sim_b2, kp_b2, a3_b2, a4_b2, c["lqg"], c["v3"], c["v4"])
+m_b2 = metrics_of(res_b2, 1.0)
+all_metrics["B2  ap=0.3  SSV ∓1% @2Hz"] = dict(ap_mm=0.3, delta_pct="∓1 sin",
+                                               **m_b2)
+print(f"  B2: LQG {m_b2['LQG']['y_rms_steady_um']:.4f} µm | "
+      f"v3 {m_b2['DARC v3']['y_rms_steady_um']:.4f} "
+      f"({m_b2['DARC v3']['gain_vs_LQG_pct']:+.1f}%) | "
+      f"v4 {m_b2['DARC v4']['y_rms_steady_um']:.4f} "
+      f"({m_b2['DARC v4']['gain_vs_LQG_pct']:+.1f}%)  "
+      f"conf={m_b2['DARC v4'].get('conf_mean', 0):.2f}")
+
 
 # ============================================================
 # Phase C : long pass with offset (position-scheduled reference)
@@ -344,9 +401,102 @@ print(f"  C : LQG {m_c['LQG']['y_rms_steady_um']:.4f} µm | "
 
 
 # ============================================================
+# Phase D : sensor noise + delay (δ = +2.5 %)
+# ============================================================
+print("\n" + "="*72)
+print(" D. δ = +2.5 % with sensor noise 0.1 µm RMS + 50 µs delay")
+print("="*72)
+
+sim_d, kp_d, a3_d, a4_d, _ = setup_const(c["plate"], ap, 80, 0.5)
+res_d = run_all(sim_d, kp_d, a3_d, a4_d, c["lqg"], c["v3"], c["v4"],
+                noisy_sensor=True)
+m_d = metrics_of(res_d, 0.5)
+all_metrics["D   ap=0.3  δ=+2.5%  noisy"] = dict(ap_mm=0.3, delta_pct=2.5,
+                                                 **m_d)
+print(f"  D : LQG {m_d['LQG']['y_rms_steady_um']:.4f} µm | "
+      f"v3 {m_d['DARC v3']['y_rms_steady_um']:.4f} "
+      f"({m_d['DARC v3']['gain_vs_LQG_pct']:+.1f}%) | "
+      f"v4 {m_d['DARC v4']['y_rms_steady_um']:.4f} "
+      f"({m_d['DARC v4']['gain_vs_LQG_pct']:+.1f}%)  "
+      f"conf={m_d['DARC v4'].get('conf_mean', 0):.2f}")
+
+
+# ============================================================
+# Phase E : beyond the pull-in range (graceful fallback)
+# ============================================================
+print("\n" + "="*72)
+print(" E. δ = +9.3 % — beyond PLL pull-in (±7 %): fallback to LQG")
+print("="*72)
+
+sim_e, kp_e, a3_e, a4_e, _ = setup_const(c["plate"], ap, 75, 0.5)
+res_e = run_all(sim_e, kp_e, a3_e, a4_e, c["lqg"], c["v3"], c["v4"])
+m_e = metrics_of(res_e, 0.5)
+all_metrics["E   ap=0.3  δ=+9.3%"] = dict(ap_mm=0.3, delta_pct=9.33, **m_e)
+ff_e = np.sqrt(np.mean(np.array(res_e["DARC v4"]["u_ff"])
+                       [int(T_STEADY/DT):]**2))
+print(f"  E : LQG {m_e['LQG']['y_rms_steady_um']:.4f} µm | "
+      f"v3 {m_e['DARC v3']['y_rms_steady_um']:.4f} "
+      f"({m_e['DARC v3']['gain_vs_LQG_pct']:+.1f}%) | "
+      f"v4 {m_e['DARC v4']['y_rms_steady_um']:.4f} "
+      f"({m_e['DARC v4']['gain_vs_LQG_pct']:+.1f}%)  "
+      f"conf={m_e['DARC v4'].get('conf_mean', 0):.2f}  "
+      f"(v4 FF retracted: u_FF_rms = {ff_e:.3f} V)")
+
+
+# ============================================================
+# Appendix : NN-seed sensitivity (A1 nominal + A3 offset)
+# ============================================================
+print("\n" + "="*72)
+print(" Appendix. NN-seed sensitivity (seeds 42/7/123, A1 and A3)")
+print("="*72)
+
+from darc_mpc_v3_controller import FeedforwardCorrectorNN
+
+seed_table = {}
+c03 = controllers[0.3e-3]
+sim_tr, kp_tr, a3_tr, a4_tr, _ = setup_const(c03["plate"], 0.3e-3,
+                                             N_PER_NOM, 0.5)
+for seed in (42, 7, 123):
+    v3s = DARC_MPC_v3_Controller(c03["plate"], dt=DT,
+                                 ff_lr=0.005, ff_max=10.0, ff_alpha=1.0,
+                                 alpha4_periodic=a4_tr[:N_PER_NOM],
+                                 n_per=N_PER_NOM, safety_alpha=5.0,
+                                 enable_adaptation=True, u_max=150.0,
+                                 verbose=False)
+    v3s.ff_nn = FeedforwardCorrectorNN(v3s.n_x, n_hidden=16, lr=0.005,
+                                       seed=seed, u_FF_max=10.0)
+    v3s.pretrain_iterative_simulation(sim_tr, a3_tr, a4_tr, kp_tr,
+                                      n_iterations=30,
+                                      n_epochs_per_iter=15, verbose=False)
+    v4s = DARC_MPC_v4_PLAD_Controller(c03["plate"], dt=DT,
+                                      alpha3_periodic=a3_tr[:N_PER_NOM],
+                                      ff_lr=0.005, ff_max=10.0,
+                                      ff_alpha=1.0,
+                                      alpha4_periodic=a4_tr[:N_PER_NOM],
+                                      n_per=N_PER_NOM, safety_alpha=5.0,
+                                      u_max=150.0, verbose=False)
+    v4s.copy_feedforward_from(v3s)
+    v4s.calibrate_phase_reference(sim_tr, a3_tr, a4_tr, kp_tr,
+                                  T_cal=0.35, t_lock=0.15, verbose=False)
+    row = {}
+    for scen, n_act in (("A1", 82), ("A3", 80)):
+        sim_s, kp_s, a3_s, a4_s, _ = setup_const(c03["plate"], 0.3e-3,
+                                                 n_act, 0.5)
+        res_s = run_all(sim_s, kp_s, a3_s, a4_s, c03["lqg"], v3s, v4s)
+        m_s = metrics_of(res_s, 0.5)
+        row[scen] = {n: m_s[n]["gain_vs_LQG_pct"]
+                     for n in ("DARC v3", "DARC v4")}
+        print(f"  seed {seed:>3} {scen}: "
+              f"v3 {row[scen]['DARC v3']:+.1f}%  "
+              f"v4 {row[scen]['DARC v4']:+.1f}%")
+    seed_table[seed] = row
+all_metrics["_seed_sensitivity"] = seed_table
+
+
+# ============================================================
 # FIGURE 1 : steady-state RMS + gain over the scenario matrix
 # ============================================================
-labels = list(all_metrics.keys())
+labels = [k for k in all_metrics if not k.startswith("_")]
 short = [l.split()[0] for l in labels]
 x = np.arange(len(labels))
 w = 0.26
@@ -533,12 +683,18 @@ with open(f"{OUT_DIR}/metrics.json", "w") as f:
     json.dump(all_metrics, f, indent=2)
 
 lines = ["# Spindle-speed uncertainty experiment — summary", "",
-         "Steady-state window: t > %.2f s.  Gains are RMS reduction vs "
-         "the LQG baseline of the SAME scenario." % T_STEADY, "",
+         "Steady-state window: t > %.2f s (excludes the mechanical "
+         "transient AND the v4 lock-in, measured as t_lock below); "
+         "full-record RMS is reported alongside. Gains are RMS reduction "
+         "vs the LQG baseline of the SAME scenario." % T_STEADY, "",
          "| Scenario | ap (mm) | δ speed | LQG (µm) | v3 (µm) | v3 gain | "
-         "v4 (µm) | v4 gain | v4 conf |",
-         "|---|---|---|---|---|---|---|---|---|"]
+         "v4 (µm) | v4 gain | v4 conf | v4 t_lock (s) | "
+         "u_rms L/v3/v4 (V) | full-RMS L/v3/v4 (µm) |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
 for l, m in all_metrics.items():
+    if l.startswith("_"):
+        continue
+    t_lock = m['DARC v4'].get('t_lock_s')
     lines.append(
         f"| {l} | {m['ap_mm']:.1f} | {m['delta_pct']} | "
         f"{m['LQG']['y_rms_steady_um']:.4f} | "
@@ -546,7 +702,38 @@ for l, m in all_metrics.items():
         f"{m['DARC v3']['gain_vs_LQG_pct']:+.1f}% | "
         f"{m['DARC v4']['y_rms_steady_um']:.4f} | "
         f"{m['DARC v4']['gain_vs_LQG_pct']:+.1f}% | "
-        f"{m['DARC v4'].get('conf_mean', float('nan')):.2f} |")
+        f"{m['DARC v4'].get('conf_mean', float('nan')):.2f} | "
+        f"{f'{t_lock:.3f}' if t_lock is not None else '—'} | "
+        f"{m['LQG']['u_rms_V']:.2f}/{m['DARC v3']['u_rms_V']:.2f}/"
+        f"{m['DARC v4']['u_rms_V']:.2f} | "
+        f"{m['LQG']['y_rms_full_um']:.4f}/"
+        f"{m['DARC v3']['y_rms_full_um']:.4f}/"
+        f"{m['DARC v4']['y_rms_full_um']:.4f} |")
+
+lines += ["", "## NN-seed sensitivity (gain vs LQG, steady window)", "",
+          "| Seed | A1 v3 | A1 v4 | A3 v3 | A3 v4 |", "|---|---|---|---|---|"]
+for seed, row in all_metrics.get("_seed_sensitivity", {}).items():
+    lines.append(f"| {seed} | {row['A1']['DARC v3']:+.1f}% | "
+                 f"{row['A1']['DARC v4']:+.1f}% | "
+                 f"{row['A3']['DARC v3']:+.1f}% | "
+                 f"{row['A3']['DARC v4']:+.1f}% |")
+
+lines += ["", "## Disclosures", "",
+          "- A1/A5 are by construction the NN training condition "
+          "(train-on-test): they serve as the v3 best case, not as a "
+          "generalisation test.",
+          "- Windows are not integer multiples of the beat/modulation "
+          "period; v3 gains within ±1 % of zero mean 'benefit erased', "
+          "not a precise below-baseline margin.",
+          "- v4 additionally uses the nominal alpha3(φ) profile and the "
+          "commanded tool position x_p — known process data, no extra "
+          "sensors.",
+          "- Scenario E is outside the PLL pull-in range by design: the "
+          "confidence gate retracts the feedforward (u_FF → 0) and v4 "
+          "coincides with the LQG baseline.",
+          "- Single deterministic run per scenario (plant and noise "
+          "seeds fixed); NN-seed sensitivity above bounds the training "
+          "variability."]
 with open(f"{OUT_DIR}/summary.md", "w") as f:
     f.write("\n".join(lines) + "\n")
 

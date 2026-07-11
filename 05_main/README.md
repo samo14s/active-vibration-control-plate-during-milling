@@ -8,6 +8,7 @@ This directory contains the **main entry points** for running the simulation.
 |---|---|---|
 | `main_simulation.py` | Full LQG vs DARC-MPC comparison | Console + figs |
 | `main_realistic_piezo.py` | Same but with piezo non-linearities | Console + figs |
+| `main_gap_spindle_sync.py` | Spindle-speed-uncertainty experiment (v3 vs v4 PLAD) | `results_gap_sync/` |
 
 ## main_simulation.py
 
@@ -131,14 +132,18 @@ uncertainty and demonstrates the v4 PLAD fix (see `docs/research_gap.md`).
 Scenarios (controllers designed/trained at nominal speed only):
 - **A1–A6** — constant effective speed offsets 0 / ±1.2 / +2.5 % at
   a_p = 0.3 and 0.6 mm (tiled periodic coefficients);
-- **B** — sinusoidal spindle-speed fluctuation ±1 % @ 2 Hz
-  (phase-continuous coefficients), T = 1 s;
+- **B / B2** — sinusoidal spindle-speed fluctuation ±1 % @ 2 Hz, both
+  modulation signs (phase-continuous coefficients), T = 1 s;
 - **C** — long pass T = 4 s with +2.5 % offset (sustained lock while the
-  tool advances; position-scheduled phase reference).
+  tool advances; position-scheduled phase reference);
+- **D** — +2.5 % offset with sensor noise 0.1 µm RMS + 50 µs delay;
+- **E** — +9.3 % offset, beyond the PLL pull-in range (graceful
+  fallback to LQG via the pseudo-lock guard);
+- **Appendix** — NN-seed sensitivity (seeds 42/7/123 on A1 and A3).
 
 ```bash
-python 05_main/main_gap_spindle_sync.py   # ~1 min, writes results_gap_sync/
-python 03_analysis/validate_phase_observer.py   # phase-observer test suite
+python 05_main/main_gap_spindle_sync.py   # ~2 min, writes results_gap_sync/
+python 03_analysis/validate_phase_observer.py   # test suite (12 checks)
 ```
 
 Outputs: `results_gap_sync/` — 5 figures, `metrics.json`, `summary.md`.

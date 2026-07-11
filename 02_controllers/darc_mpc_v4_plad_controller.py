@@ -10,8 +10,10 @@ darc_mpc_v4_plad_controller.py
    ║         with  φ_clock = 2π (k mod n_per) / n_per                 ║
    ║         → OPEN-LOOP clock. Assumes the tooth-passing period      ║
    ║           is EXACTLY known and constant. Any real spindle-speed  ║
-   ║           deviation (1–3 % droop under load, speed fluctuation,  ║
-   ║           deliberate spindle-speed variation) desynchronises     ║
+   ║           deviation (slip/droop on the order of a few percent    ║
+   ║           for induction spindles at load, fluctuation from       ║
+   ║           interrupted cutting torque, or deliberate spindle-     ║
+   ║           speed variation) desynchronises                        ║
    ║           the learned feedforward, which then injects a          ║
    ║           periodic voltage at the WRONG phase — performance      ║
    ║           degrades toward, and below, the LQG baseline.          ║
@@ -119,6 +121,7 @@ class SpindlePhaseObserver:
         self.y1 = 0.0; self.y2 = 0.0      # biquad output delay line
         self.theta = 0.0
         self.omega = self.omega_nom
+        self.omega_sat = False            # pull-in clamp saturated
         self.e_lpf = 0.0                  # quadrature branch (phase error)
         self.i_lpf = 0.0                  # in-phase branch (lock metric)
         self.env = 0.0                    # rectified-mean envelope
@@ -153,10 +156,14 @@ class SpindlePhaseObserver:
         self.i_lpf += self.beta_lpf*( s*np.cos(self.theta) - self.i_lpf)
 
         # 4. PI loop
-        self.omega += self.Ki*self.e_lpf*self.dt
+        omega_free = self.omega + self.Ki*self.e_lpf*self.dt
         lo = self.omega_nom*(1 - self.omega_pull)
         hi = self.omega_nom*(1 + self.omega_pull)
-        self.omega = min(max(self.omega, lo), hi)
+        self.omega = min(max(omega_free, lo), hi)
+        # a persistently saturated integrator = pseudo-lock: the
+        # proportional branch can still hold a static phase error with
+        # cos(Δθ) high, so lock quality alone would not detect it
+        self.omega_sat = (omega_free < lo) or (omega_free > hi)
         self.theta += (self.omega + self.Kp*self.e_lpf)*self.dt
         self.theta %= 2*np.pi
 
@@ -170,7 +177,9 @@ class SpindlePhaseObserver:
         mag_ok = min(max((2*r - 0.30)/0.30, 0.0), 1.0)
         c_raw = min(max((lock_dir - 0.50)/0.40, 0.0), 1.0)*mag_ok
         self.n_steps += 1
-        if self.n_steps < self.warmup_steps or self.env*np.pi/2 < self.amp_min:
+        if (self.n_steps < self.warmup_steps
+                or self.env*np.pi/2 < self.amp_min
+                or self.omega_sat):
             c_raw = 0.0
         self.conf += self.beta_cnf*(c_raw - self.conf)
 
@@ -386,11 +395,22 @@ class DARC_MPC_v4_PLAD_Controller(DARC_MPC_v3_Controller):
 
     # ---------------------------------------------------------------
     def copy_feedforward_from(self, other):
-        """Import trained NN weights (e.g. from a v3 controller)."""
-        self.ff_nn.W1 = other.ff_nn.W1.copy()
-        self.ff_nn.b1 = other.ff_nn.b1.copy()
-        self.ff_nn.W2 = other.ff_nn.W2.copy()
-        self.ff_nn.b2 = other.ff_nn.b2.copy()
+        """Import the trained feedforward NN (e.g. from a v3 controller).
+
+        Copies the full inference state: weights AND the saturation /
+        input-scaling constants the weights were trained against.
+        """
+        src = other.ff_nn
+        if src.n_x != self.ff_nn.n_x or src.n_hidden != self.ff_nn.n_hidden:
+            raise ValueError("feedforward NN architecture mismatch")
+        self.ff_nn.W1 = src.W1.copy()
+        self.ff_nn.b1 = src.b1.copy()
+        self.ff_nn.W2 = src.W2.copy()
+        self.ff_nn.b2 = src.b2.copy()
+        self.ff_nn.u_FF_max = src.u_FF_max
+        self.ff_nn.scale_pos = src.scale_pos
+        self.ff_nn.scale_vel = src.scale_vel
+        self.ff_nn.lr = src.lr
 
     # ---------------------------------------------------------------
     def calibrate_phase_reference(self, simulator, alpha3_t, alpha4_t,
@@ -405,6 +425,7 @@ class DARC_MPC_v4_PLAD_Controller(DARC_MPC_v3_Controller):
         portion.  Absorbs every systematic bias of the phase-reference
         model (neglected regenerative coupling, filter transients, …).
         """
+        phase_cal_prev = self.phase_cal
         self.training_mode = True
         self.reset_runtime()
         self.phase_cal = 0.0
@@ -417,10 +438,14 @@ class DARC_MPC_v4_PLAD_Controller(DARC_MPC_v3_Controller):
         k_lock = int(t_lock/self.dt)
         buf = np.array([d for k, d in self._cal_buf if k >= k_lock])
         if len(buf) == 0:
+            # failed re-calibration must not destroy a previous good value
+            self.phase_cal = phase_cal_prev
+            self.reset_runtime()
             if verbose:
                 print("  [v4-PLAD] calibration FAILED: PLL never locked "
                       f"({len(self._cal_buf)} locked samples, none after "
-                      f"t = {t_lock:.2f} s)")
+                      f"t = {t_lock:.2f} s) — keeping previous φ_cal = "
+                      f"{np.degrees(phase_cal_prev):+.1f}°")
             return None
         cal = float(np.angle(np.mean(np.exp(1j*buf))))
         spread = float(np.sqrt(-2*np.log(

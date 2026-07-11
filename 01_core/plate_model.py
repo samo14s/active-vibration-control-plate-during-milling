@@ -111,8 +111,13 @@ class PlateModel:
         if self.verbose:
             print(f"[PlateModel] Analyse modale ({self.n_modes} modes)...")
         # eigsh résout Kx = lambda*M x ; on demande les + petits modes (sigma=0)
+        # v0 fixé pour la reproductibilité run-to-run (sinon ARPACK part d'un
+        # vecteur aléatoire et le SIGNE des modes propres peut basculer entre
+        # deux exécutions ; les synthèses linéaires/quadratiques y sont
+        # invariantes, mais pas l'entraînement du feedforward NN)
+        v0 = np.ones(self.K_free.shape[0])
         w2, V = eigsh(self.K_free.tocsc(), k=self.n_modes, M=self.M_free.tocsc(),
-                      sigma=0, which='LM')
+                      sigma=0, which='LM', v0=v0)
         order = np.argsort(np.real(w2))
         w2 = np.real(w2[order])
         V  = np.real(V[:, order])

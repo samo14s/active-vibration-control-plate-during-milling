@@ -347,21 +347,27 @@ Measured impact (steady state, identical trained NN weights,
 
 | Speed error (effective) | DARC v3 gain vs LQG | DARC v4 gain vs LQG |
 |---|---:|---:|
-| 0 % (nominal, ap=0.3) | +4.6 % | +4.6 % |
-| +1.23 % | −0.2 % | +4.6 % |
-| +2.50 % | +0.7 % | +5.5 % |
-| −1.20 % | −0.3 % | +4.7 % |
-| ±1 % sinusoidal @ 2 Hz | −0.6 % | +5.1 % |
-| +2.5 %, long pass 4 s | +0.7 % | +6.8 % |
+| 0 % (nominal, ap=0.3) | +4.6 % | +4.7 % |
+| +1.23 % | −0.1 % | +4.7 % |
+| +2.50 % | +0.8 % | +5.6 % |
+| −1.20 % | −0.2 % | +4.8 % |
+| ±1 % sinusoidal @ 2 Hz | −0.3 % | +5.1 % |
+| +2.5 %, long pass 4 s | +0.8 % | +6.8 % |
+| +2.5 %, noisy sensor (0.1 µm RMS) | +1.0 % | +5.6 % |
+| +9.3 % (beyond pull-in ±7 %) | +1.7 % | −0.1 % (graceful fallback to LQG) |
 
-A 1–2.5 % spindle-speed error **erases the entire learned-feedforward
-benefit** of v3; v4 retains it fully (lock confidence 0.98–1.00) at zero
-cost at nominal speed. Full analysis and literature grounding:
-`docs/research_gap.md`; reproducible via:
+A 1–2.5 % spindle-speed error **erases the learned-feedforward benefit**
+of v3 (and wastes control effort injecting at the wrong phase); v4
+retains the benefit consistently (lock confidence 0.98–1.00, measured
+lock time 0.15–0.17 s) with no steady-state cost at nominal speed.
+Beyond the PLL pull-in range the confidence gate retracts the
+feedforward and v4 coincides with the LQG baseline. Full analysis,
+disclosures and literature grounding: `docs/research_gap.md`;
+reproducible via:
 
 ```bash
-python 05_main/main_gap_spindle_sync.py         # ~1 min
-python 03_analysis/validate_phase_observer.py   # test suite
+python 05_main/main_gap_spindle_sync.py         # ~2 min
+python 03_analysis/validate_phase_observer.py   # test suite (12 checks)
 ```
 
 ---

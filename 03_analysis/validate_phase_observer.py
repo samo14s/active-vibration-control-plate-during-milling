@@ -12,7 +12,11 @@ T2 : closed-loop simulation at NOMINAL speed — after the one-shot
      true clock 2π(k mod n_per)/n_per to a few degrees.
 T3 : closed-loop with a constant spindle-speed offset — same check
      against the ACTUAL clock (n_per_act), plus RMS comparison
-     LQG / v3 / v4.
+     LQG / v3 / v4 (v4 must beat both the desynchronised v3 AND the
+     LQG baseline).
+T4 : offset beyond the PLL pull-in range (±7 %) — the pull-in clamp
+     saturation must be detected as pseudo-lock: confidence → 0, the
+     feedforward retracts, and v4 does not fall below the LQG baseline.
 
 Pass criteria printed at the end (exit code 1 on failure).
 """
@@ -195,8 +199,28 @@ for n_act in (80, 83):
     rL = np.sqrt(np.mean(resLm['y'][I0:]**2))*1e6
     r3 = np.sqrt(np.mean(res3m['y'][I0:]**2))*1e6
     r4 = np.sqrt(np.mean(res4m['y'][I0:]**2))*1e6
-    check(f"T3 v4 beats desynchronised v3 (n_per={n_act})", r4 < r3,
+    check(f"T3 v4 beats desynchronised v3 AND LQG (n_per={n_act})",
+          r4 < r3 and r4 < rL,
           f"y_rms LQG {rL:.4f} / v3 {r3:.4f} / v4 {r4:.4f} µm")
+
+# ================= T4 : beyond pull-in range =================
+print("\n=== T4: offset beyond pull-in (pseudo-lock guard) ===")
+sim_e, kp_e, a3_e, a4_e = setup(75)          # δ = +9.3 % > pull-in ±7 %
+v4.reset_runtime()
+res4e = sim_e.simulate(a3_e, a4_e, kp_e, controller=v4, progress=False)
+resLe = sim_e.simulate(a3_e, a4_e, kp_e, controller=lqg, progress=False)
+conf_e = np.array(v4.history_conf)
+uff_e = np.array(v4.history_u_ff)
+i03 = int(0.3/DT)
+conf_late = conf_e[i03:].mean()
+uff_late = np.sqrt(np.mean(uff_e[i03:]**2))
+rL = np.sqrt(np.mean(resLe['y'][I0:]**2))*1e6
+r4 = np.sqrt(np.mean(res4e['y'][I0:]**2))*1e6
+check("T4 pseudo-lock detected (conf → 0, FF retracted)",
+      conf_late < 0.2 and uff_late < 0.3,
+      f"conf(t>0.3s) = {conf_late:.3f}, u_FF_rms(t>0.3s) = {uff_late:.3f} V")
+check("T4 graceful fallback (v4 within 1% of LQG)", r4 < rL*1.01,
+      f"y_rms LQG {rL:.4f} / v4 {r4:.4f} µm")
 
 print(f"\nTotal {time.time()-t0:.1f} s — "
       f"{'ALL PASS' if not FAILURES else 'FAILURES: ' + ', '.join(FAILURES)}")

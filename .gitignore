@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated flat workspace (recreated by setup_workspace.py)
+workspace/
+figs_article_publication/

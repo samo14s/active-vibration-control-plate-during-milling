@@ -120,3 +120,25 @@ non-linearities, but still very significant).
 2. **For thesis defense**: use `main_realistic_piezo.py` (more realistic)
 3. **For figure regeneration**: use scripts in `04_figures/`
 4. **For SLD analysis only**: use `gen_SLD_academic_style.py` directly
+
+---
+
+## main_gap_spindle_sync.py (research-gap experiment)
+
+Quantifies the sensitivity of the learned feedforward to spindle-speed
+uncertainty and demonstrates the v4 PLAD fix (see `docs/research_gap.md`).
+
+Scenarios (controllers designed/trained at nominal speed only):
+- **A1–A6** — constant effective speed offsets 0 / ±1.2 / +2.5 % at
+  a_p = 0.3 and 0.6 mm (tiled periodic coefficients);
+- **B** — sinusoidal spindle-speed fluctuation ±1 % @ 2 Hz
+  (phase-continuous coefficients), T = 1 s;
+- **C** — long pass T = 4 s with +2.5 % offset (sustained lock while the
+  tool advances; position-scheduled phase reference).
+
+```bash
+python 05_main/main_gap_spindle_sync.py   # ~1 min, writes results_gap_sync/
+python 03_analysis/validate_phase_observer.py   # phase-observer test suite
+```
+
+Outputs: `results_gap_sync/` — 5 figures, `metrics.json`, `summary.md`.

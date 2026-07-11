@@ -1,14 +1,16 @@
 # 02_controllers — Control Algorithms
 
-This directory contains the **two main controllers** compared in the article:
-LQG (baseline) and DARC-MPC (proposed).
+This directory contains the controllers compared in the article:
+LQG (baseline), DARC-MPC v3 (learned feedforward) and DARC-MPC v4 PLAD
+(phase-locked learned feedforward — research-gap contribution).
 
 ## Files
 
 | File | Controller | Key class |
 |---|---|---|
 | `lqg_controller.py` | Linear Quadratic Gaussian | `LQGController` |
-| `darc_mpc_v3_controller.py` | DARC-MPC (proposed novel method) | `DARC_MPC_v3_Controller` |
+| `darc_mpc_v3_controller.py` | DARC-MPC (learned FF, open-loop clock) | `DARC_MPC_v3_Controller` |
+| `darc_mpc_v4_plad_controller.py` | DARC-MPC v4 PLAD (sensorless phase-locked FF) | `DARC_MPC_v4_PLAD_Controller` |
 
 ## LQG Controller
 
@@ -101,3 +103,48 @@ u, x_hat = darc.step(x_hat_prev, u_prev, y_meas, k_step)
 The NN replaces the explicit model predictive control optimization,
 providing similar anticipative behavior at much lower computational cost
 (0.1 µs vs 100+ ms per step).
+
+---
+
+## DARC-MPC v4 — PLAD (Phase-Locked Adaptive DARC)
+
+Addresses the research gap of v3 (see `docs/research_gap.md`): the v3
+feedforward is indexed by an open-loop clock `k mod n_per` that assumes an
+exactly known, constant spindle speed, and its adaptation factor
+(`lambda_robust`) was computed but never applied.
+
+```
+u(t) = u_LQG(x̂) + α · c_lock(t) · NN_FF(φ̂(t), x̂)
+```
+
+**New components** (`darc_mpc_v4_plad_controller.py`):
+1. **`SpindlePhaseObserver`** — band-pass + digital PLL locks onto the
+   tooth-passing fundamental in the displacement signal (sensorless,
+   pull-in ±7 %, lock ≈ 0.1 s).
+2. **Model-based phase referencing** — closed-loop FRF from the cutting
+   force fundamental to the sensor, scheduled over tool position
+   (`enable_gs` solver hook) and frequency; one-shot calibration at
+   nominal absorbs residual bias.
+3. **Confidence gating** — PLL lock quality (amplitude-independent
+   cos Δθ metric) scales the feedforward continuously; falls back to
+   pure LQG when lock is lost. Replaces the inert v3 adaptation.
+
+```python
+from darc_mpc_v4_plad_controller import DARC_MPC_v4_PLAD_Controller
+
+v4 = DARC_MPC_v4_PLAD_Controller(
+    plate, dt=5e-5,
+    alpha3_periodic=a3[:n_per],   # for the phase-reference model
+    ff_lr=0.005, ff_max=10.0, ff_alpha=1.0,
+    alpha4_periodic=a4[:n_per], n_per=n_per,
+    safety_alpha=5.0, u_max=150.0,
+)
+v4.copy_feedforward_from(darc_v3_trained)     # identical NN weights
+v4.calibrate_phase_reference(sim, a3, a4, kp_idx)   # one-shot, nominal
+v4.reset_runtime()                            # before each deployment run
+# NewmarkSimulator passes x_p_now automatically (enable_gs)
+```
+
+**Result** (steady state, `main_gap_spindle_sync.py`): a 1–2.5 % spindle
+speed error erases the whole v3 feedforward benefit (+4.6 % → ≈0 %),
+while v4 retains it (+4.6…+6.8 %) at zero cost at nominal speed.

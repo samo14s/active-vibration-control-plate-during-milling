@@ -19,12 +19,14 @@ article_simulation_package/
 │   └── newmark_solver.py         # Newmark-β time integration
 │
 ├── 02_controllers/        ← Control algorithms
-│   ├── lqg_controller.py         # LQG with Kalman observer
-│   └── darc_mpc_v3_controller.py # DARC-MPC: LQG + NN feedforward
+│   ├── lqg_controller.py              # LQG with Kalman observer
+│   ├── darc_mpc_v3_controller.py      # DARC-MPC: LQG + NN feedforward
+│   └── darc_mpc_v4_plad_controller.py # DARC-MPC v4 PLAD: phase-locked FF ★
 │
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Floquet multipliers (FDM, Insperger-Stépán)
-│   └── uncertainty_analysis.py   # Monte Carlo robustness analysis
+│   ├── uncertainty_analysis.py   # Monte Carlo robustness analysis
+│   └── validate_phase_observer.py # v4 phase-observer test suite ★
 │
 ├── 04_figures/            ← Publication-quality figure generators
 │   ├── gen_article_complete_figures.py    # 14 main figures
@@ -35,10 +37,19 @@ article_simulation_package/
 │
 ├── 05_main/               ← Main simulation scripts
 │   ├── main_simulation.py        # Full LQG vs DARC-MPC comparison
-│   └── main_realistic_piezo.py   # With realistic piezo non-linearities
+│   ├── main_realistic_piezo.py   # With realistic piezo non-linearities
+│   └── main_gap_spindle_sync.py  # Spindle-speed-uncertainty experiment ★
+│
+├── docs/
+│   └── research_gap.md    ← Research-gap analysis + literature grounding ★
+│
+├── results_gap_sync/      ← Output of the research-gap experiment ★
 │
 └── README.md             ← This file
 ```
+
+★ = research-gap contribution (DARC-MPC v4 PLAD), see the section
+"Research-gap contribution" below and `docs/research_gap.md`.
 
 ---
 
@@ -306,6 +317,52 @@ Same pipeline but with realistic piezo non-linearities:
 - Hysteresis modeling
 - Rate-dependent saturation
 - Temperature drift
+
+---
+
+## ⭐ Research-gap contribution — DARC-MPC v4 "PLAD"
+
+The v3 feedforward is indexed by an **open-loop clock** `k mod n_per`
+(exactly known, constant spindle speed assumed) and its adaptation factor
+was computed but never applied. Realistic spindle-speed deviations
+(droop under load, fluctuation, deliberate SSV) desynchronise the learned
+feedforward, which then injects voltage at the wrong phase.
+
+**DARC-MPC v4 PLAD** (`02_controllers/darc_mpc_v4_plad_controller.py`)
+closes this gap with a *sensorless* synchronisation layer:
+
+```
+u(t) = u_LQG(x̂) + α · c_lock(t) · NN_FF(φ̂(t), x̂)
+```
+
+- band-pass + digital **PLL** locks onto the tooth-passing fundamental in
+  the displacement measurement (no spindle encoder);
+- **model-based phase referencing** (closed-loop FRF, scheduled over tool
+  position via the solver's `enable_gs` hook, one-shot calibration);
+- **confidence-gated feedforward**: graceful fallback to pure LQG when
+  lock is lost — the adaptation is actually wired into the control law.
+
+Measured impact (steady state, identical trained NN weights,
+`05_main/main_gap_spindle_sync.py`):
+
+| Speed error (effective) | DARC v3 gain vs LQG | DARC v4 gain vs LQG |
+|---|---:|---:|
+| 0 % (nominal, ap=0.3) | +4.6 % | +4.6 % |
+| +1.23 % | −0.2 % | +4.6 % |
+| +2.50 % | +0.7 % | +5.5 % |
+| −1.20 % | −0.3 % | +4.7 % |
+| ±1 % sinusoidal @ 2 Hz | −0.6 % | +5.1 % |
+| +2.5 %, long pass 4 s | +0.7 % | +6.8 % |
+
+A 1–2.5 % spindle-speed error **erases the entire learned-feedforward
+benefit** of v3; v4 retains it fully (lock confidence 0.98–1.00) at zero
+cost at nominal speed. Full analysis and literature grounding:
+`docs/research_gap.md`; reproducible via:
+
+```bash
+python 05_main/main_gap_spindle_sync.py         # ~1 min
+python 03_analysis/validate_phase_observer.py   # test suite
+```
 
 ---
 

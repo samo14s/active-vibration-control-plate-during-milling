@@ -16,7 +16,9 @@ article_simulation_package/
 │   ├── plate_model.py            # Plate assembly + modal reduction
 │   ├── piezo_actuator.py         # Piezoelectric actuator model (QDA60-200.7)
 │   ├── milling_force.py          # Cutting force model (3-tooth end-mill)
-│   └── newmark_solver.py         # Newmark-β time integration
+│   ├── newmark_solver.py         # Newmark-β time integration (linear)
+│   ├── von_karman_rom.py             # Geometrically nonlinear (von Kármán) ROM ★
+│   └── newmark_nonlinear_solver.py   # Newmark–Newton-Raphson (nonlinear) ★
 │
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py              # LQG with Kalman observer
@@ -26,7 +28,8 @@ article_simulation_package/
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Floquet multipliers (FDM, Insperger-Stépán)
 │   ├── uncertainty_analysis.py   # Monte Carlo robustness analysis
-│   └── validate_phase_observer.py # v4 phase-observer test suite ★
+│   ├── validate_phase_observer.py # v4 phase-observer test suite ★
+│   └── validate_von_karman.py     # von Kármán ROM validation (backbone) ★
 │
 ├── 04_figures/            ← Publication-quality figure generators
 │   ├── gen_article_complete_figures.py    # 14 main figures
@@ -38,12 +41,16 @@ article_simulation_package/
 ├── 05_main/               ← Main simulation scripts
 │   ├── main_simulation.py        # Full LQG vs DARC-MPC comparison
 │   ├── main_realistic_piezo.py   # With realistic piezo non-linearities
-│   └── main_gap_spindle_sync.py  # Spindle-speed-uncertainty experiment ★
+│   ├── main_gap_spindle_sync.py  # Spindle-speed-uncertainty experiment ★
+│   └── main_geometric_nonlinear.py # von Kármán geometric-nonlinearity study ★
 │
 ├── docs/
-│   └── research_gap.md    ← Research-gap analysis + literature grounding ★
+│   ├── research_gap.md          ← Spindle-sync gap (PLAD) + literature ★
+│   ├── verrou_scientifique.md   ← French thesis framing (PLAD) ★
+│   └── verrou_nonlinearite.md   ← French thesis framing (von Kármán) ★
 │
-├── results_gap_sync/      ← Output of the research-gap experiment ★
+├── results_gap_sync/      ← Output of the spindle-sync experiment ★
+├── results_geom_nl/       ← Output of the geometric-nonlinearity study ★
 │
 └── README.md             ← This file
 ```
@@ -320,7 +327,39 @@ Same pipeline but with realistic piezo non-linearities:
 
 ---
 
-## ⭐ Research-gap contribution — DARC-MPC v4 "PLAD"
+## ⭐ Research-gap contribution 2 — Geometric nonlinearity (von Kármán)
+
+Active-control-of-thin-wall-milling models are **linear** (Kirchhoff/Mindlin
++ modal reduction). Yet at aggressive cuts the wall vibrates at a
+significant fraction of its thickness, where von Kármán geometric
+nonlinearity matters. A geometrically nonlinear, **FE-consistent** reduced
+model (`01_core/von_karman_rom.py`, validated against the classical clamped-
+plate backbone ω_nl/ω_l ≈ 1.17 at A/h=1) with a Newmark–Newton-Raphson
+solver shows:
+
+- **Bifurcation**: past the stability limit the *linear* model diverges
+  exponentially, while von Kármán **bounds** the chatter into a **limit
+  cycle** (Hopf) — the linear model cannot predict the post-critical
+  amplitude.
+- **Control**: the same LQG (±150 V) designed on the linear model **diverges
+  on the linear plant** (design would reject the actuator) but is **bounded
+  and stabilised on the true von Kármán plant** — the linear model gives a
+  qualitatively wrong control assessment / actuator sizing.
+- **Criterion**: the effect is strong for an in-plane-restrained "wall"
+  (ω_nl/ω_l=1.27 @ A/h=1) and negligible for a free-edge cantilever
+  (≈1.00) — delineating when linear models suffice.
+
+Aligned with the thesis rapporteur's expertise (nonlinear smart-shell FE).
+Details: `docs/verrou_nonlinearite.md`. Reproduce:
+
+```bash
+python 05_main/main_geometric_nonlinear.py       # ~2 min → results_geom_nl/
+python 03_analysis/validate_von_karman.py        # validation suite
+```
+
+---
+
+## ⭐ Research-gap contribution 1 — DARC-MPC v4 "PLAD"
 
 The v3 feedforward is indexed by an **open-loop clock** `k mod n_per`
 (exactly known, constant spindle speed assumed) and its adaptation factor

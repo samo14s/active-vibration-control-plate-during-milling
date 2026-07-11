@@ -1,0 +1,143 @@
+{
+  "wall_h_mm": 2.0,
+  "membrane_bc": "wall",
+  "rpm": 5600,
+  "freqs_hz": [
+    260.53003869228917,
+    534.9749719007752,
+    1366.5092836006934
+  ],
+  "backbone_ratio": {
+    "A/h=0.5": 1.0737988779312,
+    "A/h=1.0": 1.269714976278226,
+    "A/h=2.0": 1.857068788155373
+  },
+  "ap_crit_linear_mm": 0.15,
+  "bifurcation": [
+    {
+      "ap_mm": 0.05,
+      "lin_unstable": false,
+      "lin_amp_um": 2.7977862704116254,
+      "vk_bounded": true,
+      "vk_amp_um": 2.0444146434896333,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.08,
+      "lin_unstable": false,
+      "lin_amp_um": 3.823338486351777,
+      "vk_bounded": true,
+      "vk_amp_um": 3.197229356938309,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.1,
+      "lin_unstable": false,
+      "lin_amp_um": 4.443380135159084,
+      "vk_bounded": true,
+      "vk_amp_um": 3.935429320797041,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.12000000000000001,
+      "lin_unstable": false,
+      "lin_amp_um": 5.268934157970325,
+      "vk_bounded": true,
+      "vk_amp_um": 4.649288972283414,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.15,
+      "lin_unstable": true,
+      "lin_amp_um": 33789.384723213676,
+      "vk_bounded": true,
+      "vk_amp_um": 156.99830363032711,
+      "vk_steady": false
+    },
+    {
+      "ap_mm": 0.18,
+      "lin_unstable": true,
+      "lin_amp_um": 40739.11428333015,
+      "vk_bounded": true,
+      "vk_amp_um": 510.6435283170291,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.2,
+      "lin_unstable": true,
+      "lin_amp_um": 43651.651652523135,
+      "vk_bounded": true,
+      "vk_amp_um": 718.3004532607175,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.25,
+      "lin_unstable": true,
+      "lin_amp_um": 40018.2516593419,
+      "vk_bounded": true,
+      "vk_amp_um": 9982.145358596043,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.3,
+      "lin_unstable": true,
+      "lin_amp_um": 47300.27918794846,
+      "vk_bounded": true,
+      "vk_amp_um": 12717.433248422942,
+      "vk_steady": true
+    },
+    {
+      "ap_mm": 0.4,
+      "lin_unstable": true,
+      "lin_amp_um": 50514.59357002058,
+      "vk_bounded": true,
+      "vk_amp_um": 16863.69494979634,
+      "vk_steady": false
+    }
+  ],
+  "control": {
+    "ap_mm": 0.2,
+    "open_loop": {
+      "linear": {
+        "unbounded": true,
+        "amp_um": 43651.651652523135,
+        "ymax_um": 43651.651652523135
+      },
+      "von_karman": {
+        "unbounded": false,
+        "amp_um": 718.3004532607175,
+        "ymax_um": 875.5658352564226
+      }
+    },
+    "lqg": {
+      "linear_plant": {
+        "unbounded": true,
+        "amp_um": 44898.66611162727,
+        "ymax_um": 44898.66611162727,
+        "u_max_V": 150.0,
+        "u_rms_V": 105.67767117878591
+      },
+      "von_karman_plant": {
+        "unbounded": false,
+        "amp_um": 670.5185646136408,
+        "ymax_um": 809.2200075564614,
+        "u_max_V": 150.0,
+        "u_rms_V": 136.7558052644647
+      }
+    }
+  },
+  "config_comparison": {
+    "cantilever": {
+      "gamma_1111": 107378661852.30093,
+      "ratio_05": 1.0001658865761733,
+      "ratio_10": 1.000663381304028,
+      "ratio_20": 1.0026508917520807
+    },
+    "wall": {
+      "gamma_1111": 49528721980969.07,
+      "ratio_05": 1.0737988779312,
+      "ratio_10": 1.269714976278226,
+      "ratio_20": 1.857068788155373
+    }
+  }
+}

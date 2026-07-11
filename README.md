@@ -338,16 +338,19 @@ plate backbone ω_nl/ω_l ≈ 1.17 at A/h=1) with a Newmark–Newton-Raphson
 solver shows:
 
 - **Bifurcation**: past the stability limit the *linear* model diverges
-  exponentially, while von Kármán **bounds** the chatter into a **limit
+  (→ cut at 40 mm), while von Kármán **bounds** the chatter into a **limit
   cycle** (Hopf) — the linear model cannot predict the post-critical
-  amplitude.
-- **Control**: the same LQG (±150 V) designed on the linear model **diverges
-  on the linear plant** (design would reject the actuator) but is **bounded
-  and stabilised on the true von Kármán plant** — the linear model gives a
-  qualitatively wrong control assessment / actuator sizing.
-- **Criterion**: the effect is strong for an in-plane-restrained "wall"
-  (ω_nl/ω_l=1.27 @ A/h=1) and negligible for a free-edge cantilever
-  (≈1.00) — delineating when linear models suffice.
+  amplitude. It is the **nonlinearity** that bounds the response.
+- **Control**: the same LQG (±150 V, designed on the linear model) diverges
+  on the linear plant, but the true von Kármán response stays bounded
+  (718 µm open-loop → 670 µm controlled, only ~7 %: the LQG — blind to the
+  regenerative delay — barely helps). The point is that the **linear model
+  gives no finite post-critical amplitude**, so control validation /
+  actuator sizing in this regime *requires* the nonlinear model.
+- **Configuration criterion** (physically consistent → idealised):
+  free-edge cantilever ω_nl/ω_l≈1.00 (negligible), base+2-sides-clamped
+  wall 1.11 (moderate, consistent), sides-in-plane-restrained "slot"
+  idealisation 1.27 (upper bound) — delineating when linear models suffice.
 
 Aligned with the thesis rapporteur's expertise (nonlinear smart-shell FE).
 Details: `docs/verrou_nonlinearite.md`. Reproduce:

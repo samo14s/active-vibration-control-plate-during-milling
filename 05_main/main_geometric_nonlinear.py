@@ -22,15 +22,22 @@ Résultats produits :
      Kármán BORNE la croissance en un CYCLE LIMITE (bifurcation de Hopf).
   B. Traces temporelles + FFT : décalage de fréquence dépendant de
      l'amplitude (raidissement).
-  C. Contrôle actif : le régulateur LQG conçu sur le modèle LINÉAIRE,
-     appliqué à la dynamique non linéaire — le modèle linéaire ne peut
-     PAS représenter le cycle limite (il prédit « instable = ∞ »), le
-     modèle von Kármán donne l'amplitude contrôlée réelle et le
-     dimensionnement correct de l'actionneur.
-  D. Configuration : paroi "wall" (base encastrée + bords latéraux
-     bridés en membrane — nervure flanquée de matière épaisse) vs
-     cantilever pur (3 bords libres) — quantifie QUAND la non-linéarité
-     compte.
+  C. Contrôle actif : le régulateur LQG (conçu sur le modèle LINÉAIRE,
+     saturé à ±150 V) appliqué aux deux dynamiques. Le modèle linéaire
+     prédit une divergence (« instable = ∞ ») ALORS QUE la réponse vraie
+     (von Kármán) est un cycle limite BORNÉ — c'est la NON-LINÉARITÉ, non
+     le régulateur, qui borne (le LQG, aveugle au retard régénératif, ne
+     réduit le cycle que de ~7 %). Le modèle linéaire ne fournit donc
+     AUCUNE amplitude post-critique finie pour valider/dimensionner la
+     commande ; seul le modèle non linéaire le permet.
+  D. Configurations (QUAND la non-linéarité compte), du physiquement
+     cohérent à l'idéalisation :
+       - cantilever (3 bords libres) : raidissement NÉGLIGEABLE ;
+       - paroi 3-bords encastrés (base + 2 côtés) : raidissement MODÉRÉ,
+         BC transverse ET membranaire cohérentes ;
+       - paroi "slot" (flexion cantilever + côtés bridés en membrane
+         seulement) : IDÉALISATION isolant l'étirement membranaire
+         (borne supérieure), utilisée pour rendre le cycle limite visible.
 
 Sortie : results_geom_nl/  (figures + metrics.json)
 """
@@ -89,9 +96,10 @@ COL = {"lin": "#B00020", "vk": "#1E5AA8", "lqg_lin": "#B00020",
        "lqg_vk": "#1E5AA8", "ol": "#777777"}
 
 
-def build_plate(ap, bp=BP):
+def build_plate(ap, bp=BP, clamp_edges="bottom"):
     p = PlateModel(LP, HP, bp, RHO, E_AL, NU_AL, N1=N1, N2=N2,
-                   n_modes=N_MODES, zeta_modes=ZETA, verbose=False)
+                   n_modes=N_MODES, zeta_modes=ZETA,
+                   clamp_edges=clamp_edges, verbose=False)
     p.precompute_Dp(zp_pos=HP - ap/2, n_pos=2001)
     p.set_observation(x_obs=LP, z_obs=HP)
     p.add_piezo_patch(0, 0.020, 0, 0.060, D31, H_PA, E_PE, NU_PE)
@@ -282,26 +290,40 @@ ctrl_metrics = {
 print(f"  open loop     : LIN {'unbounded' if ctrl_metrics['open_loop']['linear']['unbounded'] else 'bounded'}"
       f" (ymax={ctrl_metrics['open_loop']['linear']['ymax_um']:.0f}um) | "
       f"vK limit-cycle A={ctrl_metrics['open_loop']['von_karman']['amp_um']:.0f}um")
+ol_vk = ctrl_metrics['open_loop']['von_karman']['amp_um']
+cl_vk = ctrl_metrics['lqg']['von_karman_plant']['amp_um']
 print(f"  LQG lin plant : amp={ctrl_metrics['lqg']['linear_plant']['amp_um']:.1f}um "
-      f"u_max={ctrl_metrics['lqg']['linear_plant']['u_max_V']:.1f}V "
-      f"({'unbounded' if ctrl_metrics['lqg']['linear_plant']['unbounded'] else 'stabilised'})")
-print(f"  LQG vK  plant : amp={ctrl_metrics['lqg']['von_karman_plant']['amp_um']:.1f}um "
-      f"u_max={ctrl_metrics['lqg']['von_karman_plant']['u_max_V']:.1f}V "
-      f"({'unbounded' if ctrl_metrics['lqg']['von_karman_plant']['unbounded'] else 'stabilised'})")
+      f"u_rms={ctrl_metrics['lqg']['linear_plant']['u_rms_V']:.1f}V "
+      f"({'DIVERGES (no finite target)' if ctrl_metrics['lqg']['linear_plant']['unbounded'] else 'bounded'})")
+print(f"  LQG vK  plant : amp={cl_vk:.1f}um "
+      f"u_rms={ctrl_metrics['lqg']['von_karman_plant']['u_rms_V']:.1f}V "
+      f"(bounded; only {(1-cl_vk/ol_vk)*100:+.1f}% vs open-loop {ol_vk:.0f}um "
+      f"→ nonlinearity bounds, not the LQG)")
 
 
 # ============================================================
 # D. Cantilever vs wall (when does nonlinearity matter?)
 # ============================================================
-print("\n[D] Configuration comparison (cantilever vs wall) ...")
+print("\n[D] Configuration comparison — when does the nonlinearity matter? ...")
+# three configurations, from physically consistent to a bounding idealisation
+CONFIGS = [
+    ("cantilever", dict(clamp="bottom", mem="cantilever"),
+     "base clamped, 3 edges free (standard thin-wall model)"),
+    ("wall_3edge", dict(clamp="bottom_sides", mem="wall"),
+     "base + 2 sides clamped, top free (CONSISTENT wall)"),
+    ("wall_slot", dict(clamp="bottom", mem="wall"),
+     "cantilever bending + sides in-plane restrained "
+     "(IDEALISATION: isolates membrane stretching, upper bound)"),
+]
 config_cmp = {}
-for bc in ("cantilever", "wall"):
-    romc = VonKarmanROM(build_plate(ap_demo), membrane_bc=bc, verbose=False)
+for name, cfg, desc in CONFIGS:
+    romc = VonKarmanROM(build_plate(ap_demo, clamp_edges=cfg["clamp"]),
+                        membrane_bc=cfg["mem"], verbose=False)
     _, r, g = romc.backbone_single_mode(0, [0.5, 1.0, 2.0])
-    config_cmp[bc] = dict(gamma_1111=float(g),
-                          ratio_05=float(r[0]), ratio_10=float(r[1]),
-                          ratio_20=float(r[2]))
-    print(f"  {bc:10s}: Γ_1111={g:.2e}  ω_nl/ω_l(A/h=1)={r[1]:.3f}")
+    config_cmp[name] = dict(desc=desc, gamma_1111=float(g),
+                            ratio_05=float(r[0]), ratio_10=float(r[1]),
+                            ratio_20=float(r[2]))
+    print(f"  {name:11s}: Γ_1111={g:.2e}  ω_nl/ω_l(A/h=1)={r[1]:.3f}  [{desc}]")
 
 
 # ============================================================
@@ -315,12 +337,23 @@ lin_stable_amp = [b['lin_amp_um'] if not b['lin_unstable'] else np.nan
 lin_unst_amp = [b['lin_amp_um'] if b['lin_unstable'] else np.nan
                 for b in bif]
 vk_amp = [b['vk_amp_um'] for b in bif]
+# split von Kármán points: within validity (w/h ≤ 2, steady) vs beyond
+vk_valid = [b['vk_amp_um'] if (b['vk_amp_um']*1e-6/BP <= 2.0 and b['vk_steady'])
+            else np.nan for b in bif]
+vk_beyond = [b['vk_amp_um'] if not (b['vk_amp_um']*1e-6/BP <= 2.0
+             and b['vk_steady']) else np.nan for b in bif]
 ax.semilogy(aps, lin_stable_amp, 'o-', color=COL['ol'],
             label='linear — stable (forced)', markersize=6)
 ax.semilogy(aps, lin_unst_amp, 'v', color=COL['lin'], markersize=9,
             label='linear — UNSTABLE (→ divergence, cut at %.0f mm)' % (THR*1e3))
-ax.semilogy(aps, vk_amp, 's-', color=COL['vk'], markersize=6,
-            label='von Kármán — bounded limit cycle')
+ax.semilogy(aps, vk_valid, 's-', color=COL['vk'], markersize=7,
+            label='von Kármán limit cycle (within validity, w/h≤2)')
+ax.semilogy(aps, vk_beyond, 's', color=COL['vk'], markersize=7,
+            markerfacecolor='none',
+            label='von Kármán (beyond validity / not settled — indicative)')
+ax.axhspan(2*BP*1e6, ax.get_ylim()[1], color='orange', alpha=0.06)
+ax.text(aps[0], 2*BP*1e6*1.2, 'w/h > 2  (von Kármán validity limit)',
+        color='darkorange', fontsize=8)
 if ap_crit is not None:
     ax.axvline(ap_crit, color='k', ls=':', alpha=0.6)
     ax.text(ap_crit, ax.get_ylim()[1]*0.5,
@@ -365,34 +398,40 @@ plt.tight_layout(); plt.savefig(f"{OUT}/fig02_time_traces.png", dpi=170,
 print("  ✓ fig02_time_traces.png")
 
 # Fig 3 : hardening backbone ω_nl/ω_l vs A/h (validated quantity)
-fig, ax = plt.subplots(figsize=(9, 5.4))
+fig, ax = plt.subplots(figsize=(9.2, 5.6))
 ar = np.linspace(0, 2.0, 41)
+curves = [
+    ("wall_slot", COL['vk'], '-',
+     'wall — sides in-plane restrained (idealisation, upper bound)'),
+    ("wall_3edge", "#E8A000", '-',
+     'wall — base + 2 sides clamped (physically consistent)'),
+    ("cantilever", COL['ol'], '-',
+     'cantilever — 3 free edges (standard model)'),
+]
+for name, col, ls, lab in curves:
+    cfg = dict(CONFIGS)[name] if False else \
+        next(c for n, c, d in CONFIGS if n == name)
+    romc = VonKarmanROM(build_plate(ap_demo, clamp_edges=cfg["clamp"]),
+                        membrane_bc=cfg["mem"], verbose=False)
+    _, rr, _ = romc.backbone_single_mode(0, ar)
+    ax.plot(ar, rr, color=col, ls=ls, lw=2.3, label=lab)
+ax.axhline(1.0, color='k', lw=0.8, alpha=0.5)
+# operating limit-cycle amplitude marker (on the idealised-wall curve)
+A_h = ctrl_metrics['open_loop']['von_karman']['amp_um']*1e-6/BP
 rom_wall = VonKarmanROM(build_plate(ap_demo), membrane_bc="wall",
                         verbose=False)
-rom_cant = VonKarmanROM(build_plate(ap_demo), membrane_bc="cantilever",
-                        verbose=False)
-_, rw, _ = rom_wall.backbone_single_mode(0, ar)
-_, rc, _ = rom_cant.backbone_single_mode(0, ar)
-ax.plot(ar, rw, color=COL['vk'], lw=2.2,
-        label='wall (base + sides in-plane restrained)')
-ax.plot(ar, rc, color=COL['ol'], lw=2.2,
-        label='cantilever (3 free edges)')
-ax.axhline(1.0, color='k', lw=0.8, alpha=0.5)
-# operating limit-cycle amplitude marker
-A_h = ctrl_metrics['open_loop']['von_karman']['amp_um']*1e-6/BP
 if A_h <= ar[-1]:
     _, r_op, _ = rom_wall.backbone_single_mode(0, [A_h])
     ax.plot(A_h, r_op[0], '*', color='gold', ms=20, markeredgecolor='k',
             zorder=5, label='operating limit cycle (A/h=%.2f)' % A_h)
-# literature reference for a fully clamped square plate (immovable)
 ax.plot(1.0, 1.17, 'D', color='green', ms=9, markeredgecolor='k',
         label='clamped-plate lit. ref. (≈1.17 @ A/h=1)')
 ax.set_xlabel('vibration amplitude / wall thickness $A/h$', fontsize=12)
 ax.set_ylabel(r'frequency ratio $\omega_{nl}/\omega_{l}$', fontsize=12)
 ax.set_title('Amplitude-dependent stiffening (von Kármán backbone, mode 1)\n'
-             'validated model — hardening depends strongly on the in-plane BC',
-             fontsize=11, fontweight='bold')
-ax.legend(fontsize=9.5, loc='upper left'); ax.grid(True, alpha=0.4)
+             'validated model — hardening spans negligible (free edges) to '
+             'strong (constrained)', fontsize=11, fontweight='bold')
+ax.legend(fontsize=9, loc='upper left'); ax.grid(True, alpha=0.4)
 plt.tight_layout(); plt.savefig(f"{OUT}/fig03_backbone.png", dpi=170,
                                 bbox_inches='tight'); plt.close()
 print("  ✓ fig03_backbone.png")

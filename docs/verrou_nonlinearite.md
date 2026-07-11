@@ -49,8 +49,9 @@ figure pas.
 **(B) Contrôle actif GÉOMÉTRIQUEMENT NON LINÉAIRE (von Kármán) des
 plaques/coques intelligentes FGM/piézolaminées** — littérature abondante et
 mature [8–14] (la spécialité du rapporteur), mais sous chargements
-**thermiques, harmoniques ou aléatoires**, JAMAIS sous l'excitation de
-coupe **régénérative à retard** du fraisage.
+**thermiques, harmoniques ou aléatoires** — et non sous l'excitation de
+coupe **régénérative à retard** du fraisage (à la seule exception, très
+récente, de [6], discutée ci-dessous).
 
 > **Énoncé du verrou.** Le contrôle actif du broutement (chatter) en
 > fraisage des parois minces est traité sur des modèles **linéaires**, qui
@@ -122,57 +123,90 @@ Yamaki), ce qui atteste la cohérence du tenseur Γ.
 
 ## 4. Résultats (ce dépôt)
 
-`05_main/main_geometric_nonlinear.py` — paroi h = 2 mm, AL6061, 5600 tr/min,
-configuration « wall » (base encastrée + bords latéraux bridés en membrane,
-représentant une nervure flanquée de matière épaisse).
+`05_main/main_geometric_nonlinear.py` — paroi h = 2 mm, AL6061, 5600 tr/min.
+Toutes les valeurs proviennent de `results_geom_nl/metrics.json`.
 
 **A. Diagramme de bifurcation** (`fig01_bifurcation.png`). En dessous de
-a_p ≈ 0,12 mm : régime forcé stable, modèle linéaire ≈ von Kármán (quelques
-µm) — **le modèle linéaire est adéquat**. Au-delà de la limite de stabilité
-(a_p ≈ 0,15 mm) : le modèle **linéaire diverge** (croissance exponentielle
-mesurée 12,5 → 129 → 14 000 µm), tandis que von Kármán **borne** la réponse
-en un **cycle limite** (157 µm à l'amorce, croissant avec a_p).
+a_p = 0,12 mm : régime forcé **stable**, modèle linéaire ≈ von Kármán
+(2,8 → 5,3 µm) — **le modèle linéaire est adéquat**. À la limite de
+stabilité (a_p = 0,15 mm) le modèle **linéaire diverge** (amplitude coupée
+à 40 mm) ; von Kármán **borne** la croissance en un **cycle limite**
+(bifurcation de Hopf). Les cycles limites **stabilisés et dans le domaine de
+validité** (w/h ≤ 0,4) valent 511 µm (a_p = 0,18 mm) et 718 µm
+(a_p = 0,20 mm). Au-delà (a_p ≥ 0,25 mm) le cycle atteint w/h = 5–8, hors
+validité von Kármán, et n'est reporté qu'à titre indicatif (points
+« creux » sur la figure).
 
 **B. Fréquence dépendant de l'amplitude** (`fig03_backbone.png`). Le
-raidissement dépend fortement de la condition membranaire : configuration
-« wall » ω_nl/ω_l = 1,07 / 1,27 / 1,86 à A/h = 0,5 / 1 / 2 (fort), contre
-cantilever pur (3 bords libres) ≈ 1,00 (négligeable) — d'où le **critère de
-configuration**.
+raidissement dépend **fortement de la condition aux limites**, ce qui
+constitue le **critère de configuration** — trois cas, du physiquement
+cohérent à l'idéalisation :
+
+| configuration | BC | ω_nl/ω_l @ A/h=1 |
+|---|---|---|
+| cantilever (3 bords libres) | cohérente | **1,001** (négligeable) |
+| paroi 3-bords (base + 2 côtés encastrés) | **cohérente** | **1,108** (modéré) |
+| paroi « slot » (flexion cantilever + côtés bridés en membrane) | idéalisation (borne sup.) | 1,270 |
+
+La configuration **physiquement cohérente** (paroi 3-bords encastrés, BC
+transverse ET membranaire identiques) donne un raidissement **modéré mais
+réel** (1,108). La configuration « slot » (côtés bridés en membrane
+seulement, flexion restant cantilever — réalisable par des glissières
+latérales sans contact) **isole l'étirement membranaire** et sert de
+**borne supérieure** rendant le cycle limite bien visible ; c'est celle du
+diagramme de bifurcation. Le cantilever pur (borne inférieure) montre un
+effet négligeable — d'où l'encadrement.
 
 **C. Contrôle actif** (`fig04_active_control.png`), a_p = 0,20 mm, LQG conçu
 sur le modèle linéaire, saturation réaliste ±150 V :
 
-| | modèle LINÉAIRE (prédiction de conception) | modèle von Kármán (réponse vraie) |
+| | modèle LINÉAIRE (prédiction) | modèle von Kármán (réponse vraie) |
 |---|---|---|
 | boucle ouverte | divergence (→ 44 mm, coupé) | cycle limite borné 718 µm |
-| LQG ±150 V | **divergence** (non stabilisé) | **borné, stabilisé** 670 µm |
+| LQG ±150 V | **divergence** (aucune cible finie) | **borné** 670 µm |
 
-Un ingénieur s'appuyant sur le modèle **linéaire** conclurait que
-l'actionneur ±150 V est **insuffisant** (réponse divergente) et
-sur-dimensionnerait ; le modèle von Kármán révèle que la vibration
-**s'auto-limite** en un cycle borné que la commande maintient — seul le
-modèle géométriquement non linéaire permet le **dimensionnement correct**
-et la **validation** de la commande active en régime post-critique.
+Points importants (honnêteté) : **c'est la non-linéarité géométrique — non
+le régulateur — qui borne la réponse** ; le LQG (aveugle au retard
+régénératif : `lqg_controller.py` construit A,B,C sans le terme de retard)
+ne réduit le cycle que de **6,7 %** (718 → 670 µm) à 91 % du budget de
+tension. La conclusion n'est donc **pas** « le LQG stabilise », mais : le
+modèle **linéaire ne fournit AUCUNE amplitude post-critique finie** (il
+prédit une divergence sous commande), de sorte que **la validation de la
+commande et le dimensionnement de l'actionneur en régime post-critique
+exigent le modèle non linéaire**.
 
 ---
 
-## 5. Portée et limites
+## 5. Portée et limites (déclarées honnêtement)
 
-- **Configuration « wall »** : elle suppose des bords latéraux bridés en
-  membrane (nervure entre matière épaisse). Le cantilever pur (3 bords
-  libres) montre au contraire une non-linéarité négligeable dans la plage
-  opérationnelle — les deux cas sont fournis, et **le critère
-  configuration/amplitude est la conclusion d'ingénierie**.
-- **Modèle réduit à 3 modes** : cohérent EF pour le couplage membranaire
-  dominant ; l'inertie dans le plan est négligée (condensation statique),
-  hypothèse standard pour ces ROM.
-- **Validité von Kármán** : rotations modérées ; les cycles limites
-  exploités restent à w/L ≲ 0,1 (point de fonctionnement A/h = 0,36,
-  w/L ≈ 0,009). Aux a_p élevés le cycle limite dépasse cette plage et n'est
-  utilisé que qualitativement.
-- **AL6061 homogène** ; l'extension aux parois **FGM/composites** (spécialité
-  du rapporteur) renforcerait le raidissement et constitue le prolongement
-  naturel.
+- **Tension flexibilité ↔ non-linéarité.** Une paroi assez souple pour
+  broutter à w ~ h a, si elle est en cantilever, un raidissement faible
+  (cycle limite grand) ; une paroi assez bridée pour un raidissement fort
+  est rigide et broutte peu. Le cycle limite « modéré et borné » du
+  diagramme de bifurcation est obtenu avec la configuration idéalisée
+  « slot » (borne supérieure). La configuration **physiquement cohérente**
+  (3-bords encastrés) donne un effet modéré (1,108) mais réel : la
+  **conclusion robuste est le critère configuration/amplitude**, pas une
+  amplitude de cycle limite universelle.
+- **Le régulateur LQG ignore le retard régénératif** ; la divergence sous
+  commande sur le plant linéaire tient en partie à ce choix de conception.
+  L'argument porte donc sur l'**absence d'amplitude post-critique finie**
+  dans le modèle linéaire, non sur une supériorité de la commande.
+- **Modèle réduit à 3 modes** ; inertie dans le plan négligée (condensation
+  statique), hypothèse standard de ces ROM.
+- **Validité von Kármán** : rotations modérées ; seuls les points **stables
+  et w/h ≤ 2** sont exploités quantitativement (a_p = 0,18–0,20 mm,
+  w/h ≤ 0,36, w/L ≈ 0,009) ; les points w/h = 5–8 sont marqués hors
+  validité sur la figure.
+- **Contribution incrémentale, non disruptive** : le modèle réduit repose
+  sur un bilan harmonique à 1 terme (même ordre qu'une réduction de Galerkin
+  monomodale) ; l'apport propre est le **tenseur cubique assemblé par EF**
+  (vs Galerkin analytique), la **comparaison modèle linéaire ↔ non
+  linéaire** pour l'évaluation de la commande, et le **critère de
+  configuration**. Les énoncés de type « jamais traité » sont à comprendre
+  relativement à la littérature recensée, non comme un absolu vérifiable.
+- **AL6061 homogène** ; extension **FGM/composites** (spécialité du
+  rapporteur) = prolongement naturel.
 - Preuve en **simulation** ; capteur idéal.
 
 ---

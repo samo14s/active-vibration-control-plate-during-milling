@@ -128,12 +128,21 @@
   },
   "config_comparison": {
     "cantilever": {
+      "desc": "base clamped, 3 edges free (standard thin-wall model)",
       "gamma_1111": 107378661852.30093,
       "ratio_05": 1.0001658865761733,
       "ratio_10": 1.000663381304028,
       "ratio_20": 1.0026508917520807
     },
-    "wall": {
+    "wall_3edge": {
+      "desc": "base + 2 sides clamped, top free (CONSISTENT wall)",
+      "gamma_1111": 864182603626292.4,
+      "ratio_05": 1.0280788119666033,
+      "ratio_10": 1.1080542290243063,
+      "ratio_20": 1.3824386777845152
+    },
+    "wall_slot": {
+      "desc": "cantilever bending + sides in-plane restrained (IDEALISATION: isolates membrane stretching, upper bound)",
       "gamma_1111": 49528721980969.07,
       "ratio_05": 1.0737988779312,
       "ratio_10": 1.269714976278226,

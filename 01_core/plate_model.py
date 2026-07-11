@@ -40,6 +40,7 @@ class PlateModel:
                  N1: int = 30, N2: int = 24,
                  n_modes: int = 3,
                  zeta_modes=None,
+                 clamp_edges: str = "bottom",
                  verbose: bool = True):
         self.lp = lp;  self.hp = hp;  self.bp = bp
         self.rho = rho;  self.E = E;  self.nu = nu
@@ -48,6 +49,11 @@ class PlateModel:
         self.lex = lp / N1;  self.ley = hp / N2
         self.ndof = 3 * self.n1 * self.n2
         self.n_modes = n_modes
+        # "bottom"       : cantilever (base clamped, 3 edges free)
+        # "bottom_sides" : thin wall / rib (base + 2 vertical sides clamped,
+        #                  top edge free) — physically CONSISTENT with the
+        #                  "wall" membrane BC used by VonKarmanROM
+        self.clamp_edges = clamp_edges
         self.verbose = verbose
 
         if zeta_modes is None:
@@ -97,8 +103,24 @@ class PlateModel:
 
     # ---------------------------------------------------------------
     def _apply_bc(self):
-        # Encastrement : bloque w, ∂w/∂x, ∂w/∂y au bord inférieur (J=1)
-        DOFb = np.arange(3 * self.n1)
+        # Encastrement : bloque (w, ∂w/∂x, ∂w/∂y) sur les bords encastrés.
+        n1 = self.n1
+        clamped = set()
+
+        def node_dofs(I, J):                       # 1-indexed grid node
+            base = 3*((J-1)*n1 + (I-1))
+            return (base, base+1, base+2)
+
+        # bord inférieur J=1 (toujours encastré)
+        for I in range(1, n1+1):
+            clamped.update(node_dofs(I, 1))
+        if self.clamp_edges == "bottom_sides":
+            # + deux bords verticaux I=1 et I=n1 (paroi/nervure)
+            for J in range(1, self.n2+1):
+                clamped.update(node_dofs(1, J))
+                clamped.update(node_dofs(n1, J))
+
+        DOFb = np.array(sorted(clamped), dtype=int)
         all_dofs = np.arange(self.ndof)
         DOFf = np.setdiff1d(all_dofs, DOFb)
         self.DOFf = DOFf

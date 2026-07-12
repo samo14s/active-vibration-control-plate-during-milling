@@ -1,122 +1,93 @@
 # 05_main — Main Simulation Scripts
 
-This directory contains the **main entry points** for running the simulation.
+Entry points of the study. All scripts follow the **honest evaluation
+protocol** (root README): nominal-model controller design (no oracle),
+train/validation/evaluation noise seeds disjoint, identical LQG base for
+LQG and DARC, closed-loop Floquet SLD.
 
-## Files
-
-| File | Description | Output |
-|---|---|---|
-| `main_simulation.py` | Full LQG vs DARC-MPC comparison | Console + figs |
-| `main_realistic_piezo.py` | Same but with piezo non-linearities | Console + figs |
+| File | Study | Runtime |
+|---|---|---:|
+| `main_simulation.py` | LQG vs DARC : 4 scenarios + SLD + sensor sweep | ~5 min |
+| `main_imc_baseline.py` | LQG vs IMC-LQG vs DARC-FF (internal-model baseline) | ~30 s |
+| `main_fullpath_comparison.py` | 20.4 s full feed pass — held-out NN evaluation | ~10 min |
+| `main_realistic_piezo.py` | LQG under realistic actuator/sensor model | ~1 min |
 
 ## main_simulation.py
 
-The **primary script** for reproducing the article results.
+1. Analytical Galerkin plate (frequencies calibrated to the FEM anchors)
+2. Piezo patch (QDA60-200.7, 20×60 mm), corner displacement sensor
+3. Nonlinear cutting coefficients — REAL set drives the plant, NOMINAL set
+   is all the controllers ever see
+4. LQG baseline (w_q=1e14, w_qd=1e8 — the same base as inside DARC)
+5. DARC: inverse-model feedforward from the NOMINAL model +
+   NN residual (train seeds 100+, validation seed 200, evaluation seed 1)
+6. 4 scenarios (S1 nominal / S2 a_p=0.6 mm / S3 ω−15 % / S4 K_T+30 %
+   with K_T unknown to the controller)
+7. Closed-loop Floquet SLD (observer + discrete feedback in the monodromy)
+8. Sensor-noise robustness sweep (0 → 2 µm RMS)
 
-### What it does
-
-1. Builds plate FEM model (Q4 × 30×24 elements, 3 modes)
-2. Adds piezoelectric patch (QDA60-200.7, 20×60 mm)
-3. Computes cutting force coefficients (3-tooth end-mill)
-4. Builds **LQG controller** with sub-optimal weights
-5. Builds **DARC-MPC controller** with optimal LQG base + NN
-6. **Pre-trains the NN** via 30 iterations of iterative learning control
-7. Runs **4 scenarios**:
-   - **S1 Nominal**: a_p = 0.3 mm, K_T nominal, ω nominal
-   - **S2 Aggressive**: a_p = 0.6 mm (twice the depth)
-   - **S3 Uncertainty**: ω - 15% (frequency mismatch)
-   - **S4 High K_T**: K_T + 30% (harder material)
-8. Computes metrics: RMS, peak, peak-to-peak, voltage stats
-9. Prints summary table
-
-### Run
-
-```bash
-python main_simulation.py
-```
-
-### Expected output
+Measured output (bit-exact reproducible, seeds fixed):
 
 ```
-========================================================================
- LQG vs DARC-MPC v3 COMPLETE COMPARISON
-========================================================================
-
-[Setup]
-  Plate model         : 30 × 24 elements, 3 modes
-  Modal frequencies   : [521, 1070, 2733] Hz
-  Cutting parameters  : 4900 RPM, 0.3 mm axial, 0.1 mm radial
-  
-[Phase 1] Building controllers ...
-  LQG (sub-optimal)   : w_q=1e13, w_qd=1e8 → ζ_1 = 13.2%
-  DARC-MPC (optimal)  : w_q=1e14, w_qd=1e8 → ζ_1 = 23.9% (base)
-
-[Phase 2] Pre-training DARC-MPC NN ...
-  Iter  1/30 : RMS_residual = 0.587 µm
-  Iter  5/30 : RMS_residual = 0.412 µm
-  Iter 10/30 : RMS_residual = 0.298 µm
-  Iter 30/30 : RMS_residual = 0.107 µm  ✓ converged
-
-[Phase 3] Running 4 scenarios ...
-  S1 Nominal              : LQG 0.628 → DARC 0.507 µm  (+19.20%)
-  S2 Aggressive ap=0.6mm  : LQG 1.253 → DARC 1.009 µm  (+19.51%)
-  S3 Uncertainty ω-15%    : LQG 0.604 → DARC 0.488 µm  (+19.22%)
-  S4 High K_T +30%        : LQG 0.817 → DARC 0.661 µm  (+19.17%)
-  ─────────────────────────────────────────────────────────────────
-  AVERAGE                 : LQG 0.825 → DARC 0.666 µm  (+19.31%)
-
-Done. Total time: ~4 minutes
+S1  LQG 0.6052 → DARC 0.2937 µm  (+51.5 %)
+S2  LQG 1.2057 → DARC 0.5657 µm  (+53.1 %)
+S3  LQG 0.9234 → DARC 0.3340 µm  (+63.8 %)
+S4  LQG 0.7881 → DARC 0.4578 µm  (+41.9 %)   ← honest robustness number
+AVG LQG 0.8806 → DARC 0.4128 µm  (+53.1 %)
+SLD @4900 RPM : OL 0.100 mm | LQG = DARC 2.375 mm (23.8×)
 ```
 
-### Modifying parameters
+## main_imc_baseline.py
 
-Edit the configuration section near the top of `main_simulation.py`:
+The reviewer question, answered in code: with the spindle period known
+(same encoder assumption as DARC), an internal-model LQG rejects the
+tooth-passing harmonics by FEEDBACK, with **no cutting-force model**:
 
-```python
-# ────── PHYSICAL PARAMETERS ──────
-LP = 0.100              # plate length (m)
-HP = 0.080              # plate height (m)
-BP = 0.004              # plate thickness (m)
-RPM = 4900              # spindle speed
-FT = 0.02e-3            # feed per tooth (m)
-AP = 0.3e-3             # axial engagement (m)
-AE = 0.1e-3             # radial engagement (m)
+```
+              LQG      IMC-LQG   DARC-FF
+S1           0.605     0.223     0.363   µm
+S2           1.206     0.475     0.728   µm
+S3 (ω−15%)   0.923    15.755 ⚠   0.592   µm
+S4 (K_T ?)   0.788     0.293     0.536   µm
+```
 
-# ────── LQG WEIGHTS ──────
-LQG_W_Q = 1e13          # state penalty (sub-optimal)
-LQG_W_QD = 1e8          # state derivative penalty
-LQG_W_R = 1.0           # control penalty
+No architecture dominates: IMC-LQG is strongest nominally and under unknown
+K_T, but destabilizes under −15 % structural detuning (mis-phased inversion
+near resonance, voltage saturation); DARC-FF degrades gracefully instead.
+Includes a sensor-noise sweep showing the structural trade-off (IMC depends
+on the displacement sensor; DARC-FF on its cutting model and phase lock).
 
-# ────── DARC-MPC PARAMETERS ──────
-DARC_BASE_W_Q = 1e14    # base LQG (optimal)
-DARC_FF_LR = 5e-3       # NN learning rate
-DARC_FF_MAX = 10.0      # FF saturation (V)
-DARC_N_ITER = 30        # ILC iterations
-DARC_N_EPOCHS = 15      # epochs per iteration
+## main_fullpath_comparison.py
+
+Held-out evaluation: NN trained on one mid-path 0.5 s segment, evaluated on
+the whole 20.4 s pass.
+
+```
+LQG      0.4710 µm
+DARC-FF  0.2855 µm  (+39.4 %)
+DARC     0.2662 µm  (+43.5 %)   ← the NN's honest marginal gain is ~+4 pts
 ```
 
 ## main_realistic_piezo.py
 
-Same as main_simulation.py but uses a **non-linear piezo model** with:
-- Hysteresis (Bouc-Wen model)
-- Rate-dependent saturation
-- Temperature drift compensation
+LQG with the realistic actuator/sensor pipeline (saturation, slew, 5 kHz
+amplifier lag, linear material phase-lag, 0.1 µm noise + 50 µs delay).
+After the sensor-delay off-by-one fix:
 
-This shows that DARC-MPC remains effective even with realistic actuator
-non-linearities (typical for industrial piezoelectric actuators).
-
-### Run
-
-```bash
-python main_realistic_piezo.py
+```
+Open loop            : 252 µm
+LQG + ideal piezo    : 2.49 µm  (99.01 %)
+LQG + realistic piezo: 2.58 µm  (98.98 %, degradation 0.04 %, u_max 13.2 V)
 ```
 
-Expected results: ~+15% improvement (slightly less than ideal case due to
-non-linearities, but still very significant).
+⚠ The loop's delay margin is thin: stable at 50 µs sensor delay, divergent
+at 100 µs — budget the total loop latency in any deployment discussion.
+DARC under this realistic model is an open item (P1).
 
 ## Tips
 
-1. **For first run**: use `main_simulation.py` (faster, ideal piezo)
-2. **For thesis defense**: use `main_realistic_piezo.py` (more realistic)
-3. **For figure regeneration**: use scripts in `04_figures/`
-4. **For SLD analysis only**: use `gen_SLD_academic_style.py` directly
+1. Run everything from a flat `workspace/` (`python setup_workspace.py`).
+2. Never quote open-loop chatter AMPLITUDES (clamp-limited); only the
+   stability boundary is quantitative.
+3. If an SLD boundary does not cross ρ=1 inside the grid, report the grid
+   top as a lower bound.

@@ -4,6 +4,27 @@
 **Périmètre** : l'intégralité du package (`01_core`, `02_controllers`, `03_analysis`, `04_figures`, `05_main`) — code, README et résultats annoncés.
 **Date** : juillet 2026.
 
+> ## ✅ STATUT : plan P0 EXÉCUTÉ (juillet 2026)
+>
+> Les 9 corrections P0 (§6) ont été appliquées et re-exécutées. Résultats
+> honnêtes après correction (à comparer aux chiffres pré-correction cités
+> dans le corps de l'audit) :
+>
+> | Grandeur | Avant (gonflé/faux) | Après (honnête) |
+> |---|---:|---:|
+> | Gain DARC moyen (S1-S4) | +55.2 % | **+53.1 %** |
+> | S4 (K_T +30 % inconnu du contrôleur) | +52.6 % (oracle) | **+41.9 %** |
+> | SLD LQG à 4900 RPM | 2.86 mm (substitution de pôles) | **2.375 mm** (Floquet BF complet) |
+> | SLD « DARC » | 4.00 mm / « 40× » (boost 1.30× + plafond de grille) | **= SLD LQG** (théorème : FF exogène) |
+> | Piézo réaliste (LQG) | −589 % (bug off-by-one retard) | **98.98 %** de réduction |
+> | Gain NN hors-échantillon (trajet complet) | annoncé +15-25 % | **+4 points** (0.286 → 0.266 µm) |
+> | λ Von Kármán | abs() d'une projection au signe faux | forme énergétique variationnelle |
+> | « DARC-MPC » | aucun MPC dans le code | renommé **DARC**, code mort supprimé |
+> | Baseline modèle interne (A6) | absente | **IMC-LQG** implémentée : 0.223 µm en S1
+>   (bat DARC nominalement, sans modèle de coupe) mais diverge sous détuning −15 % |
+>
+> Les constats P1 (§6) restent ouverts et sont listés dans le README racine.
+
 ## Méthodologie
 
 - Ré-exécution complète et indépendante de `main_simulation.py` sur un environnement propre (Python 3.11, NumPy 2.4, SciPy 1.17).

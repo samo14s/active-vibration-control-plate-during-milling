@@ -1,0 +1,50 @@
+{
+  "drift_end": 0.78,
+  "T_end": 6.0,
+  "cases": {
+    "LQG statique": {
+      "kind": "LQG statique",
+      "y_rms_um": 59.37538855089967,
+      "y_rms_first_um": 0.5965900039976456,
+      "y_rms_last_um": 145.39086410984356,
+      "y_max_um": 443.87994688599366,
+      "u_rms_V": 411.60343956939704,
+      "u_max_V": 3465.8959462043176,
+      "wall_s": 19.6806218624115
+    },
+    "DARC-FF statique": {
+      "kind": "DARC-FF statique",
+      "y_rms_um": 7.041887994899098,
+      "y_rms_first_um": 0.34221556179010537,
+      "y_rms_last_um": 17.23242567221112,
+      "y_max_um": 49.14523919202621,
+      "u_rms_V": 40.55585048592779,
+      "u_max_V": 150.0,
+      "wall_s": 24.616121768951416
+    },
+    "LQG adaptatif": {
+      "kind": "LQG adaptatif",
+      "y_rms_um": 0.5670357699648508,
+      "y_rms_first_um": 0.5942220096257921,
+      "y_rms_last_um": 0.5558353654779252,
+      "y_max_um": 2.574998810428398,
+      "u_rms_V": 3.4047390813352787,
+      "u_max_V": 17.39578498612773,
+      "wall_s": 18.229654788970947
+    },
+    "DARC-FF adaptatif": {
+      "kind": "DARC-FF adaptatif",
+      "y_rms_um": 0.34689833886779486,
+      "y_rms_first_um": 0.33227086409310835,
+      "y_rms_last_um": 0.38154337624441437,
+      "y_max_um": 1.0980115808614426,
+      "u_rms_V": 5.025750385391513,
+      "u_max_V": 18.098486502073637,
+      "wall_s": 22.163872241973877
+    }
+  },
+  "improvement_last_second_pct": {
+    "LQG": 99.61769580992518,
+    "DARC_FF": 97.78589861054971
+  }
+}

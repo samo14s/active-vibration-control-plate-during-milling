@@ -127,6 +127,10 @@ class NewmarkSimulator:
         sep_flag = np.zeros(nstep)          # séparation (1 = hors coupe)
 
         Mp = self.plate.Mp;  Kp_modal = self.plate.Kp;  Cp_modal = self.plate.Cp
+        # Dérive structurelle optionnelle (enlèvement de matière pendant
+        # l'usinage, cf. article ASME Eq. (6)) : stiff_scale_t[k] = s(t)
+        # met à l'échelle les pulsations propres (K ∝ s², C ∝ s).
+        stiff_scale_t = getattr(self, '_stiff_scale_t', None)
         H_Pe_modal = (self.plate.H_Pe_modal
                       if controller is not None
                       else np.zeros(n))
@@ -225,7 +229,14 @@ class NewmarkSimulator:
             sep_flag[k] = 1.0 - g_sep
 
             # --- Raideur effective (ossature linéaire implicite, gée par g) ---
-            K_eff = Kp_modal + g_sep * a4 * DpT_Dp_now
+            if stiff_scale_t is not None:
+                s_k = stiff_scale_t[k]
+                Kp_now = Kp_modal * (s_k * s_k)
+                Cp_now = Cp_modal * s_k
+            else:
+                Kp_now = Kp_modal
+                Cp_now = Cp_modal
+            K_eff = Kp_now + g_sep * a4 * DpT_Dp_now
 
             # --- Forces ---
             # Coupe linéaire (forçage moyen + régénératif retardé) — IDENTIQUE
@@ -246,8 +257,8 @@ class NewmarkSimulator:
             F_now = F_lin + F_cut_nl + F_edge + F_vk + F_pe
 
             # --- Résolution de Newmark implicite ---
-            S_eff = Mp + gNM*dt*Cp_modal + bNM*dt**2 * K_eff
-            rhs = F_now - Cp_modal @ qd_pred - K_eff @ q_pred
+            S_eff = Mp + gNM*dt*Cp_now + bNM*dt**2 * K_eff
+            rhs = F_now - Cp_now @ qd_pred - K_eff @ q_pred
 
             qmdd[:, k] = np.linalg.solve(S_eff, rhs)
             qmd [:, k] = qd_pred + gNM*dt * qmdd[:, k]

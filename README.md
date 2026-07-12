@@ -108,6 +108,37 @@ lifts the open-loop limit by an order of magnitude (best lobe ≈ 5200 rpm),
 and LQG multiplies it again.  See
 `results/article_alignment/alignment_report.md`.
 
+## The ASME gap, treated on the article plant
+
+The ASME paper's central gap — *model-based strategies computed offline
+become invalid as the workpiece dynamics evolve with material removal* —
+applies verbatim to the article's controllers: LQG and DARC-MPC are
+designed ONCE on the nominal plate model.
+
+`article_package/*/main_adaptive_drift.py` machines the plate while its
+natural frequencies drift −22 % (Eq. (6)-style material-removal
+softening).  The static model-based controllers cross a stability cliff
+at ≈ −16 % and collapse into chatter; the adaptive versions — online
+drift identification by a **multi-model bank of shadow Kalman observers**
+(innovation comparison with the known tooth-passing excitation fed
+through) + scheduled Riccati/feedforward redesign
+(`adaptive_lqg_controller.py`) — hold nominal performance throughout:
+
+| Controller | RMS 1st s | RMS last s | max |
+|---|---|---|---|
+| LQG static | 0.60 μm | **145.4 μm (chatter)** | 444 μm |
+| DARC-FF static | 0.34 μm | 17.2 μm | 49 μm |
+| **LQG adaptive** | 0.59 μm | **0.56 μm** | 2.6 μm |
+| **DARC-FF adaptive** | 0.33 μm | **0.38 μm** | 1.1 μm |
+
+Adaptive vs static, last second: **+99.6 % (LQG), +97.8 % (DARC-FF)**.
+A note on method: the ASME paper's RLS identifies the structural mode
+directly; in THIS closed loop the nonsynchronous residual is dominated by
+the regenerative quasi-periodic root (mode reflections at f ± k·f_tooth),
+so the drift is identified from the model fit itself (observer bank) —
+the RLS is kept as a diagnostic.  See
+`results/adaptive_drift/fig_adaptive_drift.png`.
+
 ## Run it
 
 ```bash

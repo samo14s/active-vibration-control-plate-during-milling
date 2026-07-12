@@ -1,0 +1,5 @@
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+numba>=0.58        # optional but strongly recommended (JIT for the kernel)
+pytest>=7.0        # tests only

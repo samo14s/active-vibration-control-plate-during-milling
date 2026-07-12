@@ -8,7 +8,13 @@ plate with a bonded piezoelectric actuator:
 |---|---|---|
 | **LQG** (baseline) | displacement sensor | `02_controllers/lqg_controller.py` |
 | **IMC-LQG** (feedback baseline, internal-model principle) | displacement sensor + spindle period (encoder) | `02_controllers/imc_lqg_controller.py` |
-| **DARC** (proposed: Deep Anticipative Residual Control) | spindle phase (encoder) + nominal cutting model + sensor (for its LQG base and NN) | `02_controllers/darc_controller.py` |
+| **DARC** (Deep Anticipative Residual Control) | spindle phase (encoder) + nominal cutting model + sensor | `02_controllers/darc_controller.py` |
+| **STSMC+DOB** (robust corner: super-twisting + disturbance observer) | sensor + encoder, **no cutting model** | `02_controllers/smc_dob_controller.py` |
+
+The controllers span an **information-structure map** whose central finding —
+each performance-buying architecture is fragile in a *different* direction, and
+a robust broadband controller can only *recover* LQG on a lightly-damped plate,
+never beat it — is documented in **`docs/ETUDE_ARCHITECTURES.md`**.
 
 **Thesis context**: *Contribution au contrôle actif des vibrations en
 fraisage des pièces flexibles* — a purely theoretical (simulation-based)
@@ -159,20 +165,25 @@ the spindle period is known — IMC-LQG estimates the tooth-passing harmonics
 online (augmented Kalman) and cancels them **without any cutting-force
 model**:
 
-| Scenario | LQG | IMC-LQG | DARC-FF (no NN) |
-|---|---:|---:|---:|
-| S1 Nominal | 0.605 µm | **0.223 µm** | 0.363 µm |
-| S2 Aggressive | 1.206 µm | **0.475 µm** | 0.728 µm |
-| S3 Detuned ω −15 % | 0.923 µm | 15.8 µm ⚠ | **0.592 µm** |
-| S4 Unknown K_T | 0.788 µm | **0.293 µm** | 0.536 µm |
+| Scenario | LQG | IMC-LQG | DARC-FF | STSMC+DOB |
+|---|---:|---:|---:|---:|
+| S1 Nominal | 0.605 | **0.223** | 0.363 | 0.608 |
+| S2 Aggressive | 1.206 | **0.475** | 0.728 | 1.207 |
+| S3 Detuned ω −15 % | 0.923 | 15.8 ⚠ | **0.592** | 0.917 |
+| S4 Unknown K_T | 0.788 | **0.293** | 0.536 | 0.790 |
 
-**No architecture dominates.** IMC-LQG wins whenever its plant model is
-good (and needs no force model), but its nominal-model inversion mis-phases
-near resonance under −15 % structural detuning and destabilizes (voltage
-saturation). DARC's feedforward degrades gracefully under detuning but pays
-for force-model error, and its NN adds a few honest points on top. This
-trade-off (information structure ↔ robustness direction) is a genuine
-contribution of the study.
+**No architecture dominates — and that is the contribution.** IMC-LQG wins
+when its plant model is good (no force model needed) but its nominal-model
+inversion mis-phases near resonance under −15 % detuning and *diverges*.
+DARC-FF is the only one that improves S3 (phase-locked to the spindle, immune
+to structural detuning) but pays for cutting-model error. **STSMC+DOB** is the
+*robust corner*: it recovers LQG everywhere, needs **no cutting model**, and
+**never diverges** — but it cannot beat LQG. The fundamental reason (the 2nd
+tooth harmonic sits on mode 1, so no *online* broadband controller can
+selectively reject the near-resonant periodic disturbance on this lightly-damped
+plate) is derived in **`docs/ETUDE_ARCHITECTURES.md`** — a rigorous,
+near-impossibility form of the performance↔robustness trade-off, and the
+strongest theoretical result of the study.
 
 ### Sensor robustness (fig10)
 

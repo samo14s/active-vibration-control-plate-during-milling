@@ -186,7 +186,7 @@ class NewmarkSimulator:
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)
-                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller', 'DARCController'):
+                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller', 'DARCController', 'SMCDOBController'):
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)

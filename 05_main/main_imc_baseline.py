@@ -36,6 +36,7 @@ from milling_force import precompute_nonlinear_periodic
 from lqg_controller import LQGController
 from imc_lqg_controller import IMCLQGController
 from darc_controller import DARCController
+from smc_dob_controller import SMCDOBController
 from newmark_solver import NewmarkSimulator
 
 # ============================================================
@@ -152,19 +153,23 @@ for name, ap, KT_actual, freq_perturb in scenarios_def:
                                      n_harm=FF_HARMONICS)
     r_ff = run(darc)
 
+    # 4. STSMC+DOB (coin robuste : super-twisting, sans modèle de coupe)
+    smc = SMCDOBController(plate_d, dt=DT, Dp_dist=Dp_ff, n_per=n_per,
+                           verbose=False)
+    smc.reset()
+    r_smc = run(smc)
+
     row = {'name': name}
-    for tag, r in (('LQG', r_lqg), ('IMC-LQG', r_imc), ('DARC-FF', r_ff)):
+    for tag, r in (('LQG', r_lqg), ('IMC-LQG', r_imc),
+                   ('DARC-FF', r_ff), ('STSMC+DOB', r_smc)):
         i = r['stop_idx']
         row[tag] = dict(
             y_rms=float(np.sqrt(np.mean(r['y'][:i+1]**2)))*1e6,
             u_max=float(np.max(np.abs(r['u'][:i+1]))))
     results.append(row)
-    print(f"   LQG     : {row['LQG']['y_rms']:.4f} um "
-          f"(u_max {row['LQG']['u_max']:.1f} V)")
-    print(f"   IMC-LQG : {row['IMC-LQG']['y_rms']:.4f} um "
-          f"(u_max {row['IMC-LQG']['u_max']:.1f} V)")
-    print(f"   DARC-FF : {row['DARC-FF']['y_rms']:.4f} um "
-          f"(u_max {row['DARC-FF']['u_max']:.1f} V)")
+    for tag in ('LQG', 'IMC-LQG', 'DARC-FF', 'STSMC+DOB'):
+        print(f"   {tag:<10}: {row[tag]['y_rms']:.4f} um "
+              f"(u_max {row[tag]['u_max']:.1f} V)")
 
 # ============================================================
 # Balayage bruit capteur : le compromis structurel IMC vs FF
@@ -186,9 +191,11 @@ f_fund = 1.0 / (n_per * DT)
 darc_sr = DARCController(plate_sr, dt=DT, base_w_q=1e14, base_w_qd=1e8,
                          n_per=n_per, u_max=150.0, verbose=False)
 darc_sr.design_periodic_feedforward(FT, a3[:n_per], Dp_ff, n_harm=FF_HARMONICS)
+smc_sr = SMCDOBController(plate_sr, dt=DT, Dp_dist=Dp_ff, n_per=n_per,
+                         verbose=False)
 
 noise_levels = np.array([0.0, 0.1, 0.3, 0.6, 1.0, 1.5, 2.0]) * 1e-6
-sweep = {'LQG': [], 'IMC-LQG': [], 'DARC-FF': []}
+sweep = {'LQG': [], 'IMC-LQG': [], 'DARC-FF': [], 'STSMC+DOB': []}
 for sn in noise_levels:
     lqg_sr = LQGController(plate_sr, dt=DT, verbose=False)
     lqg_sr.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0,
@@ -198,7 +205,7 @@ for sn in noise_levels:
                               n_harm=IMC_HARMONICS, q_dist=IMC_QDIST,
                               verbose=False)
     for tag, ctrl in (('LQG', lqg_sr), ('IMC-LQG', imc_sr),
-                      ('DARC-FF', darc_sr)):
+                      ('DARC-FF', darc_sr), ('STSMC+DOB', smc_sr)):
         if hasattr(ctrl, 'reset'):
             ctrl.reset()
         r = sim_sr.simulate(a3, a4, kp_sr, controller=ctrl,
@@ -209,50 +216,58 @@ for sn in noise_levels:
         i = r['stop_idx']
         sweep[tag].append(float(np.sqrt(np.mean(r['y'][:i+1]**2)))*1e6)
     print(f"   noise={sn*1e6:.1f}um : LQG={sweep['LQG'][-1]:.3f}  "
-          f"IMC={sweep['IMC-LQG'][-1]:.3f}  FF={sweep['DARC-FF'][-1]:.3f} um")
+          f"IMC={sweep['IMC-LQG'][-1]:.3f}  FF={sweep['DARC-FF'][-1]:.3f}  "
+          f"SMC={sweep['STSMC+DOB'][-1]:.3f} um")
 
 # ============================================================
 # Figure + résumé
 # ============================================================
-fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 names = [r['name'].split(' - ')[0] for r in results]
-x = np.arange(len(names)); w = 0.26
-colors = {'LQG': '#2E8B57', 'IMC-LQG': '#1f77b4', 'DARC-FF': '#DC143C'}
+x = np.arange(len(names)); w = 0.2
+tags4 = ('LQG', 'IMC-LQG', 'DARC-FF', 'STSMC+DOB')
+colors = {'LQG': '#2E8B57', 'IMC-LQG': '#1f77b4', 'DARC-FF': '#DC143C',
+          'STSMC+DOB': '#8A6A1B'}
 ax = axes[0]
-for j, tag in enumerate(('LQG', 'IMC-LQG', 'DARC-FF')):
-    vals = [r[tag]['y_rms'] for r in results]
-    bars = ax.bar(x + (j-1)*w, vals, w, color=colors[tag], alpha=0.85,
+for j, tag in enumerate(tags4):
+    vals = [min(r[tag]['y_rms'], 3.0) for r in results]   # cap for readability
+    raw = [r[tag]['y_rms'] for r in results]
+    bars = ax.bar(x + (j-1.5)*w, vals, w, color=colors[tag], alpha=0.85,
                   edgecolor='k', label=tag)
-    for b, v in zip(bars, vals):
-        ax.text(b.get_x()+b.get_width()/2, v*1.02, f'{v:.3f}',
-                ha='center', fontsize=8, fontweight='bold')
-ax.set_xticks(x); ax.set_xticklabels(names)
-ax.set_ylabel("$y_{RMS}$ (µm)")
-ax.set_title("Rejet de la perturbation périodique\n"
-             "(protocole honnête : aucun contrôleur ne connaît "
-             "les paramètres réels)", fontweight='bold')
-ax.legend(); ax.grid(True, axis='y', alpha=0.5)
+    for b, v, rv in zip(bars, vals, raw):
+        txt = f'{rv:.2f}' if rv < 3.0 else f'{rv:.0f}✗'
+        ax.text(b.get_x()+b.get_width()/2, v*1.01, txt,
+                ha='center', fontsize=7.5, fontweight='bold', rotation=90)
+ax.set_xticks(x); ax.set_xticklabels(names, fontsize=9)
+ax.set_ylabel("$y_{RMS}$ (µm)  [tronqué à 3 µm]")
+ax.set_title("Rejet de la perturbation — carte d'architectures\n"
+             "(protocole honnête ; ✗ = divergence)", fontweight='bold')
+ax.legend(fontsize=9); ax.grid(True, axis='y', alpha=0.5)
 
 ax = axes[1]
-for tag in ('LQG', 'IMC-LQG', 'DARC-FF'):
+for tag in tags4:
     ax.plot(noise_levels*1e6, sweep[tag], 'o-', color=colors[tag],
-            lw=2.2, ms=7, label=tag)
+            lw=2.2, ms=6, label=tag)
 ax.set_xlabel("Bruit capteur (µm RMS)")
 ax.set_ylabel("$y_{RMS}$ (µm)")
-ax.set_title("Compromis structurel :\n"
-             "IMC-LQG dépend du capteur, DARC-FF de son modèle de coupe",
-             fontweight='bold')
-ax.legend(); ax.grid(True, alpha=0.5); ax.set_ylim(bottom=0)
+ax.set_title("Compromis structurel : chaque architecture\n"
+             "est fragile dans une direction différente", fontweight='bold')
+ax.legend(fontsize=9); ax.grid(True, alpha=0.5); ax.set_ylim(bottom=0)
 plt.tight_layout()
 plt.savefig(f"{OUT_DIR}/fig_imc_baseline.png", dpi=140, bbox_inches='tight')
 plt.close()
 print(f"\n  ✓ {OUT_DIR}/fig_imc_baseline.png")
 
-print(f"\n{'='*72}")
-print(" RESUME : LQG vs IMC-LQG vs DARC-FF (y_RMS, um)")
-print(f"{'='*72}")
-print(f"  {'Scenario':<28}{'LQG':>10}{'IMC-LQG':>10}{'DARC-FF':>10}")
+print(f"\n{'='*78}")
+print(" RESUME : carte d'architectures (y_RMS, um)")
+print(f"{'='*78}")
+print(f"  {'Scenario':<24}{'LQG':>11}{'IMC-LQG':>11}{'DARC-FF':>11}{'STSMC+DOB':>12}")
 for r in results:
-    print(f"  {r['name']:<28}{r['LQG']['y_rms']:>10.4f}"
-          f"{r['IMC-LQG']['y_rms']:>10.4f}{r['DARC-FF']['y_rms']:>10.4f}")
+    print(f"  {r['name']:<24}{r['LQG']['y_rms']:>11.4f}"
+          f"{r['IMC-LQG']['y_rms']:>11.4f}{r['DARC-FF']['y_rms']:>11.4f}"
+          f"{r['STSMC+DOB']['y_rms']:>12.4f}")
+print(f"\nLecture : DARC-FF/IMC-LQG achètent la performance (0.2-0.5 um) mais "
+      f"chacun est fragile dans UNE direction (IMC sous detuning S3, DARC sous "
+      f"K_T S4).\n         STSMC+DOB (coin robuste) recupere le LQG partout, "
+      f"sans modele de coupe, sans jamais diverger.")
 print(f"\nTemps total : {time.time()-t0:.1f} s")

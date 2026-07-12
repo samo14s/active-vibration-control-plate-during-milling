@@ -75,6 +75,39 @@ excursion as the physical 10–15 mm → 1–3 mm walls, while the regenerative
 dynamics (ms scale) remain fully resolved — the time-scale separation the
 paper itself relies on for quasi-static model updating.
 
+## Article package integration (this repository's own study)
+
+`article_package/` contains the simulation package of the repository's
+article — **LQG vs DARC-MPC active vibration control of a cantilever
+AL6061 plate during peripheral milling** (plant modelling per Nasiri &
+Moradi, MSSP 224 (2025) 112198: Von Kármán/Galerkin nonlinear plate,
+3-tooth D10 end mill, piezo QDA60 patch, 4900 rpm, aₑ = 0.1 mm).
+
+Re-run results (this environment):
+
+| Quantity | Re-run | Package README claim |
+|---|---|---|
+| LQG y_RMS, nominal 0.5 s scenario | 0.605 μm | ≈ 0.63 μm |
+| DARC-MPC gain over LQG (4 scenarios) | +55.2 % avg | ≈ 55 % |
+| Full 20.4 s path: LQG / DARC / DARC-MPC | 0.471 / 0.286 / 0.267 μm | DARC-MPC best |
+| ap crit @4900 rpm: open-loop → LQG → DARC | 0.10 → 2.86 → 4.0 mm | idem |
+
+**Model alignment** (`milling_sim/article_plant.py`,
+`run_article_alignment.py`): the `milling_sim` framework was mapped onto
+the article plant (modal set, force coefficients `Kt_eff = k₂K_T`,
+`Kr_eff = k₁/k₂`, scalar regenerative NDDE), giving an independent
+frequency-domain (ZOA-style) stability boundary cross-checked against the
+package's own time-domain Floquet FDM — two methods, one plant.  They
+agree on lobe positions and on the safety-critical valleys (including
+`ap_lim ≈ 0.08–0.10 mm` at the nominal point → **the article's operating
+point is open-loop unstable, exactly the article's premise**); the
+averaged-coefficient method overestimates lobe peaks, as expected for an
+ae/D = 1 % interrupted cut.  The adaptive spindle-speed layer of the ASME
+re-run composes with the article's active control: speed selection alone
+lifts the open-loop limit by an order of magnitude (best lobe ≈ 5200 rpm),
+and LQG multiplies it again.  See
+`results/article_alignment/alignment_report.md`.
+
 ## Run it
 
 ```bash

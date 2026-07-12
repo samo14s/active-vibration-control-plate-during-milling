@@ -24,11 +24,15 @@ avec, pour cette plaque (encastrée en Z=0, libre ailleurs) :
   CONSERVATION DES VALEURS PRINCIPALES
 ═══════════════════════════════════════════════════════════════════════════════
 Les fréquences propres analytiques de Galerkin pour cette géométrie
-(528 / 1165 / 2657 Hz pour les modes (1,1)=flexion, (1,2)=torsion,
+(528.1 / 1165.3 / 3042.0 Hz pour les modes (1,1)=flexion, (1,2)=torsion,
 (1,3)=flexion en largeur) sont CALIBRÉES sur les valeurs FEM d'origine du
 package  [521.06, 1069.95, 2733.02] Hz  (paramètre ``freq_calib``), de sorte
 que les valeurs principales (fréquences, amortissements, dimensions, matériau,
-piézo) sont conservées et que les contrôleurs LQG / DARC-MPC restent inchangés.
+piézo) sont conservées et que les contrôleurs LQG / DARC restent inchangés.
+NOTE : les facteurs de calibration valent [0.987, 0.918, 0.898] — la base de
+Rayleigh mono-terme SURESTIME les modes 2-3 de 8-10 % ; les formes propres
+(donc D_obs, Dp, H_Pe) restent celles de la base analytique, ce qui doit être
+assumé comme un modèle hybride dans le texte de la thèse.
 
 L'INTERFACE PUBLIQUE est strictement préservée :
    Mp, Kp, Cp, omega_n, freq_n, n_modes, V (formes),
@@ -232,7 +236,9 @@ class PlateModel:
             self.omega_n = self.omega_analytical.copy()
             self.freq_calibrated = False
         self.freq_n = self.omega_n / (2 * np.pi)
-        # Facteur de calibration appliqué à chaque mode (≈1)
+        # Facteur de calibration appliqué à chaque mode
+        # ([0.987, 0.918, 0.898] pour cette plaque : la base mono-terme
+        #  surestime les modes 2-3 de 8-10 %)
         self.calib_factor = self.omega_n / self.omega_analytical
 
     # ---------------------------------------------------------------
@@ -267,16 +273,24 @@ class PlateModel:
     def _compute_vonkarman_cubic(self):
         """
         Coefficient cubique de Von Kármán λ_i (terme +λ_i·η_i³ de l'Eq. 30/36),
-        par projection de Galerkin des termes non linéaires de l'Eq. 30 sur la
-        forme propre normalisée en masse.
+        par la FORME ÉNERGÉTIQUE variationnellement cohérente (u₀ = v₀ = 0).
 
-            λ_i = -∫∫ Ŵ_i · S[Ŵ_i] dA       (durcissement géométrique, λ_i > 0)
+        Énergie membranaire de Von Kármán avec ε_x = ½w_x², ε_y = ½w_y²,
+        γ_xy = w_x·w_y et w = η·Ŵ_i :  U_m(η) = (λ_i/4)·η⁴, d'où le terme
+        modal ∂U_m/∂η = λ_i·η³ avec
 
-        avec S la somme des termes non linéaires (en w³) de l'Eq. 30 :
-            S = w_xx(c11/2 w_x² + c12/2 w_y²) + w_x(c11 w_xx w_x + c12 w_xy w_y)
-              + w_yy(c12/2 w_x² + c22/2 w_y²) + w_y(c12 w_xy w_x + c22 w_yy w_y)
-              + c66 w_xx w_y² + 4 c66 w_x w_xy w_y + c66 w_yy w_x²
-        (x ≡ X, largeur L_P ; y ≡ Z, longueur H_P).
+            λ_i = ∫∫ [ c11/2·Ŵ_x⁴ + c22/2·Ŵ_y⁴
+                       + (c12 + 2c66)·Ŵ_x²·Ŵ_y² ] dA     ( > 0 par construction )
+
+        NOTE de modélisation : l'hypothèse u₀ = v₀ = 0 (pas de détente
+        membranaire) rend ce λ_i une BORNE SUPÉRIEURE du durcissement réel ;
+        la résolution du problème membranaire (fonction d'Airy, comme dans
+        l'article) donnerait un coefficient plus faible pour une plaque à
+        trois bords libres.  L'ancienne implémentation projetait la forme
+        forte S[Ŵ] (flux de bord parasites → λ NÉGATIF, signe corrigé par
+        abs()) ; elle est remplacée par cette forme énergétique, positive et
+        variationnellement justifiée.
+        (x ≡ X, largeur L_P ; y ≡ Z, longueur H_P.)
         """
         c11, c12, c22, c66 = self.c11, self.c12, self.c11, self.c66
         XX = self._xi * self.lp                      # grille physique X
@@ -288,28 +302,17 @@ class PlateModel:
 
         lam = np.zeros(self.n_modes)
         for i in range(self.n_modes):
-            W   = self._W_normalized(i, Xg, Zg, 0, 0)
             w_x = self._W_normalized(i, Xg, Zg, 1, 0)    # ∂/∂X
             w_y = self._W_normalized(i, Xg, Zg, 0, 1)    # ∂/∂Z
-            w_xx = self._W_normalized(i, Xg, Zg, 2, 0)
-            w_yy = self._W_normalized(i, Xg, Zg, 0, 2)
-            w_xy = self._W_normalized(i, Xg, Zg, 1, 1)
+            integrand = (0.5 * c11 * w_x**4
+                         + 0.5 * c22 * w_y**4
+                         + (c12 + 2.0 * c66) * (w_x**2) * (w_y**2))
+            lam[i] = float(np.sum(integrand * dA))
 
-            S = (w_xx * (0.5 * c11 * w_x**2 + 0.5 * c12 * w_y**2)
-                 + w_x * (c11 * w_xx * w_x + c12 * w_xy * w_y)
-                 + w_yy * (0.5 * c12 * w_x**2 + 0.5 * c22 * w_y**2)
-                 + w_y * (c12 * w_xy * w_x + c22 * w_yy * w_y)
-                 + c66 * w_xx * w_y**2
-                 + 4.0 * c66 * w_x * w_xy * w_y
-                 + c66 * w_yy * w_x**2)
-
-            lam[i] = -float(np.sum(W * S * dA))
-
-        # Durcissement géométrique attendu (λ_i > 0) ; on conserve le signe
-        # physique de durcissement si la projection donne un signe inversé.
-        self.lam_modal = np.abs(lam)
+        self.lam_modal = lam
         if self.verbose:
-            print("[PlateModel] Coeff. cubiques Von Karman lambda_i :",
+            print("[PlateModel] Coeff. cubiques Von Karman lambda_i "
+                  "(forme energetique, u0=v0=0) :",
                   np.array2string(self.lam_modal, precision=3))
 
     # ---------------------------------------------------------------
@@ -389,11 +392,16 @@ class PlateModel:
     # ---------------------------------------------------------------
     def set_process_damping(self, Omega: float, Gamma: float):
         """
-        Amortissement de process (process damping, Eq. 44-46) :
+        Amortissement de process — OUTIL OPTIONNEL, NON UTILISÉ.
+
+        AVERTISSEMENT : cette fonction n'est appelée par AUCUN script du
+        package ; TOUS les résultats rapportés ont ζ_p = 0 (amortissement
+        structurel pur).  Ne pas présenter le process damping comme une
+        caractéristique du modèle simulé.  De plus, la forme
             ζ_p,i = Γ / (2 Ω M ω_i)
-        Avec masse modale normalisée (M = 1).  Ajouté à Cp.  Effet ∝ 1/Ω
-        (significatif aux basses vitesses).  Désactivé par défaut (Γ=0) pour
-        conserver les résultats nominaux du package.
+        réduit les Eq. 44-46 de l'article à un scalaire Γ non dérivé
+        (unités non spécifiées) ; une utilisation sérieuse exigerait de
+        dériver Γ de la géométrie de dépouille et de la vitesse de coupe.
         """
         if Gamma <= 0.0 or Omega <= 0.0:
             self.zeta_p = np.zeros(self.n_modes)

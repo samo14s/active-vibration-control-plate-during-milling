@@ -5,7 +5,9 @@ Modèle réaliste d'actionneur piézoélectrique QDA60-200.7 incluant :
    - saturation de tension : ±V_max
    - limitation de slew-rate (vitesse de variation max)
    - dynamique de l'amplificateur de puissance (passe-bas 1er ordre)
-   - hystérésis Bouc-Wen simplifié
+   - retard de phase linéaire supplémentaire (approximation 1er ordre du
+     déphasage matériau ; ce N'EST PAS un modèle d'hystérésis Bouc-Wen —
+     le bloc est exactement linéaire, sans boucle d'hystérésis)
    - retard de phase de l'amplificateur
 """
 import numpy as np
@@ -111,13 +113,17 @@ class PiezoActuator:
     # ------------------------------------------------------------------
     def hysteresis(self, u_cmd: float) -> float:
         """
-        Hystérésis simple : retarde de hyst_pct% selon le signe de la dérivée.
-        Modèle simplifié : output = u_cmd * (1 - hyst_pct) + hyst_pct * hyst_state
+        Retard de phase matériau — approximation LINÉAIRE 1er ordre.
+
+        ATTENTION : sign(x)*|x| = x, donc ce bloc se réduit exactement à
+            hyst_state += 0.5*(1-hyst_pct)*(u_cmd - hyst_state)   (lag 1er ordre)
+            u_out      = (1-hyst_pct)*u_cmd + hyst_pct*hyst_state
+        C'est un filtre linéaire (déphasage ~1° aux modes contrôlés), PAS une
+        hystérésis : aucune boucle multivaluée, aucune dépendance à l'amplitude.
+        Aucune conclusion de robustesse à l'hystérésis ne peut en être tirée ;
+        un vrai modèle Bouc-Wen (ż = ẋ[A - |z|^n(γ + β·sgn(ẋz))]) serait requis.
         """
-        # Mise à jour lente de l'état d'hystérésis (Bouc-Wen-like)
-        sign_du = np.sign(u_cmd - self.hyst_state)
-        self.hyst_state += sign_du * abs(u_cmd - self.hyst_state) * (1 - self.hyst_pct) * 0.5
-        # Sortie : combinaison linéaire commande / état mémorisé
+        self.hyst_state += 0.5 * (1 - self.hyst_pct) * (u_cmd - self.hyst_state)
         u_hyst = (1 - self.hyst_pct) * u_cmd + self.hyst_pct * self.hyst_state
         return u_hyst
 
@@ -149,8 +155,11 @@ class PiezoActuator:
 
         # Ajouter à la fin du tampon
         self.delay_buffer.append(y_true)
-        # Si tampon plus long que le retard, sortir la valeur la plus ancienne
-        if len(self.delay_buffer) > n_delay + 1:
+        # Sortie retardée de exactement n_delay échantillons :
+        # après l'append au pas k, le tampon contient [y[k-n_delay], ..., y[k]] ;
+        # on dépile dès que len > n_delay pour renvoyer y[k-n_delay]
+        # (n_delay = 0 -> aucune latence ; n_delay = 1 -> un échantillon).
+        if len(self.delay_buffer) > n_delay:
             y_delayed = self.delay_buffer.pop(0)
         else:
             y_delayed = self.delay_buffer[0]

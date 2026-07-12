@@ -7,6 +7,19 @@ Génère SLD avec style ACADÉMIQUE classique :
    - Annotations claires
    - Comparaison directe sur même graphique
    - Style des publications classiques (Schmitz, Altintas, Insperger)
+
+PROTOCOLE HONNÊTE (voir docs/AUDIT_SCIENTIFIQUE.md) :
+   - Courbes OL et LQG par analyse de Floquet de la boucle COMPLÈTE
+     (compute_SLD_closed_loop : plaque multi-modes couplée + retard +
+     observateur de Kalman + retour discret) — plus de substitution de pôles.
+   - LQG = base optimale w_q=1e14 (la même que la comparaison temporelle) —
+     plus de base « sous-optimale » séparée.
+   - DARC = LQG : le feedforward périodique verrouillé en phase est une
+     entrée exogène qui ne modifie pas l'équation variationnelle homogène ;
+     les multiplicateurs de Floquet sont strictement inchangés.  (L'ancien
+     facteur d'amortissement 1.30x a été supprimé, sans base théorique.)
+   - Limite documentée conservée : Dp moyenné le long de la passe (mode 2,
+     antisymétrique, invisible dans cette moyenne).
 """
 
 import os
@@ -18,7 +31,7 @@ import time
 
 from plate_model import PlateModel
 from lqg_controller import LQGController
-from fdm_stability import compute_SLD
+from fdm_stability import compute_SLD_closed_loop
 
 
 # Style publication
@@ -64,19 +77,6 @@ def build_plate(zp_pos):
     return plate
 
 
-def extract_modes(ev_cl, n_modes):
-    ev_pos = ev_cl[np.imag(ev_cl) > 0]
-    ev_pos = ev_pos[np.argsort(np.imag(ev_pos))]
-    omega_arr = np.zeros(n_modes)
-    zeta_arr = np.zeros(n_modes)
-    for k in range(n_modes):
-        if k < len(ev_pos):
-            e = ev_pos[k]
-            omega_arr[k] = abs(e)
-            zeta_arr[k] = -np.real(e)/abs(e)
-    return omega_arr, zeta_arr
-
-
 def save_fig(fig, name):
     fig.savefig(f"{OUT_DIR}/{name}.png", dpi=300, bbox_inches='tight')
     fig.savefig(f"{OUT_DIR}/{name}.pdf", dpi=300, bbox_inches='tight')
@@ -85,16 +85,17 @@ def save_fig(fig, name):
 
 
 # ============================================================
-# Compute SLD with DENSE grid for clean curves
+# Compute SLD (Floquet boucle complète — protocole honnête)
 # ============================================================
 print("="*70)
-print(" SLD ACADEMIC STYLE — High-density grid")
+print(" SLD ACADEMIC STYLE — Floquet boucle fermée (protocole honnête)")
 print("="*70)
 
-# Dense grid : higher resolution + EXTENDED LOWER BOUND
-# Lower limit : 0.005 mm (5 µm) to capture OL transition near zero
-RPM_arr = np.linspace(2500, 7500, 60)        # 60 points
-ap_arr = np.linspace(0.005e-3, 4e-3, 60)      # 60 points starting at 5 µm
+# Grille bornée (30 x 25) : l'analyse de Floquet de la boucle COMPLÈTE est
+# beaucoup plus coûteuse par point que l'ancienne approche par mode ; la
+# borne basse étendue (5 µm) est conservée pour capturer la transition OL.
+RPM_arr = np.linspace(2500, 7500, 30)         # 30 points
+ap_arr = np.linspace(0.005e-3, 4e-3, 25)      # 25 points à partir de 5 µm
 
 print(f"  Grid: {len(RPM_arr)} RPM × {len(ap_arr)} ap = {len(RPM_arr)*len(ap_arr)} cases")
 
@@ -105,48 +106,39 @@ phi_ex = np.pi
 k1_sld = KN*np.cos(ETA_H)
 k2_sld = 1 + MU_C*np.tan(ETA_H)*np.cos(GAMMA_N) - KN*np.sin(ETA_H)
 
+# Dp moyenné le long de la passe (limite documentée : mode 2, antisymétrique,
+# invisible dans cette moyenne — voir docs/AUDIT_SCIENTIFIQUE.md)
 Dp_sample = []
 for kp in range(0, 2001, 50):
     Dp_, _ = plate_n.get_Dp_at(kp)
     Dp_sample.append(Dp_)
 Dp_avg = np.mean(Dp_sample, axis=0)
-m_list = np.diag(plate_n.Mp).tolist()
 
 t0 = time.time()
-print("\n[1/3] Open-Loop SLD ...")
-rho_OL, _ = compute_SLD(RPM_arr, ap_arr,
-                          plate_n.omega_n.tolist(), ZETA, Dp_avg.tolist(), m_list,
-                          NT, RT, ETA_H, phi_st, phi_ex,
-                          k1_sld, k2_sld, KT_NOMINAL, HP,
-                          m_div=40, verbose=False)
+print("\n[1/3] Open-Loop SLD (Floquet multi-modes) ...")
+rho_OL = compute_SLD_closed_loop(RPM_arr, ap_arr, plate_n,
+                                 NT, RT, ETA_H, phi_st, phi_ex,
+                                 k1_sld, k2_sld, KT_NOMINAL, HP, Dp_avg,
+                                 lqg=None, dt_c=DT_FAST, verbose=False)
 print(f"   done ({time.time()-t0:.1f}s)")
 
 t0 = time.time()
-print("[2/3] LQG SLD (sub-optimal w_q=1e13) ...")
+print("[2/3] LQG SLD (base optimale w_q=1e14, compensateur dans la monodromie) ...")
 lqg_n = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_n.optimize_weights(w_q_list=[1e13], w_qd_list=[1e8], w_r=1.0)
-omega_LQG_n, zeta_LQG_n = extract_modes(lqg_n.ev_cl, N_MODES)
-rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
-                          omega_LQG_n.tolist(), zeta_LQG_n.tolist(),
-                          Dp_avg.tolist(), m_list,
-                          NT, RT, ETA_H, phi_st, phi_ex,
-                          k1_sld, k2_sld, KT_NOMINAL, HP,
-                          m_div=40, verbose=False)
+lqg_n.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0,
+                       gain_norm_max=1e10)
+rho_LQG = compute_SLD_closed_loop(RPM_arr, ap_arr, plate_n,
+                                  NT, RT, ETA_H, phi_st, phi_ex,
+                                  k1_sld, k2_sld, KT_NOMINAL, HP, Dp_avg,
+                                  lqg=lqg_n, dt_c=DT_FAST, verbose=False)
 print(f"   done ({time.time()-t0:.1f}s)")
 
-t0 = time.time()
-print("[3/3] DARC-MPC SLD (optimal LQG base + 30% FF) ...")
-lqg_opt = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_opt.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0)
-omega_OPT_n, zeta_OPT_n = extract_modes(lqg_opt.ev_cl, N_MODES)
-zeta_DARC_eff = (np.array(zeta_OPT_n) * 1.30).tolist()
-rho_DARC, _ = compute_SLD(RPM_arr, ap_arr,
-                            omega_OPT_n.tolist(), zeta_DARC_eff,
-                            Dp_avg.tolist(), m_list,
-                            NT, RT, ETA_H, phi_st, phi_ex,
-                            k1_sld, k2_sld, KT_NOMINAL, HP,
-                            m_div=40, verbose=False)
-print(f"   done ({time.time()-t0:.1f}s)")
+print("[3/3] DARC SLD = LQG SLD (FF exogène : multiplicateurs de Floquet inchangés)")
+# Le feedforward périodique verrouillé en phase est une entrée exogène : il
+# n'entre pas dans l'équation variationnelle homogène, donc SLD(DARC) =
+# SLD(LQG) exactement.  (L'ancien facteur 1.30x d'amortissement a été
+# supprimé — heuristique sans base théorique.)
+rho_DARC = rho_LQG
 
 
 # ============================================================
@@ -168,9 +160,10 @@ cs_OL = ax.contour(RPM_arr, ap_arr*1e3, rho_OL,
 cs_LQG = ax.contour(RPM_arr, ap_arr*1e3, rho_LQG,
                       levels=[1.0], colors=COLOR_LQG, linewidths=2.8,
                       linestyles='-', zorder=3)
+# DARC = LQG (FF exogène) : frontière IDENTIQUE, tracée en tirets
 cs_DARC = ax.contour(RPM_arr, ap_arr*1e3, rho_DARC,
                        levels=[1.0], colors=COLOR_DARC, linewidths=2.8,
-                       linestyles='-', zorder=3)
+                       linestyles='--', zorder=4)
 
 # Operating point article
 ax.plot(4900, 0.3, marker='*', color='gold', markersize=28,
@@ -181,45 +174,42 @@ ax.plot(4900, 0.3, marker='*', color='gold', markersize=28,
 idx_4900 = np.argmin(np.abs(RPM_arr - 4900))
 ap_crit_OL = None
 ap_crit_LQG = None
-ap_crit_DARC = None
 for i_ap, ap_v in enumerate(ap_arr):
     if rho_OL[i_ap, idx_4900] >= 1.0 and ap_crit_OL is None:
         ap_crit_OL = ap_v
     if rho_LQG[i_ap, idx_4900] >= 1.0 and ap_crit_LQG is None:
         ap_crit_LQG = ap_v
-    if rho_DARC[i_ap, idx_4900] >= 1.0 and ap_crit_DARC is None:
-        ap_crit_DARC = ap_v
 
+# Si la frontière n'est pas croisée dans la grille, la valeur n'est qu'une
+# BORNE INFÉRIEURE « > ap_max » — jamais rapportée comme un croisement.
+ap_crit_OL_capped = ap_crit_OL is None
+ap_crit_LQG_capped = ap_crit_LQG is None
 if ap_crit_OL is None: ap_crit_OL = ap_arr[-1]
 if ap_crit_LQG is None: ap_crit_LQG = ap_arr[-1]
-if ap_crit_DARC is None: ap_crit_DARC = ap_arr[-1]
+ap_crit_DARC = ap_crit_LQG          # FF exogène : même frontière que LQG
+ap_crit_DARC_capped = ap_crit_LQG_capped
+_cap_o = ">" if ap_crit_OL_capped else "="
+_cap_l = ">" if ap_crit_LQG_capped else "="
 
 # Vertical line at 4900 RPM
 ax.axvline(4900, color='#888', linestyle=':', alpha=0.5, linewidth=1.2, zorder=2)
 
-# Square markers for critical ap
+# Square markers for critical ap (DARC = LQG : même point)
 ax.plot(4900, ap_crit_OL*1e3, marker='s', color=COLOR_OL, markersize=12,
          markeredgecolor='black', markeredgewidth=1.5, zorder=8)
 ax.plot(4900, ap_crit_LQG*1e3, marker='s', color=COLOR_LQG, markersize=12,
          markeredgecolor='black', markeredgewidth=1.5, zorder=8)
-ax.plot(4900, ap_crit_DARC*1e3, marker='s', color=COLOR_DARC, markersize=12,
-         markeredgecolor='black', markeredgewidth=1.5, zorder=8)
 
 # Annotations for critical ap (better positioned)
-ax.annotate(f'$a_p^{{crit}} = {ap_crit_OL*1e3:.2f}$ mm  (Open-loop)',
+ax.annotate(f'$a_p^{{crit}} {_cap_o} {ap_crit_OL*1e3:.2f}$ mm  (Open-loop)',
              xy=(4900, ap_crit_OL*1e3), xytext=(5200, 0.6),
              fontsize=11, color=COLOR_OL, fontweight='bold',
              arrowprops=dict(arrowstyle='->', color=COLOR_OL, lw=1.3))
 
-ax.annotate(f'$a_p^{{crit}} = {ap_crit_LQG*1e3:.2f}$ mm  (LQG)',
+ax.annotate(f'$a_p^{{crit}} {_cap_l} {ap_crit_LQG*1e3:.2f}$ mm  (LQG = DARC)',
              xy=(4900, ap_crit_LQG*1e3), xytext=(5500, ap_crit_LQG*1e3 - 0.15),
              fontsize=11, color=COLOR_LQG, fontweight='bold',
              arrowprops=dict(arrowstyle='->', color=COLOR_LQG, lw=1.3))
-
-ax.annotate(f'$a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm  (DARC-MPC)',
-             xy=(4900, ap_crit_DARC*1e3), xytext=(5500, ap_crit_DARC*1e3 + 0.20),
-             fontsize=11, color=COLOR_DARC, fontweight='bold',
-             arrowprops=dict(arrowstyle='->', color=COLOR_DARC, lw=1.3))
 
 # Labels for stable / unstable regions (only inside panel)
 ax.text(2800, 3.7, 'UNSTABLE\nzone',
@@ -229,23 +219,15 @@ ax.text(2800, 0.6, 'STABLE\nzone',
          fontsize=14, fontweight='bold', color='#444', alpha=0.8,
          ha='center', style='italic')
 
-# Improvement annotation (key result for paper)
-ax.annotate('',
-             xy=(4900, ap_crit_DARC*1e3),
-             xytext=(4900, ap_crit_LQG*1e3),
-             arrowprops=dict(arrowstyle='<->', color='blue', lw=2.0))
-ax.text(4720, (ap_crit_LQG + ap_crit_DARC)*1e3/2,
-         f'+{(ap_crit_DARC/ap_crit_LQG-1)*100:.0f}%',
-         fontsize=12, color='blue', fontweight='bold',
-         ha='right', va='center',
-         bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
-                    edgecolor='blue', linewidth=1.2))
+# NOTE : plus de flèche « +X% DARC vs LQG » — la frontière DARC est
+# IDENTIQUE à celle du LQG (feedforward exogène, Floquet inchangé).
 
 # Custom legend with thick lines
 custom_lines = [
     plt.Line2D([0], [0], color=COLOR_OL, lw=3, label='Open-loop'),
     plt.Line2D([0], [0], color=COLOR_LQG, lw=3, label='LQG'),
-    plt.Line2D([0], [0], color=COLOR_DARC, lw=3, label='DARC-MPC'),
+    plt.Line2D([0], [0], color=COLOR_DARC, lw=3, linestyle='--',
+                label='DARC (= LQG : FF exogène,\nFloquet inchangé)'),
     plt.Line2D([0], [0], marker='*', color='gold', markersize=18,
                 markeredgecolor='black', linestyle='None',
                 label='Operating point'),
@@ -281,7 +263,7 @@ fig, axes = plt.subplots(1, 3, figsize=(20, 7), sharey=True)
 cases = [
     ("(a) Open-loop", rho_OL, COLOR_OL, '#E8E8E8'),
     ("(b) LQG", rho_LQG, COLOR_LQG, '#E8F5E8'),
-    ("(c) DARC-MPC", rho_DARC, COLOR_DARC, '#FCE8E8'),
+    ("(c) DARC (= LQG)", rho_DARC, COLOR_DARC, '#FCE8E8'),
 ]
 
 for ax, (title, rho_grid, line_color, fill_color) in zip(axes, cases):
@@ -331,13 +313,13 @@ ax.contourf(RPM_arr, ap_arr*1e3, rho_OL,
               levels=[1.0, 1e10], colors='none',
               hatches=['////'], zorder=0)
 
-# Boundaries
+# Boundaries (DARC = LQG : frontière identique, tracée en tirets)
 ax.contour(RPM_arr, ap_arr*1e3, rho_OL,
             levels=[1.0], colors=COLOR_OL, linewidths=2.5, linestyles='-', zorder=3)
 ax.contour(RPM_arr, ap_arr*1e3, rho_LQG,
             levels=[1.0], colors=COLOR_LQG, linewidths=2.5, linestyles='-', zorder=3)
 ax.contour(RPM_arr, ap_arr*1e3, rho_DARC,
-            levels=[1.0], colors=COLOR_DARC, linewidths=2.5, linestyles='-', zorder=3)
+            levels=[1.0], colors=COLOR_DARC, linewidths=2.5, linestyles='--', zorder=4)
 
 # Add styled fills above LQG and DARC boundaries
 ax.contourf(RPM_arr, ap_arr*1e3, rho_LQG,
@@ -349,22 +331,20 @@ ax.contourf(RPM_arr, ap_arr*1e3, rho_DARC,
 ax.plot(4900, 0.3, marker='*', color='gold', markersize=28,
          markeredgecolor='black', markeredgewidth=2, zorder=10)
 
-# Critical ap markers
+# Critical ap markers (DARC = LQG : même point)
 ax.axvline(4900, color='#888', linestyle=':', alpha=0.5, linewidth=1.2)
 ax.plot(4900, ap_crit_OL*1e3, 's', color=COLOR_OL, markersize=12,
          markeredgecolor='black', zorder=8)
 ax.plot(4900, ap_crit_LQG*1e3, 's', color=COLOR_LQG, markersize=12,
-         markeredgecolor='black', zorder=8)
-ax.plot(4900, ap_crit_DARC*1e3, 's', color=COLOR_DARC, markersize=12,
          markeredgecolor='black', zorder=8)
 
 # Custom legend
 custom = [
     plt.Line2D([0], [0], color=COLOR_OL, lw=2.5, label=f'Open-loop (Hatched = unstable)'),
     plt.Line2D([0], [0], color=COLOR_LQG, lw=2.5,
-                label=f'LQG  ($a_p^{{crit}} = {ap_crit_LQG*1e3:.2f}$ mm)'),
-    plt.Line2D([0], [0], color=COLOR_DARC, lw=2.5,
-                label=f'DARC-MPC  ($a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm)'),
+                label=f'LQG  ($a_p^{{crit}} {_cap_l} {ap_crit_LQG*1e3:.2f}$ mm)'),
+    plt.Line2D([0], [0], color=COLOR_DARC, lw=2.5, linestyle='--',
+                label='DARC (= LQG : FF exogène, Floquet inchangé)'),
     plt.Line2D([0], [0], marker='*', color='gold', markersize=18,
                 markeredgecolor='black', linestyle='None',
                 label='Operating point (4900 RPM, 0.3 mm)'),
@@ -391,8 +371,9 @@ print(f"\n{'='*70}")
 print(f" SUMMARY ")
 print(f"{'='*70}")
 print(f"  Critical a_p at 4900 RPM:")
-print(f"    Open-loop  : {ap_crit_OL*1e3:.3f} mm")
-print(f"    LQG        : {ap_crit_LQG*1e3:.3f} mm  ({ap_crit_LQG/ap_crit_OL:.1f}x OL)")
-print(f"    DARC-MPC: {ap_crit_DARC*1e3:.3f} mm  ({ap_crit_DARC/ap_crit_OL:.1f}x OL)")
-print(f"\n  DARC vs LQG: +{(ap_crit_DARC/ap_crit_LQG - 1)*100:.1f}% increase in stability domain")
+print(f"    Open-loop  : {_cap_o} {ap_crit_OL*1e3:.3f} mm")
+print(f"    LQG        : {_cap_l} {ap_crit_LQG*1e3:.3f} mm  ({ap_crit_LQG/ap_crit_OL:.1f}x OL)")
+print(f"    DARC       : {_cap_l} {ap_crit_DARC*1e3:.3f} mm  (= LQG)")
+print(f"\n  DARC vs LQG : même frontière de stabilité (feedforward exogène —")
+print(f"                multiplicateurs de Floquet strictement inchangés)")
 print(f"\n  Figures saved: fig09_SLD_overlay + fig08_SLD_3panels + fig09b_SLD_hatched")

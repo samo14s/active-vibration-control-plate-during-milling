@@ -231,44 +231,53 @@ def build_Phi_closed_loop(A0, Bu_col, Dp_vec, C_row, a4_array,
 
     if has_ctrl:
         K = np.atleast_2d(ctrl['K'])
+        K_row = K.flatten()
         A_obs_d = ctrl['A_obs_d']
         G_u = np.asarray(ctrl['G_u']).reshape(n_x)
         G_y = np.asarray(ctrl['G_y']).reshape(n_x)
-        A_hat = A_obs_d - np.outer(G_u, K.flatten())   # x̂ -> x̂ (u = -K x̂)
-        GyC = np.outer(G_y, C_row)                     # x  -> x̂
+        A_hat = A_obs_d - np.outer(G_u, K_row)         # x̂ -> x̂ (u = -K x̂)
 
     from scipy.linalg import expm as _expm
     Phi = np.eye(N)
-    T = np.zeros((N, N))
     i_h0 = n_x + n_c                          # début du bloc historique
+
+    # La matrice de pas T_k est creuse (bloc dense (n_x+n_c) lignes + décalage
+    # de l'historique) : on applique T_k @ Phi de façon STRUCTURÉE en
+    # O(m_div·N²) au lieu de O(m_div·N³), et on met en cache la
+    # discrétisation (Ad, Γu, Γd) par valeur de a4_k — la dent est hors coupe
+    # (a4 = 0) la majorité de la période à faible immersion radiale.
+    disc_cache = {}
     for k in range(m_div):
         a4_k = float(a4_array[k])
-        A_k = A0 - a4_k * E
-        Ad = _expm(A_k * dt_int)
-        try:
-            intExp = np.linalg.solve(A_k, Ad - np.eye(n_x))
-        except np.linalg.LinAlgError:
-            intExp = (np.eye(n_x) * dt_int + A_k * dt_int**2 / 2
-                      + A_k @ A_k * dt_int**3 / 6)
-        Gu_p = intExp @ Bu_col                # entrée commande (ZOH)
-        Gd_p = intExp @ (a4_k * Bd)           # entrée retardée (gelée)
+        if a4_k in disc_cache:
+            Ad, Gu_p, Gd_p = disc_cache[a4_k]
+        else:
+            A_k = A0 - a4_k * E
+            Ad = _expm(A_k * dt_int)
+            try:
+                intExp = np.linalg.solve(A_k, Ad - np.eye(n_x))
+            except np.linalg.LinAlgError:
+                intExp = (np.eye(n_x) * dt_int + A_k * dt_int**2 / 2
+                          + A_k @ A_k * dt_int**3 / 6)
+            Gu_p = intExp @ Bu_col            # entrée commande (ZOH)
+            Gd_p = intExp @ (a4_k * Bd)       # entrée retardée (gelée)
+            disc_cache[a4_k] = (Ad, Gu_p, Gd_p)
 
-        T[:, :] = 0.0
-        # x_{j+1}
-        T[:n_x, :n_x] = Ad
+        x_blk = Phi[:n_x]                     # vues sur l'état courant
+        h_last = Phi[i_h0 + m_div - 1]        # ligne w_{j-m_div}
+        new_x = Ad @ x_blk + np.outer(Gd_p, h_last)
         if has_ctrl:
-            T[:n_x, n_x:n_x + n_c] = -np.outer(Gu_p, K.flatten())
-        T[:n_x, i_h0 + m_div - 1] = Gd_p      # w_{j-m_div} (plus ancien)
-        # x̂_{j+1}
-        if has_ctrl:
-            T[n_x:n_x + n_c, :n_x] = GyC
-            T[n_x:n_x + n_c, n_x:n_x + n_c] = A_hat
-        # historique : nouveau w_j en tête, décalage du reste
-        T[i_h0, :n_x] = Dp_ext
-        for j in range(m_div - 1):
-            T[i_h0 + 1 + j, i_h0 + j] = 1.0
+            xh_blk = Phi[n_x:n_x + n_c]
+            new_x = new_x - np.outer(Gu_p, K_row @ xh_blk)
+            new_xh = np.outer(G_y, C_row @ x_blk) + A_hat @ xh_blk
+        new_w = Dp_ext @ x_blk                # nouveau w_j (ligne)
 
-        Phi = T @ Phi
+        # décalage de l'historique (copie explicite : recouvrement)
+        Phi[i_h0 + 1:i_h0 + m_div] = Phi[i_h0:i_h0 + m_div - 1].copy()
+        Phi[i_h0] = new_w
+        Phi[:n_x] = new_x
+        if has_ctrl:
+            Phi[n_x:n_x + n_c] = new_xh
 
     return Phi
 

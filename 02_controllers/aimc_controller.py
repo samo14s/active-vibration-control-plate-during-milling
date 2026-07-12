@@ -178,6 +178,18 @@ class AIMCController:
         # variance d'innovation de référence (échelle du bruit capteur)
         self.S_ref = max(S_lik, 1e-18)
 
+        # --- pré-empilement VECTORISÉ du banc (temps réel) ---
+        self.A_stack = np.stack([m.A_obs_d for m in self.models])     # (N,n_a,n_a)
+        self.Gu_stack = np.stack([m.G_u for m in self.models])        # (N,n_a)
+        self.Gy_stack = np.stack([m.G_y for m in self.models])        # (N,n_a)
+        self.C_row = self.C[0, :self.n_x].copy()                      # (n_x,)
+        self.K_row = self.K[0, :].copy()                              # (n_x,)
+        # indices d'états harmoniques (cos/sin) et gains d'annulation empilés
+        self.idx_re = np.array([self.n_x + 2*h for h in range(n_harm)])
+        self.idx_im = self.idx_re + 1
+        g = np.stack([m.gamma_h[1:n_harm+1] for m in self.models])    # (N,n_harm)
+        self.gam_re = np.real(g); self.gam_im = np.imag(g)
+
         self.reset()
         if verbose:
             print(f"[AIMC] banc MMAE : {self.N} candidats rho="
@@ -195,44 +207,34 @@ class AIMCController:
 
     # ----------------------------------------------------------------
     def reset(self):
-        self.x_bank = [np.zeros(self.n_a) for _ in range(self.N)]
-        self.logp = np.zeros(self.N)          # log-vraisemblances (relatives)
+        self.X = np.zeros((self.N, self.n_a))   # banc d'états (vectorisé)
+        self.logp = np.zeros(self.N)            # log-vraisemblances (relatives)
         # traces de diagnostic
-        self.trace_rho = []                    # détuning estimé (moyenne post.)
-        self.trace_conf = []                   # max p_i
+        self.trace_rho = []                     # détuning estimé (moyenne post.)
+        self.trace_conf = []                    # max p_i
 
     # ----------------------------------------------------------------
     def step(self, x_hat_prev, u_prev, y_meas, k_step=0):
-        # 1. banc de filtres augmentés + log-vraisemblances récursives
-        nu2 = np.empty(self.N)
-        for i, m in enumerate(self.models):
-            xa = self.x_bank[i]
-            y_pred = float(self.C[0, :] @ xa[:self.n_x])
-            nu = y_meas - y_pred
-            nu2[i] = nu*nu
-            self.x_bank[i] = m.A_obs_d @ xa + m.G_u*u_prev + m.G_y*y_meas
+        X_pre = self.X
+        # 1. innovations (prédiction depuis l'estimée précédente)
+        y_pred = X_pre[:, :self.n_x] @ self.C_row             # (N,)
+        nu2 = (y_meas - y_pred)**2
+        # propagation VECTORISÉE -> estimée courante x̂[k] (post-correction)
+        X = (np.einsum('nij,nj->ni', self.A_stack, X_pre)
+             + self.Gu_stack*u_prev + self.Gy_stack*y_meas)
+        self.X = X
         # MMAE : oubli exponentiel, normalisation log-somme
         self.logp = self.forget*self.logp - 0.5*nu2/self.S_ref
         self.logp -= self.logp.max()
-        p = np.exp(self.logp)
-        p /= p.sum()
+        p = np.exp(self.logp); p /= p.sum()
 
-        # 2. MÉLANGE BAYÉSIEN : état plante et annulation moyennés par p_i
-        x_mix = np.zeros(self.n_x)
-        u_canc = 0.0
-        for i, m in enumerate(self.models):
-            if p[i] < 1e-4:
-                continue
-            xa = self.x_bank[i]
-            x_mix += p[i] * xa[:self.n_x]
-            uc = 0.0
-            for h in range(1, self.n_harm+1):
-                i0 = self.n_x + 2*(h-1)
-                z_h = complex(xa[i0], xa[i0+1])
-                uc += float(np.real(np.conj(m.gamma_h[h]) * z_h))
-            u_canc += p[i] * uc
+        # 2. MÉLANGE BAYÉSIEN (vectorisé) sur l'estimée COURANTE x̂[k]
+        x_mix = p @ X[:, :self.n_x]                           # (n_x,)
+        zc = X[:, self.idx_re]; zs = X[:, self.idx_im]        # (N,n_harm)
+        # Re(conj(γ)·z) = γ_re·z_re + γ_im·z_im, sommé sur h puis pondéré par p
+        u_canc = float(p @ np.sum(self.gam_re*zc + self.gam_im*zs, axis=1))
 
-        u = -float((self.K @ x_mix).item()) + u_canc
+        u = -float(self.K_row @ x_mix) + u_canc
         u = float(np.clip(u, -self.u_max, self.u_max))
 
         self.trace_rho.append(float(p @ self.rho_grid))

@@ -161,6 +161,58 @@ peuvent dériver indépendamment : grille multi-ρ = extension directe) ;
 36 états de filtre au total (7×(6+16)) à 20 kHz — réaliste pour un DSP
 moderne mais à chiffrer ; la dérive simulée est un proxy k_scale(t) uniforme.
 
+## 6bis. Résultats étendus de l'AIMC (pour l'article — `main_aimc_extended.py`, `main_aimc_drift.py`)
+
+Caractérisation complète, y compris les LIMITES (protocole honnête).
+
+**E4 — paysage de détuning continu (−22 %…+12 %, au-delà de la grille MMAE).**
+L'AIMC reste plat à 0.24–0.41 µm sur TOUT le continuum, tandis que les modèles
+FIGÉS (LQG, IMC, DARC, STSMC) perdent la STABILITÉ dans les bandes de détuning
+où un mode traverse un lobe (à ρ ≤ −16 %, le plateau nominal chatter à
+a_p = 0.3 mm ; amplitudes non quantitatives car bornées par le clamp, mais la
+DIVERGENCE l'est). L'AIMC identifie le plateau détuné et **maintient la
+stabilité ET la performance sous-µm là où les autres décrochent** — y compris
+juste HORS grille (ρ = −22 %, la grille s'arrête à −20 %), preuve d'un bord
+gracieux.
+
+**E5 — robustesse au bruit capteur (paroi détunée −15 %).** L'AIMC est de loin
+le plus robuste : 0.35 µm (idéal) → 1.20 µm (2 µm RMS), contre 0.9→3.0 pour
+LQG/DARC/STSMC et ~9 µm (déjà divergé) pour l'IMC figé. L'identification MMAE
+survit au bruit car les vraisemblances intègrent sur ~10 ms.
+
+**E7 — transitoire d'identification (entrée d'outil dans une paroi déjà
+détunée −15 %).** Verrouillage à 90 % en **3 ms** ; RMS transitoire [0,50] ms
+= 0.61 µm, établi = 0.27 µm. L'adaptation est quasi instantanée à l'échelle
+d'une passe.
+
+**E9 — annulation spectrale (paroi −15 %).** Atténuation des raies de passage
+de dent : **−19 dB à 245 Hz, −11 dB à 490 Hz, −23 dB à 735 Hz, −16 dB à
+980 Hz** (LQG → AIMC). Preuve fréquentielle directe du rejet harmonique.
+
+**E10 — coût temps réel.** Banc VECTORISÉ (empilement des N filtres, une
+`einsum` par pas) : **45 µs/pas < dt = 50 µs -> temps réel VÉRIFIÉ** (à 20 kHz).
+Référence : LQG 7 µs, IMC 22 µs, DARC 15 µs, STSMC 15 µs. L'AIMC est ~2× l'IMC
+(7 filtres augmentés = 7×22 = 154 états), et reste dans le budget. (La première
+version, boucle Python, faisait 139 µs > dt ; la vectorisation était donc
+nécessaire — la charge algorithmique elle-même est modérée pour un DSP.)
+
+**E8 — bande passante de suivi (limite honnête).** La fenêtre d'oubli de 10 ms
+donne une large bande de suivi : l'AIMC reste à **0.19–0.25 µm pour TOUS les
+taux de dérive testés (8 %/s → 300 %/s)**, avec un retard d'identification
+< 4 %. L'IMC figé, lui, diverge (8.7 → 15.8 µm) dès que le détuning s'accumule,
+à toute vitesse. (Un enlèvement de matière réaliste dérive de quelques %/s ;
+l'AIMC a donc une très large marge.)
+
+**E12 — erreur d'encodeur / vitesse broche (limite honnête).** L'AIMC et l'IMC
+partagent la sensibilité des modèles internes à la fréquence de dent supposée :
+0.22 µm à erreur nulle → ~0.61 µm à ±4 % d'erreur de f_fund (l'AIMC reste
+légèrement meilleur que l'IMC car il ré-identifie l'amplitude, pas la
+fréquence). Le DARC, indexé par la PHASE (pas par f_fund), y est immunisé
+(0.363 µm plat). **Conséquence de conception** : l'AIMC exige un bon
+verrouillage sur l'encodeur (±4 % de RPM est énorme ; les encodeurs réels sont
+< 0.1 %) — une grille MMAE en fréquence, ou l'ajout de la fréquence à
+l'identification, lèverait cette sensibilité (P1).
+
 ## 7. Pistes de travail (P1 — recherche)
 
 1. **Tester le STSMC+DOB sur une pièce plus amortie / poutre Timoshenko** (là

@@ -103,11 +103,14 @@ class NewmarkSimulator:
         sensor_noise : bruit additif du capteur [m] (écart-type), 0=off.
         sensor_rng : générateur aléatoire pour le bruit capteur (reproductible).
         k_scale_t : (nstep,) facteur multiplicatif de la raideur modale au
-            cours du temps (None = 1, comportement historique).  Simule la
-            DÉRIVE EN COURS D'USINAGE des fréquences propres (proxy de
-            l'enlèvement de matière sur paroi mince) :
+            cours du temps (None = 1, comportement historique).  Modélise la
+            DÉRIVE EN COURS D'USINAGE des fréquences propres par ENLÈVEMENT DE
+            MATIÈRE (amincissement de paroi mince) :
                 Kp(t) = k_scale(t)·Kp ,  Cp(t) = sqrt(k_scale(t))·Cp
             (amortissements modaux ζ constants, ω_i(t) = sqrt(k_scale)·ω_i).
+            Base physique : pour une plaque, ω_i ∝ B (épaisseur) pour TOUS les
+            modes, donc k_scale = (B(t)/B₀)² est exact et uniforme entre modes.
+            Construire k_scale_t avec ``material_removal.thinning_schedule``.
             Le CONTRÔLEUR n'est PAS informé de cette dérive (protocole
             honnête) — c'est le banc d'essai des commandes adaptatives.
         """

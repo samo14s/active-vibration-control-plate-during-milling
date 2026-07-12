@@ -37,6 +37,7 @@ from darc_controller import DARCController
 from smc_dob_controller import SMCDOBController
 from aimc_controller import AIMCController
 from newmark_solver import NewmarkSimulator
+from material_removal import thinning_schedule
 
 # ============================================================
 # Paramètres physiques (identiques à main_simulation.py)
@@ -177,14 +178,16 @@ for name, ap, KT, fp in scenarios:
 # ================================================================
 # E3 : dérive en cours d'usinage (rampe 0 -> -15 %, T = 2 s)
 # ================================================================
-print("\n[E3] Dérive en cours d'usinage : omega 0 -> -15% sur t=[0.4,1.6]s (T=2s)")
+print("\n[E3] Dérive PHYSIQUE (amincissement paroi 4->3.4mm, loi ω∝B) sur t=[0.4,1.6]s (T=2s)")
 ap = 0.3e-3
 plate_d = build_plate(ap, 0.0)
 sim, kp, arrs, a3_n, n_per = make_setup(plate_d, ap, KT_NOMINAL, 2.0)
 Dp_ff = plate_d.get_Dp_at(int(kp[sim.nstep // 2]))[0]
 t = sim.t_vec
-rho_true = np.clip((t - 0.4)/(1.6 - 0.4), 0, 1) * (-0.15)
-k_scale = (1.0 + rho_true)**2
+# dérive de fréquence PHYSIQUE : amincissement de la paroi (loi plaque ω ∝ B).
+# 0.6 mm retirés d'une paroi de 4 mm = 15 % -> détuning -15 % (cf. material_removal).
+k_scale, B_t, rho_true = thinning_schedule(
+    t, B_nominal=BP, removed_total=0.15*BP, t_start=0.4, t_end=1.6)
 
 segs = [(0.0, 0.4), (0.4, 1.0), (1.0, 1.6), (1.6, 2.0)]
 def rms_seg(r, t0, t1):

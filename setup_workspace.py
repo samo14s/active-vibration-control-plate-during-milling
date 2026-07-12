@@ -79,6 +79,7 @@ def main():
     test_imports = [
         'kirchhoff_q4',
         'plate_model',
+        'material_removal',
         'piezo_actuator',
         'milling_force',
         'newmark_solver',

@@ -31,6 +31,7 @@ from imc_lqg_controller import IMCLQGController
 from darc_controller import DARCController
 from aimc_controller import AIMCController
 from newmark_solver import NewmarkSimulator
+from material_removal import thinning_schedule   # dérive de fréquence PHYSIQUE
 
 LP, HP, BP = 0.100, 0.080, 0.004
 RHO, E_AL, NU_AL = 2830, 69e9, 0.33
@@ -119,15 +120,19 @@ def make_ctrls(n_per):
 # ================================================================
 # E8 : limite de vitesse de dérive
 # ================================================================
-print("\n[E8] Bande passante de suivi : rampe 0 -> -15% de durées variables")
+print("\n[E8] Bande passante de suivi : amincissement PHYSIQUE de paroi "
+      "(0.6 mm = 15% de 4 mm) à débits variables")
 ramp_durs = [2.0, 1.0, 0.5, 0.2, 0.1, 0.05]   # s (du plus lent au plus rapide)
-e8 = {'ramp': [], 'IMC-fige': [], 'AIMC': [], 'lag': []}
+REMOVED = 0.15 * BP                            # 0.6 mm retirés (15% -> -15% freq)
+e8 = {'ramp': [], 'rate_mm': [], 'IMC-fige': [], 'AIMC': [], 'lag': []}
 for T_ramp in ramp_durs:
     T_end = 0.2 + T_ramp + 0.3            # avant + rampe + après
     sim, kp, arrs, n_per = setup(plate_d, ap, T_end)
     t = sim.t_vec
-    rho_true = np.clip((t - 0.2)/T_ramp, 0, 1)*(-0.15)
-    k_scale = (1.0 + rho_true)**2
+    # dérive PHYSIQUE : ω(t) ∝ B(t), amincissement de REMOVED sur [0.2, 0.2+T_ramp]
+    k_scale, B_t, rho_true = thinning_schedule(
+        t, B_nominal=BP, removed_total=REMOVED, t_start=0.2, t_end=0.2+T_ramp)
+    rate_mm = REMOVED*1e3 / T_ramp             # débit d'amincissement [mm/s]
     lqg, imc, aimc = make_ctrls(n_per)
     # RMS sur la fenêtre "après rampe établie" (dernier 0.2 s)
     i0 = int((T_end-0.2)/DT)
@@ -140,11 +145,12 @@ for T_ramp in ramp_durs:
     rr = np.array(aimc.trace_rho)
     i_end_ramp = min(int((0.2+T_ramp)/DT), len(rr)-1)
     lag = (rho_true[i_end_ramp] - rr[i_end_ramp])*100   # % de retard
-    e8['ramp'].append(T_ramp); e8['IMC-fige'].append(rms_tail(r_imc))
+    e8['ramp'].append(T_ramp); e8['rate_mm'].append(rate_mm)
+    e8['IMC-fige'].append(rms_tail(r_imc))
     e8['AIMC'].append(rms_tail(r_aimc)); e8['lag'].append(lag)
-    rate = 15.0/T_ramp
-    print(f"  rampe {T_ramp:.2f}s ({rate:5.0f}%/s) : IMC-fige={rms_tail(r_imc):6.3f}  "
-          f"AIMC={rms_tail(r_aimc):6.3f} um  retard_ID={lag:+.1f}%")
+    print(f"  amincissement {rate_mm:5.2f} mm/s ({15.0/T_ramp:5.0f}%/s) : "
+          f"IMC-fige={rms_tail(r_imc):6.3f}  AIMC={rms_tail(r_aimc):6.3f} um  "
+          f"retard_ID={lag:+.1f}%")
 
 # ================================================================
 # E12 : erreur d'encodeur / variation de vitesse de broche
@@ -175,13 +181,13 @@ for df in df_axis:
 # ================================================================
 fig, axes = plt.subplots(1, 2, figsize=(16, 5.6))
 ax = axes[0]
-rates = [15.0/T for T in e8['ramp']]
+rates = e8['rate_mm']
 ax.plot(rates, e8['IMC-fige'], 'o-', color=COL['IMC-fige'], lw=2, ms=6, label='IMC-figé')
 ax.plot(rates, e8['AIMC'], 's-', color=COL['AIMC'], lw=2, ms=6, label='AIMC')
-ax.set_xlabel("vitesse de dérive (% de détuning / s)")
+ax.set_xlabel("débit d'amincissement de paroi (mm/s)")
 ax.set_ylabel("$y_{RMS}$ après rampe (µm)")
 ax.set_xscale('log')
-ax.set_title("(E8) Bande passante de suivi\nAIMC suit jusqu'à une vitesse limite",
+ax.set_title("(E8) Suivi de la dérive PHYSIQUE (amincissement)\nAIMC suit, IMC figé diverge",
              fontweight='bold')
 ax.legend(fontsize=9); ax.grid(True, which='both', alpha=0.4)
 

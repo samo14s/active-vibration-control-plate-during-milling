@@ -196,12 +196,13 @@ Référence : LQG 7 µs, IMC 22 µs, DARC 15 µs, STSMC 15 µs. L'AIMC est ~2× 
 version, boucle Python, faisait 139 µs > dt ; la vectorisation était donc
 nécessaire — la charge algorithmique elle-même est modérée pour un DSP.)
 
-**E8 — bande passante de suivi (limite honnête).** La fenêtre d'oubli de 10 ms
-donne une large bande de suivi : l'AIMC reste à **0.19–0.25 µm pour TOUS les
-taux de dérive testés (8 %/s → 300 %/s)**, avec un retard d'identification
-< 4 %. L'IMC figé, lui, diverge (8.7 → 15.8 µm) dès que le détuning s'accumule,
-à toute vitesse. (Un enlèvement de matière réaliste dérive de quelques %/s ;
-l'AIMC a donc une très large marge.)
+**E8 — bande passante de suivi (limite honnête, dérive PHYSIQUE).** La dérive
+est modélisée par l'AMINCISSEMENT PHYSIQUE de la paroi (§6ter) : 0.6 mm retirés
+d'une paroi de 4 mm (15 %) à débit variable. L'AIMC reste à **0.19–0.25 µm pour
+TOUS les débits testés (0.30 → 12 mm/s d'amincissement)**, avec un retard
+d'identification < 4 %. L'IMC figé diverge (8.7 → 15.8 µm) à tout débit. Un
+enlèvement de matière réaliste en finition de paroi mince est bien inférieur au
+mm/s ; l'AIMC a donc une très large marge de bande passante.
 
 **E12 — erreur d'encodeur / vitesse broche (limite honnête).** L'AIMC et l'IMC
 partagent la sensibilité des modèles internes à la fréquence de dent supposée :
@@ -212,6 +213,37 @@ fréquence). Le DARC, indexé par la PHASE (pas par f_fund), y est immunisé
 verrouillage sur l'encodeur (±4 % de RPM est énorme ; les encodeurs réels sont
 < 0.1 %) — une grille MMAE en fréquence, ou l'ajout de la fréquence à
 l'identification, lèverait cette sensibilité (P1).
+
+## 6ter. NMODÉLISATION PHYSIQUE de la dérive (`01_core/material_removal.py`)
+
+La dérive de fréquence que l'AIMC identifie n'est PAS un simple bruit
+paramétrique : elle a une origine mécanique précise, l'**enlèvement de
+matière** en usinage de paroi mince.
+
+**Loi d'échelle exacte.** Pour une plaque, la rigidité par unité (flexion
+D ∝ B³ ; torsion GJ ∝ B³) et l'inertie ∝ B, d'où
+        ω_i = √(rigidité/inertie) ∝ √(B³/B) = B .
+**TOUTES** les fréquences (flexion, torsion, flexion-largeur) se mettent à
+l'échelle du MÊME facteur B(t)/B₀. La dérive uniforme entre modes — donc le
+paramètre UNIQUE ρ de la grille MMAE de l'AIMC — est **exacte pour la flexion
+de plaque, pas une approximation**. Un détuning de −15 % ≡ un amincissement de
+15 % (0.60 mm sur 4 mm) ≡ 6 passes × a_e = 0.1 mm en fraisage périphérique
+(vérifié à la précision machine : k_scale = (B/B₀)² = (1+ρ)²).
+
+Le solveur reçoit `k_scale_t` construit par `thinning_schedule(...)` :
+`Kp(t) = (B(t)/B₀)²·Kp`, `Cp(t) = (B(t)/B₀)·Cp` (ζ constants). Les scénarios de
+détuning STATIQUE (S3, S3b, E4) et de DÉRIVE (E3, E8) sont ainsi tous ancrés
+dans une même physique d'amincissement.
+
+**Limites explicites (honnêteté).** L'amincissement réel est spatialement non
+uniforme (zone usinée plus mince que devant l'outil) : cela ferait aussi
+évoluer les FORMES propres et Dp, non seulement les fréquences. Ici seules les
+fréquences varient (effet dominant), les formes restent nominales
+(approximation « épaisseur effective uniforme instantanée »). La rétroaction
+géométrique matière-contrainte et la variation de Dp par perte de masse ne sont
+pas modélisées. Ces limites bornent la portée quantitative mais non la
+conclusion qualitative (l'AIMC suit une dérive de fréquence d'origine physique
+là où le modèle figé décroche).
 
 ## 7. Pistes de travail (P1 — recherche)
 

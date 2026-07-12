@@ -49,7 +49,10 @@ def _band(ax, histories, key, color, label, n_pts: int = 400,
     if smooth_s > 0.0:
         k = max(1, int(round(smooth_s / (tg[1] - tg[0]))))
         kern = np.ones(k) / k
-        Y = np.vstack([np.convolve(y, kern, mode="same") for y in Y])
+        Y = np.vstack([
+            np.convolve(np.pad(y, (k, k), mode="edge"), kern,
+                        mode="same")[k:-k]
+            for y in Y])
     mu, sd = Y.mean(axis=0), Y.std(axis=0)
     lo = mu - sd if floor is None else np.maximum(mu - sd, floor)
     ax.plot(tg, mu, color=color, lw=1.8, label=label)
@@ -267,8 +270,7 @@ def fig_learning(part_summaries: list[dict], path: str) -> None:
     ax.set_xlabel("Workpiece number (identical parts)")
     ax.set_ylabel("Average MRR (cm³/min)")
     ax.set_xticks(parts)
-    ax.set_title(f"GP boundary learning across parts: {gain:+.1f}% MRR "
-                 "(paper reports +8 % by the later parts)", loc="left",
-                 fontsize=10)
+    ax.set_title(f"GP boundary learning: {gain:+.1f}% MRR across parts\n"
+                 "(paper: +8 % by the later parts)", loc="left", fontsize=10)
     fig.savefig(path)
     plt.close(fig)

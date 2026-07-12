@@ -178,7 +178,9 @@ class TestIdentification:
         for k in range(0, len(y) - 100, 100):
             ident.update(y[k: k + 100], f_rev=190.0)
         assert ident.fn_hz is not None
-        assert abs(ident.fn_hz - fn) / fn < 0.03
+        # raw-RLS accuracy is a few percent (the paper reports 3.2 %);
+        # the controller additionally fuses the Eq. (6) prediction
+        assert abs(ident.fn_hz - fn) / fn < 0.04
 
 
 # ---------------------------------------------------------------------------

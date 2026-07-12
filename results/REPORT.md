@@ -10,24 +10,24 @@ Campaign: 3 strategies x 5 trials, time-compressed wall-thinning pass (15 cm3 st
 
 | Quantity | This simulation | Paper |
 |---|---|---|
-| MRR improvement (adaptive vs conventional) | +45.5% | +44.2% |
+| MRR improvement (adaptive vs conventional) | +44.9% | +44.2% |
 | MRR improvement (SSV vs conventional) | +31.6% | +18% |
-| Total machining time | -32.3% | -29.6% |
-| Specific cutting energy | -32.2% | -25.8% |
+| Total machining time | -32.0% | -29.6% |
+| Specific cutting energy | -32.3% | -25.8% |
 | Modal identification median error | 1.0% | 3.2% |
 
 ## Per-strategy detail (means over trials; paper values in the last two columns)
 
 | Metric | Conventional (sim) | Adaptive (sim) | Conventional (paper) | Adaptive (paper) |
 |---|---|---|---|---|
-| Average MRR (cm3/min) | 16.4 | 23.9 | 17.2 | 24.8 |
+| Average MRR (cm3/min) | 16.4 | 23.8 | 17.2 | 24.8 |
 | Peak MRR (cm3/min) | 21.6 | 39.6 | 20.0 | 32.5 |
 | Max RMS vibration (um) | 118 | 24 | peaks > 150* | < 25 |
-| Time above 25 um (%) | 40.0 | 0.1 | - | ~0 |
+| Time above 25 um (%) | 40.0 | 0.0 | - | ~0 |
 | Ra min (um) | 0.80 | 0.80 | 0.8 | 0.9 |
-| Ra max (um) | 4.46 | 1.28 | 4.5 | 1.3 |
-| Ra sigma (um) | 0.82 | 0.10 | 1.24 | 0.15 |
-| Thickness deviation (mm) | 0.094 | 0.019 | ±0.08 | ±0.02 |
+| Ra max (um) | 4.46 | 1.29 | 4.5 | 1.3 |
+| Ra sigma (um) | 0.82 | 0.11 | 1.24 | 0.15 |
+| Thickness deviation (mm) | 0.094 | 0.020 | ±0.08 | ±0.02 |
 | Specific energy (W·min/cm3) | 19.7 | 13.3 | 3.1* | 2.3* |
 
 \* Notes on scale: the paper's Fig. 3(a) reports RMS peaks exceeding 150 um for conventional cutting; our conventional runs saturate near 115 um RMS (~165 um peak amplitude), set by the tooth jump-out limit cycle.  The absolute specific energy in the mechanistic force model (~13 W·min/cm3, i.e. ~0.8 J/mm3) matches aluminium machining physics; the paper's absolute values (3.1 -> 2.3) are on a different accounting basis, so the *relative* reduction is the comparable quantity.
@@ -38,7 +38,7 @@ Campaign: 3 strategies x 5 trials, time-compressed wall-thinning pass (15 cm3 st
 |---|---|---|
 | conventional | 55.7 | 52.2, 51.7, 70.4, 52.8, 51.3 |
 | ssv | 41.7 | 41.7, 41.7, 41.7, 41.7, 41.7 |
-| adaptive | 37.7 | 37.7, 36.4, 38.5, 38.2, 38.0 |
+| adaptive | 37.9 | 37.7, 36.3, 38.2, 38.6, 38.6 |
 
 ## Figures
 

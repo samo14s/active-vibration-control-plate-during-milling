@@ -36,6 +36,8 @@ def remove_harmonics(y: np.ndarray, fs: float, f_rev: float,
     n = len(y)
     if n < 8 or f_rev <= 0.0:
         return y
+    # keep the regressor well-posed: at most ~1 column per 5 samples
+    n_harm = min(n_harm, max(2, n // 10))
     t = np.arange(n) / fs
     cols = [np.ones(n)]
     for h in range(1, n_harm + 1):

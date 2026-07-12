@@ -37,9 +37,9 @@ class BoundaryGP:
         if self._calls % 25 != 0 or ap_lim_mm <= 0.1:
             return
         util = ap_mm / ap_lim_mm
-        if rms_um < 15.0 and util > 0.55:
-            target = np.log(1.10)                 # boundary was conservative
-        elif rms_um > 40.0:
+        if rms_um < 18.0 and util > 0.5:
+            target = np.log(1.12)                 # boundary was conservative
+        elif rms_um > 28.0:
             target = np.log(0.85)                 # boundary was optimistic
         else:
             target = 0.0

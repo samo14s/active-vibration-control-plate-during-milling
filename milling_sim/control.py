@@ -435,7 +435,10 @@ class AdaptiveController(BaseController):
             self.ap = self.ap + float(np.clip(d_ap_cmd, -0.35, 0.25))
         # feedback-driven trust in the model boundary: sustained quiet
         # cutting relaxes the cap; any chatter indication resets it
-        if self.p_inst > 0.3:
+        # In-pass trust relaxation.  When a cross-part boundary learner is
+        # attached it becomes the sole learning channel (clean attribution
+        # for the Eq. (23) study) and the in-pass relaxation is disabled.
+        if self.p_inst > 0.3 or self.learner is not None:
             self._relax = 0.0
         elif (chatter_um < 2.0 and self._rms_filt < 1.1 * cp.V_target_um
               and self._n_target is None):

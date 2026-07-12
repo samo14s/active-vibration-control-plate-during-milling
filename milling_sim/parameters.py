@@ -181,7 +181,7 @@ class BaselineParams:
     ssv_freq_hz: float = 5.0
     # "Manual conservative reduction when visible chatter occurred":
     # operator reacts with a delay, cutting feed/depth in steps.
-    operator_rms_threshold_um: float = 90.0
+    operator_rms_threshold_um: float = 65.0   # AC (high-passed) basis
     operator_reaction_s: float = 2.0
     operator_feed_factor: float = 0.82
     operator_ap_step_mm: float = 0.5

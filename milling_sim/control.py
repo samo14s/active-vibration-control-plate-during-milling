@@ -173,6 +173,7 @@ class AdaptiveController(BaseController):
         # boundary; any instability indication snaps it back (the in-pass
         # counterpart of the paper's boundary-learning, Sec. 3.3)
         self._relax = 0.0
+        self._chatter_streak = 0
         self.log = AdaptiveLog()
 
     # -- controller-side model update -------------------------------------
@@ -218,10 +219,12 @@ class AdaptiveController(BaseController):
         if self.learner is not None:
             env_mm = env_mm * self.learner.correction(self.n_grid,
                                                       Vr=self._Vr_cmd)
-        # smoothing across the grid stabilises the gradient, Eq. (19)
+        # smoothing across the grid stabilises the gradient, Eq. (19);
+        # edge-padded so the boundary is not biased down at the grid ends
         kernel = np.array([1.0, 2.0, 3.0, 2.0, 1.0])
-        env_mm = np.convolve(env_mm, kernel / kernel.sum(), mode="same")
-        self.ap_env_mm = env_mm
+        kernel /= kernel.sum()
+        padded = np.pad(env_mm, (2, 2), mode="edge")
+        self.ap_env_mm = np.convolve(padded, kernel, mode="same")[2:-2]
 
     def _ap_lim_at(self, n_rpm: float) -> float:
         return float(np.interp(n_rpm, self.n_grid, self.ap_env_mm))
@@ -340,9 +343,14 @@ class AdaptiveController(BaseController):
         # NONSYNCHRONOUS residual (chatter energy), which reacts long
         # before the total RMS - the paper's variance-analysis detector
         chatter_um = self.ident.resid_rms * 1e6
-        self.p_inst = max(0.0, (chatter_um - 2.5) / 5.0)
-        # temporary retraction (Sec. 3.1 tool-path modifier) on strong onset
-        if chatter_um > 6.0:
+        warmed_up = meas.t > 0.5                 # entry transients settle
+        self.p_inst = (max(0.0, (chatter_um - 2.5) / 5.0)
+                       if warmed_up else 0.0)
+        # temporary retraction (Sec. 3.1 tool-path modifier) on a SUSTAINED
+        # strong onset - a single hot window is not chatter
+        self._chatter_streak = (self._chatter_streak + 1
+                                if chatter_um > 6.0 else 0)
+        if warmed_up and self._chatter_streak >= 3:
             self.ap = max(lim.ap_min_mm, self.ap * 0.85)
 
         if self.ap_env_mm is None or self._lobe_refresh <= 0:
@@ -444,8 +452,12 @@ class AdaptiveController(BaseController):
               and self._n_target is None):
             self._relax = min(0.35, self._relax + 0.0007)
         # stability constraint, Eq. (17), enforced every period, together
-        # with the forced-response cap at the current speed and feed
-        ap_cap = cp.eta * self._ap_lim_at(self.n) * (1.0 + self._relax)
+        # with the forced-response cap at the current speed and feed.
+        # The trust relaxation may soften the safety factor eta but must
+        # never push the commanded depth past the predicted boundary
+        # itself (eta_eff < 1 always).
+        eta_eff = min(cp.eta * (1.0 + self._relax), 0.95)
+        ap_cap = eta_eff * self._ap_lim_at(self.n)
         ap_forced_now = float(self._ap_forced_mm(
             np.array([self.n]), vf_mm_min=self.vf)[0])
         ap_cap = min(ap_cap, 1.15 * ap_forced_now)
@@ -457,6 +469,7 @@ class AdaptiveController(BaseController):
             if sel.any():
                 ap_cap = min(ap_cap,
                              0.9 * cp.eta * float(self.ap_env_mm[sel].min()))
+        ap_cap = max(ap_cap, lim.ap_min_mm)      # keep clip bounds ordered
         self.ap = float(np.clip(self.ap, lim.ap_min_mm,
                                 min(lim.ap_max_mm, ap_cap)))
 
@@ -477,6 +490,9 @@ class AdaptiveController(BaseController):
 
         With QMRR linear in vf and ap held over the horizon, the KKT system
         is tridiagonal in the moves; only the first move is applied.
+        The tracking error is expressed in feed units, so lambda_f here
+        equals the paper's lambda_f divided by (ap*ae)^2 - a fixed smoothing
+        ratio rather than Eq. (20)'s literal MRR-unit weighting.
         """
         cp = self.cp
         Np = cp.Np

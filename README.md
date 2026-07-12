@@ -14,22 +14,32 @@ Full re-implementation and re-run of the simulation/control study in:
 
 | Quantity | This simulation | Paper |
 |---|---|---|
-| MRR improvement, adaptive vs conventional | **+45.5 %** | +44.2 % |
-| SSV baseline MRR improvement | +31.6 % | +18 % |
-| Total machining time | **−32.3 %** | −29.6 % |
-| Specific cutting energy | **−32.2 %** | −25.8 % |
-| Adaptive RMS vibration | < 25 μm (max ≈ 24) | < 25 μm |
-| Conventional vibration | ~115 μm RMS (≈165 μm peaks) | peaks > 150 μm |
-| Adaptive Ra | 0.80–1.35 μm | 0.9–1.3 μm |
-| Conventional Ra | 0.8–4.5 μm | 0.8–4.5 μm |
-| Ra σ reduction | −88 % | −87.9 % |
-| Wall-thickness deviation | ±0.019 / ±0.094 mm | ±0.02 / ±0.08 mm |
-| Modal-ID median error | ~1 % | 3.2 % |
+| MRR improvement, adaptive vs conventional | **+46.8 %** | +44.2 % |
+| SSV baseline MRR improvement | +32.8 % | +18 % |
+| Total machining time | **−32.6 %** | −29.6 % |
+| Specific cutting energy | **−28.4 %** | −25.8 % |
+| Adaptive RMS vibration (AC, high-passed basis) | < 25 μm (max ≈ 23) | < 25 μm |
+| Conventional vibration | ~85 μm RMS (≈120 μm peaks) | peaks > 150 μm |
+| Adaptive Ra | 0.80–1.24 μm | 0.9–1.3 μm |
+| Conventional Ra | 0.8–3.3 μm | 0.8–4.5 μm |
+| Ra σ reduction | −84 % | −87.9 % |
+| Wall-thickness deviation | ±0.019 / ±0.068 mm | ±0.02 / ±0.08 mm |
+| Modal-model tracking error (median / p90) | 1.2 % / 2.5 % | 3.2 % (identification) |
 
 See `results/REPORT.md` for the full table, figures and the list of known
-deviations (most notably: the SSV baseline over-performs on MRR and
-under-performs on quality relative to the paper — SSV effectiveness is
-plant-specific).
+deviations — most notably: the SSV baseline over-performs on MRR and
+under-performs on quality relative to the paper (SSV effectiveness is
+plant-specific), the tracking-error headline scores the fused Eq. (6)+RLS
+model rather than raw RLS, and the Eq. (23) cross-part learning yields
+only ~0–2 % here because the binding constraint in this plant is the
+forced-response cap, not a conservative stability boundary.
+
+The implementation was adversarially reviewed (multi-agent verification
+pass over force/dynamics, stability, control and metrics); all confirmed
+findings — DC contamination of the vibration channel, an Eq. (17)
+violation by the trust relaxation, a frozen-speed process-damping term in
+the ZOA, lobe-envelope edge-binning, coherence phase-slip, and a circular
+identification-accuracy headline — are fixed or honestly documented.
 
 ## What is modelled
 

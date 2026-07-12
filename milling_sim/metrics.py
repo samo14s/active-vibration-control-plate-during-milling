@@ -82,15 +82,26 @@ class MetricsCollector:
 
 
 def tooth_pass_coherence(force: np.ndarray, fs: float,
-                         n_rpm: float, n_teeth: int) -> float:
+                         n_rpm: float, n_teeth: int,
+                         pts_per_period: int = 32) -> float:
     """Correlation between successive tooth-passing periods (Sec. 4.1:
-    values below 0.7 indicate regenerative chatter onset)."""
+    values below 0.7 indicate regenerative chatter onset).
+
+    Segments are resampled onto an exact fractional-period grid (the
+    period is only ~4-6 raw samples at 12-20 krpm on the 5 kHz force
+    channel, so integer-sample segmentation would phase-slip and destroy
+    the coherence of perfectly periodic signals).
+    """
     period = 60.0 / (n_rpm * n_teeth)
-    npp = int(round(period * fs))
-    if npp < 4 or len(force) < 3 * npp:
+    npp = period * fs                            # fractional samples/period
+    if npp < 2.0 or len(force) < 4 * npp:
         return 1.0
-    nseg = len(force) // npp
-    segs = force[: nseg * npp].reshape(nseg, npp)
+    nseg = int(len(force) / npp) - 1
+    t_rel = np.arange(pts_per_period) / pts_per_period * npp
+    idx = np.arange(len(force), dtype=float)
+    segs = np.empty((nseg, pts_per_period))
+    for s in range(nseg):
+        segs[s] = np.interp(s * npp + t_rel, idx, force)
     segs = segs - segs.mean(axis=1, keepdims=True)
     cc = []
     for a, b in zip(segs[:-1], segs[1:]):

@@ -10,35 +10,35 @@ Campaign: 3 strategies x 5 trials, time-compressed wall-thinning pass (15 cm3 st
 
 | Quantity | This simulation | Paper |
 |---|---|---|
-| MRR improvement (adaptive vs conventional) | +44.9% | +44.2% |
-| MRR improvement (SSV vs conventional) | +31.6% | +18% |
-| Total machining time | -32.0% | -29.6% |
-| Specific cutting energy | -32.3% | -25.8% |
-| Modal identification median error | 1.0% | 3.2% |
+| MRR improvement (adaptive vs conventional) | +46.8% | +44.2% |
+| MRR improvement (SSV vs conventional) | +32.8% | +18% |
+| Total machining time | -32.6% | -29.6% |
+| Specific cutting energy | -28.4% | -25.8% |
+| Modal-model tracking error (median / p90) | 1.2% / 2.5% | 3.2% (identification accuracy) |
 
 ## Per-strategy detail (means over trials; paper values in the last two columns)
 
 | Metric | Conventional (sim) | Adaptive (sim) | Conventional (paper) | Adaptive (paper) |
 |---|---|---|---|---|
-| Average MRR (cm3/min) | 16.4 | 23.8 | 17.2 | 24.8 |
-| Peak MRR (cm3/min) | 21.6 | 39.6 | 20.0 | 32.5 |
-| Max RMS vibration (um) | 118 | 24 | peaks > 150* | < 25 |
-| Time above 25 um (%) | 40.0 | 0.0 | - | ~0 |
+| Average MRR (cm3/min) | 16.3 | 23.9 | 17.2 | 24.8 |
+| Peak MRR (cm3/min) | 21.6 | 36.3 | 20.0 | 32.5 |
+| Max RMS vibration (um) | 85 | 23 | peaks > 150* | < 25 |
+| Time above 25 um (%) | 37.9 | 0.0 | - | ~0 |
 | Ra min (um) | 0.80 | 0.80 | 0.8 | 0.9 |
-| Ra max (um) | 4.46 | 1.29 | 4.5 | 1.3 |
-| Ra sigma (um) | 0.82 | 0.11 | 1.24 | 0.15 |
-| Thickness deviation (mm) | 0.094 | 0.020 | ±0.08 | ±0.02 |
-| Specific energy (W·min/cm3) | 19.7 | 13.3 | 3.1* | 2.3* |
+| Ra max (um) | 3.30 | 1.24 | 4.5 | 1.3 |
+| Ra sigma (um) | 0.62 | 0.10 | 1.24 | 0.15 |
+| Thickness deviation (mm) | 0.068 | 0.019 | ±0.08 | ±0.02 |
+| Specific energy (W·min/cm3) | 18.7 | 13.4 | 3.1* | 2.3* |
 
-\* Notes on scale: the paper's Fig. 3(a) reports RMS peaks exceeding 150 um for conventional cutting; our conventional runs saturate near 115 um RMS (~165 um peak amplitude), set by the tooth jump-out limit cycle.  The absolute specific energy in the mechanistic force model (~13 W·min/cm3, i.e. ~0.8 J/mm3) matches aluminium machining physics; the paper's absolute values (3.1 -> 2.3) are on a different accounting basis, so the *relative* reduction is the comparable quantity.
+\* Notes on scale: the paper's Fig. 3(a) reports RMS peaks exceeding 150 um for conventional cutting; our conventional runs saturate near 85 um RMS (~121 um peak amplitude), set by the tooth jump-out limit cycle.  The absolute specific energy in the mechanistic force model (~19 W·min/cm3, i.e. ~0.8 J/mm3) matches aluminium machining physics; the paper's absolute values (3.1 -> 2.3) are on a different accounting basis, so the *relative* reduction is the comparable quantity.
 
 ## Simulated machining times (s, compressed pass)
 
 | Strategy | mean | trials |
 |---|---|---|
-| conventional | 55.7 | 52.2, 51.7, 70.4, 52.8, 51.3 |
+| conventional | 56.0 | 51.6, 52.7, 54.6, 68.2, 52.6 |
 | ssv | 41.7 | 41.7, 41.7, 41.7, 41.7, 41.7 |
-| adaptive | 37.9 | 37.7, 36.3, 38.2, 38.6, 38.6 |
+| adaptive | 37.7 | 36.4, 37.6, 37.1, 38.9, 38.6 |
 
 ## Figures
 
@@ -53,6 +53,8 @@ Campaign: 3 strategies x 5 trials, time-compressed wall-thinning pass (15 cm3 st
 1. **SSV baseline** improves MRR by more than the paper's +18% here (no operator reductions are triggered because its chatter bursts stay short), while its surface/thickness quality is worse than the paper reports.  SSV effectiveness is highly plant-specific; our calibrated wall dynamics sit where 5 Hz modulation only fragments, rather than suppresses, chatter.
 2. **Chatter frequency band**: our calibration places the wall mode at 1580 Hz falling to ~1050 Hz across the pass, so chatter appears at 1100-1500 Hz vs the paper's 800-1200 Hz; the paper's physical walls are larger.  The stability mechanics (lobe migration through the fixed operating point) are identical.
 3. The economics rows of the paper's Table 2 (cost/part, tooling cost, ROI) and yield/tool-life statistics require shop-floor data and are outside the physics simulation.
+4. **Identification**: the tracking-error headline scores the controller's fused modal model - Eq. (6) dead-reckoning from the commanded material removal, refined by the RLS estimate when it is fresh and consistent (the notch and the mode collide near resonant speeds, so raw RLS goes stale there).  The plant's Eq. (6)-(7) sensitivities are scattered per workpiece while the controller knows only the nominal calibration, so the dead-reckoning alone would drift by a few percent over the pass.
+5. **Cross-part learning** (`run_learning_demo.py`): the GP mechanism of Eq. (23) is implemented, but the realised gain in our plant is ~0-2% (within trial scatter) versus the paper's +8%: the binding constraint here is usually the forced-response cap, which leaves little boundary conservatism for the GP to reclaim.
 
 ## Equation-to-code map
 

@@ -14,11 +14,17 @@ Implements the coupled tool-workpiece model of Sec. 2:
 * Eq. (13): process damping force proportional to Kp V0 / V
 
 The regenerative delay tau = 60 / (N n) is realised with a full
-displacement history buffer and linear interpolation, which remains exact
-under the spindle-speed variation commanded by the controllers.
+displacement history buffer and linear interpolation.  Under spindle-speed
+variation the instantaneous tau is used (the surface-position history is
+not re-timed), a standard quasi-static approximation that is accurate for
+the modulation rates commanded here (<= a few Hz).
 
 Nonlinearities: the tooth leaves the cut when h_j < 0 (jump-out) and the
-engagement window g(phi_j) switches teeth in and out of contact.
+engagement window g(phi_j) switches teeth in and out of contact.  The
+jump-out uses the classical single-delay model (the machined surface is
+not frozen across skipped passes).  Sensor decimation is direct (no
+anti-aliasing filter); all modelled modes lie below the Nyquist rate of
+the 10 kHz vibration channel, but force spectra above 2.5 kHz fold.
 """
 
 from __future__ import annotations
@@ -67,7 +73,9 @@ def _integrate_interval(i0, i1, dt,
     two_pi = 2.0 * math.pi
     pitch = two_pi / n_teeth
 
+    sum_y = 0.0
     sum_y2 = 0.0
+    sum_yw = 0.0
     sum_yw2 = 0.0
     sum_fx = 0.0
     sum_fy = 0.0
@@ -145,7 +153,9 @@ def _integrate_interval(i0, i1, dt,
 
         phi += omega * dt
 
+        sum_y += y_rel
         sum_y2 += y_rel * y_rel
+        sum_yw += y_wp
         sum_yw2 += y_wp * y_wp
         sum_fx += fx
         sum_fy += fy
@@ -162,8 +172,13 @@ def _integrate_interval(i0, i1, dt,
             n_f += 1
 
     n_steps = i1 - i0
-    rms_y = math.sqrt(sum_y2 / n_steps)
-    rms_yw = math.sqrt(sum_yw2 / n_steps)
+    # AC vibration (variance about the interval mean): the physical
+    # accelerometer chain is high-passed at 10 Hz (paper Sec. 3.2), so the
+    # quasi-static deflection must NOT appear in the vibration channel
+    mean_y = sum_y / n_steps
+    mean_yw = sum_yw / n_steps
+    rms_y = math.sqrt(max(sum_y2 / n_steps - mean_y * mean_y, 0.0))
+    rms_yw = math.sqrt(max(sum_yw2 / n_steps - mean_yw * mean_yw, 0.0))
     return (phi % two_pi, rms_y, sum_fx / n_steps, sum_fy / n_steps,
             sum_ftan / n_steps, max_f, rms_yw, n_id, n_f)
 
@@ -201,13 +216,24 @@ class MillingSimulator:
         self.ctrl_dt = 1.0 / setup.controller.update_rate_hz
         self.steps_per_ctrl = int(round(self.ctrl_dt / self.dt))
 
-        # workpiece-to-workpiece scatter ("same material batch", Sec. 4.1)
+        # workpiece-to-workpiece scatter ("same material batch", Sec. 4.1).
+        # The Eq. (6)-(7) sensitivities alpha/beta are ALSO scattered: the
+        # controller only knows their nominal calibration, so its
+        # dead-reckoned model carries a genuine, growing error over the
+        # pass that the RLS identification has to correct.
         self.modes = []
         for m in setup.modes:
             mm = type(m)(**{**m.__dict__})
             mm.f0_hz *= 1.0 + batch_scatter * self.rng.standard_normal() * 0.5
             mm.zeta0 *= 1.0 + batch_scatter * self.rng.standard_normal()
+            mm.alpha *= 1.0 + 4.0 * batch_scatter * self.rng.standard_normal()
+            mm.beta *= 1.0 + 4.0 * batch_scatter * self.rng.standard_normal()
             self.modes.append(mm)
+        # the kernel's force routing supports wall modes in y only (the
+        # thin wall is rigid along the feed direction by assumption)
+        for m in self.modes:
+            if m.structure == "workpiece" and m.direction != "y":
+                raise ValueError("workpiece modes must be y-direction")
 
         n_modes = len(self.modes)
         self.mass = np.array([m.mass_kg for m in self.modes])
@@ -230,8 +256,10 @@ class MillingSimulator:
         nt = setup.tool.n_teeth
         radial = np.array([r0 * math.cos(2.0 * math.pi * j / nt + ph)
                            for j in range(nt)])
-        # chip-thickness perturbation = own offset minus preceding tooth's
-        self.runout = radial - np.roll(radial, 1)
+        # chip-thickness perturbation = own offset minus that of the tooth
+        # which cut the same surface point one pitch earlier (tooth j+1
+        # passes a fixed angular position before tooth j)
+        self.runout = radial - np.roll(radial, -1)
 
         self.id_dec = max(1, int(round(1.0 / (sim.accel_sample_hz * self.dt))))
         self.f_dec = max(1, int(round(1.0 / (sim.force_sample_hz * self.dt))))

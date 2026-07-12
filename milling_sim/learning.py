@@ -5,8 +5,15 @@ fraction) learns a multiplicative correction to the model-based stability
 boundary from the outcomes observed on previous workpieces.  Where the
 process ran stably close to the predicted boundary, the correction (and
 hence the usable depth of cut) grows; where vibration was high, it
-shrinks.  This reproduces the paper's progressive improvement across
-identical workpieces (~8 % MRR between the first and later parts).
+shrinks.
+
+This implements the mechanism behind the paper's progressive improvement
+across identical workpieces (+8 % MRR by the later parts).  In OUR
+calibrated plant the realised cross-part gain is small (~0-2 %, within
+trial-to-trial scatter): the binding constraint is usually the
+forced-response cap rather than a conservatively-predicted stability
+boundary, so there is little conservatism for the GP to reclaim.  See
+results/REPORT.md, "Known deviations".
 """
 
 from __future__ import annotations

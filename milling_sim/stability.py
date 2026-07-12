@@ -80,12 +80,20 @@ def stability_lobes(tool: ToolParams,
                     f_hi: float = 3600.0,
                     n_freq: int = 900,
                     k_max: int = 12,
-                    process_damping: bool = False,
                     ) -> list[LobePoint]:
     """Sweep candidate chatter frequencies and solve Eqs. (11)-(12).
 
     Returns the raw cloud of (n, ap_lim) lobe points; use
     :func:`critical_depth_at_speed` for the envelope at one speed.
+
+    NOTE on Eq. (13): process damping is speed-dependent (Cp = Kp V0 / V),
+    but in the ZOA the same chatter frequency maps to one spindle speed
+    per lobe number, so a Cp folded into H before the eigenvalue step
+    cannot be given the correct per-speed value.  Process damping is
+    therefore modelled ONLY in the time-domain engine (where the true
+    instantaneous speed is available); the analytical boundaries here are
+    slightly conservative at low spindle speeds, which is the safe side
+    for the controller that consumes them.
     """
     phi_st, phi_ex = engagement.entry_exit_angles(tool)
     A = directional_matrix(tool.Kr, phi_st, phi_ex)
@@ -95,8 +103,6 @@ def stability_lobes(tool: ToolParams,
     for f in np.linspace(f_lo, f_hi, n_freq):
         w = 2.0 * math.pi * f
         H = receptance_matrix(w, modes, Vr)
-        if process_damping:
-            H = _apply_process_damping(H, w, tool, modes, Vr)
         G0 = A @ H                      # oriented receptance matrix, Eq. (9)
         eigs = np.linalg.eigvals(G0)
         for nu in eigs:
@@ -121,24 +127,6 @@ def stability_lobes(tool: ToolParams,
     return points
 
 
-def _apply_process_damping(H: np.ndarray, w: float, tool: ToolParams,
-                           modes: list[Mode], Vr: float) -> np.ndarray:
-    """Fold the speed-dependent process damping of Eq. (13) into H[1,1].
-
-    Modelled as extra modal damping on the dominant wall mode proportional
-    to Kp V0 / V, evaluated at a representative cutting speed.
-    """
-    # Representative surface speed at 12 000 rpm for the damping magnitude.
-    V = math.pi * tool.diameter_m * 12000.0 / 60.0
-    Cp = tool.Kp * tool.V0 / max(V, 0.5)
-    H = H.copy()
-    g = H[1, 1]
-    if abs(g) > 0.0:
-        # Add Cp as parallel viscous damping: 1/g' = 1/g + i w Cp
-        H[1, 1] = 1.0 / (1.0 / g + 1j * w * Cp)
-    return H
-
-
 def lobe_envelope(points: list[LobePoint],
                   n_grid_rpm: np.ndarray) -> np.ndarray:
     """Lower envelope ap_lim(n) [m] over a spindle-speed grid."""
@@ -147,8 +135,15 @@ def lobe_envelope(points: list[LobePoint],
         return ap_env
     n_arr = np.array([p.spindle_rpm for p in points])
     ap_arr = np.array([p.ap_lim_m for p in points])
-    # bin points to the grid and keep the minimum per bin, then close gaps
-    idx = np.clip(np.searchsorted(n_grid_rpm, n_arr), 0, len(n_grid_rpm) - 1)
+    # keep only points inside the grid (out-of-range lobes must not be
+    # collapsed into the edge bins), bin to the NEAREST node and keep the
+    # per-bin minimum, then close gaps
+    lo, hi = n_grid_rpm[0], n_grid_rpm[-1]
+    bin_w = (hi - lo) / max(len(n_grid_rpm) - 1, 1)
+    inside = (n_arr >= lo) & (n_arr <= hi)
+    n_arr, ap_arr = n_arr[inside], ap_arr[inside]
+    idx = np.clip(((n_arr - lo) / bin_w).round().astype(int),
+                  0, len(n_grid_rpm) - 1)
     for i, a in zip(idx, ap_arr):
         if a < ap_env[i]:
             ap_env[i] = a
@@ -172,7 +167,8 @@ def fast_lobe_envelope(tool: ToolParams,
     """Vectorised ap_lim(n) envelope [m] for the controller's 100 Hz loop.
 
     ``modes_fz`` is a list of (fn_hz, zeta, mass_kg) tuples;  ``directions``
-    gives 'x'/'y' per mode (defaults to the standard set order).  Uses the
+    gives 'x'/'y' per mode.  If omitted, ALL modes are treated as
+    y-direction — pass the real directions for a mixed modal set.  Uses the
     closed-form eigenvalues of the 2x2 oriented matrix, fully vectorised
     over the chatter-frequency grid, then scatters Eq. (12) speeds onto
     ``n_grid_rpm`` keeping the per-bin minimum of Eq. (11).

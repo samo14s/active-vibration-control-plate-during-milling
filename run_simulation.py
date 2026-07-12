@@ -98,16 +98,32 @@ def main() -> None:
     e_gain = 100.0 * (m("adaptive", "specific_energy_W_min_cm3")
                       / m("conventional", "specific_energy_W_min_cm3") - 1.0)
 
-    # identification accuracy across adaptive trials
-    id_errs = []
+    # modal-model tracking accuracy across adaptive trials.  NOTE: this
+    # scores the controller's FUSED model (Eq. (6) dead-reckoning refined
+    # by RLS when fresh/consistent) against the true wall mode - it is a
+    # model-tracking error, not the raw-RLS accuracy.  The plant's Eq. (6)
+    # sensitivity alpha is scattered per workpiece while the controller
+    # only knows the nominal calibration, so pure dead-reckoning drifts by
+    # a few percent over the pass; the RLS fusion pulls it back.
+    id_errs, id_errs_p90 = [], []
     for ctl in campaign["adaptive"]["controllers"]:
         f_id = np.asarray(ctl.log.fn_id, float)
         f_tr = np.asarray(ctl.log.fn_true, float)
         ok = np.isfinite(f_id) & np.isfinite(f_tr)
         if ok.any():
-            id_errs.append(np.median(
-                np.abs(f_id[ok] - f_tr[ok]) / f_tr[ok] * 100.0))
+            e = np.abs(f_id[ok] - f_tr[ok]) / f_tr[ok] * 100.0
+            id_errs.append(np.median(e))
+            id_errs_p90.append(np.percentile(e, 90.0))
     id_err = float(np.mean(id_errs)) if id_errs else float("nan")
+    id_err_p90 = float(np.mean(id_errs_p90)) if id_errs_p90 else float("nan")
+
+    # completion guard: every run must actually finish its stock
+    incomplete = {name: sum(1 for s in campaign[name]["summaries"]
+                            if s["final_Vr"] < 0.999)
+                  for name in STRATEGIES}
+    if any(incomplete.values()):
+        print(f"WARNING: runs that hit the time ceiling before Vr=1: "
+              f"{incomplete} - machining-time comparison is biased")
 
     results = {
         "config": {
@@ -125,7 +141,9 @@ def main() -> None:
             "ssv_mrr_improvement_pct": ssv_gain,
             "machining_time_change_pct": t_gain,
             "specific_energy_change_pct": e_gain,
-            "identification_median_error_pct": id_err,
+            "model_tracking_median_error_pct": id_err,
+            "model_tracking_p90_error_pct": id_err_p90,
+            "incomplete_runs": incomplete,
         },
         "paper_reference": PAPER,
     }
@@ -139,7 +157,8 @@ def main() -> None:
     print(f"SSV MRR improvement:  {ssv_gain:+6.1f}%   (paper +18%)")
     print(f"Machining time:       {t_gain:+6.1f}%   (paper -29.6%)")
     print(f"Specific energy:      {e_gain:+6.1f}%   (paper -25.8%)")
-    print(f"ID median error:      {id_err:6.2f}%   (paper 3.2%)")
+    print(f"Model tracking error: {id_err:6.2f}% median / {id_err_p90:.2f}% "
+          f"p90  (paper reports 3.2% for its identification)")
     print(f"\nOutputs written to {args.out}/")
 
 
@@ -178,8 +197,10 @@ def _write_report(out: str, setup: PaperSetup, agg: dict,
         f"-29.6% |",
         f"| Specific cutting energy | "
         f"{h['specific_energy_change_pct']:+.1f}% | -25.8% |",
-        f"| Modal identification median error | "
-        f"{h['identification_median_error_pct']:.1f}% | 3.2% |",
+        f"| Modal-model tracking error (median / p90) | "
+        f"{h['model_tracking_median_error_pct']:.1f}% / "
+        f"{h['model_tracking_p90_error_pct']:.1f}% | 3.2% "
+        f"(identification accuracy) |",
         "",
         "## Per-strategy detail (means over trials; paper values in the "
         "last two columns)",
@@ -203,14 +224,18 @@ def _write_report(out: str, setup: PaperSetup, agg: dict,
         row("Specific energy (W·min/cm3)", "specific_energy_W_min_cm3",
             "3.1*", "2.3*", "{:.1f}"),
         "",
-        "\\* Notes on scale: the paper's Fig. 3(a) reports RMS peaks "
-        "exceeding 150 um for conventional cutting; our conventional runs "
-        "saturate near 115 um RMS (~165 um peak amplitude), set by the "
-        "tooth jump-out limit cycle.  The absolute specific energy in the "
-        "mechanistic force model (~13 W·min/cm3, i.e. ~0.8 J/mm3) matches "
-        "aluminium machining physics; the paper's absolute values (3.1 -> "
-        "2.3) are on a different accounting basis, so the *relative* "
-        "reduction is the comparable quantity.",
+        f"\\* Notes on scale: the paper's Fig. 3(a) reports RMS peaks "
+        f"exceeding 150 um for conventional cutting; our conventional runs "
+        f"saturate near "
+        f"{agg['conventional']['rms_max_um']['mean']:.0f} um RMS "
+        f"(~{agg['conventional']['rms_max_um']['mean'] * 1.414:.0f} um peak "
+        f"amplitude), set by the tooth jump-out limit cycle.  The absolute "
+        f"specific energy in the mechanistic force model "
+        f"(~{agg['conventional']['specific_energy_W_min_cm3']['mean']:.0f} "
+        f"W·min/cm3, i.e. ~0.8 J/mm3) matches aluminium machining physics; "
+        f"the paper's absolute values (3.1 -> 2.3) are on a different "
+        f"accounting basis, so the *relative* reduction is the comparable "
+        f"quantity.",
         "",
         "## Simulated machining times (s, compressed pass)",
         "",
@@ -252,6 +277,20 @@ def _write_report(out: str, setup: PaperSetup, agg: dict,
         "3. The economics rows of the paper's Table 2 (cost/part, tooling "
         "cost, ROI) and yield/tool-life statistics require shop-floor "
         "data and are outside the physics simulation.",
+        "4. **Identification**: the tracking-error headline scores the "
+        "controller's fused modal model - Eq. (6) dead-reckoning from the "
+        "commanded material removal, refined by the RLS estimate when it "
+        "is fresh and consistent (the notch and the mode collide near "
+        "resonant speeds, so raw RLS goes stale there).  The plant's "
+        "Eq. (6)-(7) sensitivities are scattered per workpiece while the "
+        "controller knows only the nominal calibration, so the "
+        "dead-reckoning alone would drift by a few percent over the pass.",
+        "5. **Cross-part learning** (`run_learning_demo.py`): the GP "
+        "mechanism of Eq. (23) is implemented, but the realised gain in "
+        "our plant is ~0-2% (within trial scatter) versus the paper's "
+        "+8%: the binding constraint here is usually the forced-response "
+        "cap, which leaves little boundary conservatism for the GP to "
+        "reclaim.",
         "",
         "## Equation-to-code map",
         "",

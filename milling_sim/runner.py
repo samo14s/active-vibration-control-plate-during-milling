@@ -77,5 +77,6 @@ def aggregate(summaries: list[dict]) -> dict:
     agg = {}
     for k in keys:
         vals = np.array([s[k] for s in summaries], dtype=float)
-        agg[k] = {"mean": float(vals.mean()), "std": float(vals.std())}
+        agg[k] = {"mean": float(vals.mean()),
+                  "std": float(vals.std(ddof=1)) if len(vals) > 1 else 0.0}
     return agg

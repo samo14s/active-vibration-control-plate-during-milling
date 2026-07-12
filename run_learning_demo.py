@@ -35,8 +35,9 @@ def main() -> None:
     summaries = []
     for part in range(args.parts):
         ctl = AdaptiveController(setup, boundary_learner=learner)
-        # identical parts: same seed base, small trial-to-trial scatter
-        h, s = run_pass(setup, ctl, seed=903 + part)
+        # identical parts: SAME plant realisation every time, so the only
+        # thing that changes between parts is the accumulated GP knowledge
+        h, s = run_pass(setup, ctl, seed=903)
         summaries.append(s)
         print(f"part {part + 1}: MRR {s['avg_mrr_cm3_min']:.1f} cm3/min, "
               f"RMS max {s['rms_max_um']:.0f} um, "

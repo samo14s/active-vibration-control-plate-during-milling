@@ -69,6 +69,7 @@ class NewmarkSimulator:
                  sensor_rng=None,
                  stop_threshold: float = 5e-3,
                  stop_at_time: float = None,
+                 k_scale_t=None,
                  progress: bool = True):
         """
         Lance la simulation de la NDDE non linéaire.
@@ -101,6 +102,14 @@ class NewmarkSimulator:
             réaliste du capteur).  Appliqué même en capteur idéal.  0 = parfait.
         sensor_noise : bruit additif du capteur [m] (écart-type), 0=off.
         sensor_rng : générateur aléatoire pour le bruit capteur (reproductible).
+        k_scale_t : (nstep,) facteur multiplicatif de la raideur modale au
+            cours du temps (None = 1, comportement historique).  Simule la
+            DÉRIVE EN COURS D'USINAGE des fréquences propres (proxy de
+            l'enlèvement de matière sur paroi mince) :
+                Kp(t) = k_scale(t)·Kp ,  Cp(t) = sqrt(k_scale(t))·Cp
+            (amortissements modaux ζ constants, ω_i(t) = sqrt(k_scale)·ω_i).
+            Le CONTRÔLEUR n'est PAS informé de cette dérive (protocole
+            honnête) — c'est le banc d'essai des commandes adaptatives.
         """
         n = self.n_modes
         n_x = 2 * n
@@ -159,6 +168,13 @@ class NewmarkSimulator:
             a4_2 = alpha4_2_t[k]
             a4_3 = alpha4_3_t[k]
 
+            # Dérive en cours d'usinage (proxy enlèvement de matière) :
+            # raideur (et amortissement à ζ constant) variables dans le temps.
+            if k_scale_t is not None:
+                ks = float(k_scale_t[k])
+                Kp_modal = self.plate.Kp * ks
+                Cp_modal = self.plate.Cp * np.sqrt(ks)
+
             # Mesure : idéale ou réaliste (bruit + retard), puis plancher capteur
             y_true = D_obs @ qm[:, k-1]
             if piezo is not None:
@@ -186,7 +202,7 @@ class NewmarkSimulator:
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)
-                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller', 'DARCController', 'SMCDOBController'):
+                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller', 'DARCController', 'SMCDOBController', 'AIMCController'):
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)

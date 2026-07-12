@@ -1,14 +1,17 @@
 # 02_controllers — Control Algorithms
 
-This directory contains the **three controllers** compared in the study:
-LQG (baseline), IMC-LQG (internal-model feedback baseline), and DARC
-(proposed).
+This directory contains the **five controllers** of the architecture study:
+LQG (baseline), IMC-LQG (internal-model feedback baseline), DARC
+(anticipative feedforward + NN residual), STSMC+DOB (robust corner), and
+AIMC (identification-adaptive cancellation — the headline contribution).
 
 | File | Controller | Key class |
 |---|---|---|
 | `lqg_controller.py` | Linear Quadratic Gaussian | `LQGController` |
 | `imc_lqg_controller.py` | LQG + harmonic internal model (disturbance-accommodating LQG) | `IMCLQGController` |
-| `darc_controller.py` | DARC: Deep Anticipative Residual Control (proposed) | `DARCController` |
+| `darc_controller.py` | DARC: Deep Anticipative Residual Control | `DARCController` |
+| `smc_dob_controller.py` | STSMC+DOB robust corner (super-twisting + integral DOB) | `SMCDOBController` |
+| `aimc_controller.py` | **AIMC: identification-adaptive harmonic cancellation (headline)** | `AIMCController` |
 
 ## LQG Controller (baseline)
 
@@ -109,3 +112,38 @@ See the root README "Key Results" tables — all numbers there are produced
 by `05_main/main_simulation.py` and `05_main/main_imc_baseline.py` under the
 honest protocol (nominal-model controller design, disjoint train/val/eval
 seeds).
+
+
+## AIMC (identification-adaptive cancellation — headline contribution)
+
+Closes the literature gap "in-process identification never feeds the active
+cancellation path; FxLMS adapts coefficients over a fixed plant": an MMAE bank
+of harmonic-augmented Kalman filters over a structural-detuning grid
+identifies the IN-CUT plant online; the model-based cancellation gains
+gamma_h(rho) are re-synthesized offline per candidate and Bayesian-blended
+online (no thresholds, no switching, no gradient adaptation near resonance).
+
+```python
+from aimc_controller import AIMCController
+aimc = AIMCController(plate_nominal, dt=5e-5,
+                      f_fund=1/(n_per*dt),   # encoder info
+                      Dp_dist=Dp_tool)       # nominal tool-point shape
+aimc.reset()                                 # REQUIRED before each run
+x_hat, u = aimc.step(x_prev, u_prev, y_meas, k_step=k)
+# diagnostics: aimc.trace_rho (identified detuning), aimc.trace_conf
+```
+
+Measured (main_aimc_study.py): dominates the whole architecture map, including
+in-process frequency drift (k_scale_t) where the fixed IMC degrades 40x.
+Identified rho carries a systematic -3..-5% bias vs the structural detuning:
+it identifies the effective IN-CUT frequency (regenerative stiffness + delay
+coupling included) — exactly the right quantity for phasing the cancellation.
+
+## STSMC+DOB (robust corner)
+
+Super-twisting augmentation of the LQG base on a first-order tool-displacement
+surface; the super-twisting integral acts as a built-in disturbance observer.
+Recovers LQG everywhere, no cutting model, never diverges, finite-time
+certificate — but cannot beat LQG (see docs/ETUDE_ARCHITECTURES.md §4 for the
+structural reason). Use as the guaranteed-stability fallback, not for peak
+performance.

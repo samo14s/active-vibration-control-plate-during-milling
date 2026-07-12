@@ -113,7 +113,55 @@ Sa contrepartie assumée : il ne descend pas sous le LQG sur la vibration forcé
 
 ---
 
-## 6. Pistes de travail (P1 — recherche)
+## 6. AIMC — la résolution du conflit par l'adaptation INDIRECTE (par identification)
+
+Le §4 établit que l'adaptation DIRECTE des coefficients d'annulation
+(AFC/FxLMS) est instable en phase près de la résonance, et que les gains
+FIGÉS (IMC/DARC) paient leur fragilité. La troisième voie — celle qui comble
+la lacune de la littérature (« l'identification en cours d'usinage alimente la
+re-planification des paramètres, jamais le chemin d'annulation actif ; le
+FxLMS adapte des coefficients sur une dynamique FIXE ») — est l'adaptation
+**INDIRECTE** : identifier LE MODÈLE en ligne, et RE-SYNTHÉTISER
+algébriquement les gains d'annulation modèle-basés.
+
+**AIMC** (`aimc_controller.py`, étude `main_aimc_study.py`) :
+banc MMAE de filtres de Kalman augmentés sur une grille de détuning
+(−20 %…+10 %), vraisemblances récursives avec oubli (fenêtre ≈ 10 ms),
+**mélange bayésien** de l'annulation (u_canc = Σ p_i·Σ_h Re{γ̄_h(ρ_i)·ẑ_h^i},
+aucun seuil, aucune commutation) au-dessus du retour LQG nominal fixe.
+La boucle d'identification (stable par construction) est séparée de la boucle
+de commande : aucun gradient n'est adapté dans la région résonante.
+
+Résultats (protocole honnête, T = 0.5 s, et dérive T = 2 s) :
+
+| Scénario | LQG | IMC figé | DARC-FF | STSMC+DOB | **AIMC** |
+|---|---:|---:|---:|---:|---:|
+| S1 nominal | 0.605 | 0.223 | 0.363 | 0.608 | **0.222** |
+| S2 a_p=0.6 mm | 1.206 | 0.475 | 0.728 | 1.207 | **0.473** |
+| S3 ω−15 % | 0.923 | 15.76 ✗ | 0.592 | 0.917 | **0.297** |
+| S3b ω−12 % (hors grille) | 0.694 | 0.378 | 0.429 | 0.685 | **0.277** |
+| S4 K_T+30 % inconnu | 0.788 | 0.293 | 0.536 | 0.790 | **0.292** |
+| Dérive 0→−15 % en coupe, segment final | 0.631 | 8.49 (130 V) | 0.364 | 0.624 | **0.205** |
+
+**L'AIMC domine (ou co-domine) TOUTE la carte** : il égale l'IMC figé là où
+celui-ci excelle (S1/S2/S4), répare sa divergence sous détuning (S3 : 0.297 au
+lieu de 15.8), interpole entre les points de grille (S3b), et SUIT une dérive
+de fréquences en cours d'usinage là où l'IMC figé se dégrade de 40× (E3).
+Le coût : ~0 % au nominal (0.222 vs 0.223) — l'adaptation est "gratuite" une
+fois la vraisemblance concentrée.
+
+Note d'identification : le ρ̂ identifié porte un biais systématique ≈ −3…−5 %
+par rapport au détuning STRUCTUREL vrai — il identifie la fréquence EFFECTIVE
+EN COUPE (raideur régénérative + couplage de retard inclus), qui est
+précisément la bonne grandeur pour phaser l'annulation. (Cohérent avec le fait
+connu que la FRF en coupe diffère de la FRF au marteau.)
+
+Limites honnêtes : grille 1-paramètre (détuning global ρ — les modes réels
+peuvent dériver indépendamment : grille multi-ρ = extension directe) ;
+36 états de filtre au total (7×(6+16)) à 20 kHz — réaliste pour un DSP
+moderne mais à chiffrer ; la dérive simulée est un proxy k_scale(t) uniforme.
+
+## 7. Pistes de travail (P1 — recherche)
 
 1. **Tester le STSMC+DOB sur une pièce plus amortie / poutre Timoshenko** (là
    où les DOB sont efficaces) : la prédiction du §4 est que l'avantage
@@ -121,16 +169,16 @@ Sa contrepartie assumée : il ne descend pas sous le LQG sur la vibration forcé
 2. **Balayage de vitesse de broche** : à un RPM plaçant les harmoniques de dent
    entre les modes (hors résonance), tester si l'annulation en ligne redevient
    stable et performante.
-3. **Modèle interne adaptatif résonance-conscient** : AFC avec contrainte
-   d'anti-résonance / fuite dans la bande du mode 1, ou super-twisting sur un
-   modèle interne répétitif — pour tenter de concilier (a) et (b) du §4.
-4. **Hybride DARC×STSMC** : feedforward inverse-modèle (performance) + dorsale
-   super-twisting (rattrape la stabilité quand le feedforward se déphase, là où
-   IMC divergeait) — le meilleur des deux, à valider.
+3. **Grille MMAE multi-paramètre** (ρ par mode, ± K_T) et grille adaptative
+   (raffinement local autour du MAP).
+4. **SLD de l'AIMC** : Floquet du système commuté/mélangé (LPV) — la frontière
+   de stabilité d'un contrôleur à modèle identifié est un problème ouvert.
+5. **Hybride DARC×STSMC** : feedforward inverse-modèle + dorsale
+   super-twisting — le meilleur des deux, à valider.
 
 ---
 
-## 7. Référence de positionnement (littérature, via Consensus)
+## 8. Référence de positionnement (littérature, via Consensus)
 
 - Le champ du contrôle actif de chatter des pièces minces est **essentiellement
   mono-architecture (feedback)** : modal actif, retour retardé optimal, H∞,

@@ -10,11 +10,18 @@ plate with a bonded piezoelectric actuator:
 | **IMC-LQG** (feedback baseline, internal-model principle) | displacement sensor + spindle period (encoder) | `02_controllers/imc_lqg_controller.py` |
 | **DARC** (Deep Anticipative Residual Control) | spindle phase (encoder) + nominal cutting model + sensor | `02_controllers/darc_controller.py` |
 | **STSMC+DOB** (robust corner: super-twisting + disturbance observer) | sensor + encoder, **no cutting model** | `02_controllers/smc_dob_controller.py` |
+| **AIMC** (identification-adaptive harmonic cancellation — MMAE bank + Bayesian blending) | sensor + encoder + nominal model **grid**; identifies the in-cut plant online | `02_controllers/aimc_controller.py` |
 
-The controllers span an **information-structure map** whose central finding —
-each performance-buying architecture is fragile in a *different* direction, and
-a robust broadband controller can only *recover* LQG on a lightly-damped plate,
-never beat it — is documented in **`docs/ETUDE_ARCHITECTURES.md`**.
+The controllers span an **information-structure map** (documented in
+**`docs/ETUDE_ARCHITECTURES.md`**) with two central findings: (1) each
+performance-buying architecture is fragile in a *different* direction, and a
+robust broadband controller can only *recover* LQG on a lightly-damped plate;
+(2) the trade-off is **resolved by indirect (identification-based) adaptation**:
+AIMC re-synthesizes the model-based cancellation gains from an online MMAE
+identification and dominates the whole map — including in-process frequency
+DRIFT (`main_aimc_study.py`, solver `k_scale_t`), the gap the literature
+leaves open (in-process identification feeding parameter scheduling, never the
+active cancellation path; FxLMS adapting coefficients over a *fixed* plant).
 
 **Thesis context**: *Contribution au contrôle actif des vibrations en
 fraisage des pièces flexibles* — a purely theoretical (simulation-based)
@@ -165,25 +172,33 @@ the spindle period is known — IMC-LQG estimates the tooth-passing harmonics
 online (augmented Kalman) and cancels them **without any cutting-force
 model**:
 
-| Scenario | LQG | IMC-LQG | DARC-FF | STSMC+DOB |
-|---|---:|---:|---:|---:|
-| S1 Nominal | 0.605 | **0.223** | 0.363 | 0.608 |
-| S2 Aggressive | 1.206 | **0.475** | 0.728 | 1.207 |
-| S3 Detuned ω −15 % | 0.923 | 15.8 ⚠ | **0.592** | 0.917 |
-| S4 Unknown K_T | 0.788 | **0.293** | 0.536 | 0.790 |
+| Scenario | LQG | IMC-LQG | DARC-FF | STSMC+DOB | **AIMC** |
+|---|---:|---:|---:|---:|---:|
+| S1 Nominal | 0.605 | 0.223 | 0.363 | 0.608 | **0.222** |
+| S2 Aggressive | 1.206 | 0.475 | 0.728 | 1.207 | **0.473** |
+| S3 Detuned ω −15 % | 0.923 | 15.8 ⚠ | 0.592 | 0.917 | **0.297** |
+| S3b Detuned −12 % (off-grid) | 0.694 | 0.378 | 0.429 | 0.685 | **0.277** |
+| S4 Unknown K_T | 0.788 | 0.293 | 0.536 | 0.790 | **0.292** |
+| In-process drift 0→−15 % (final segment) | 0.631 | 8.49 ⚠ | 0.364 | 0.624 | **0.205** |
 
-**No architecture dominates — and that is the contribution.** IMC-LQG wins
-when its plant model is good (no force model needed) but its nominal-model
-inversion mis-phases near resonance under −15 % detuning and *diverges*.
-DARC-FF is the only one that improves S3 (phase-locked to the spindle, immune
-to structural detuning) but pays for cutting-model error. **STSMC+DOB** is the
-*robust corner*: it recovers LQG everywhere, needs **no cutting model**, and
-**never diverges** — but it cannot beat LQG. The fundamental reason (the 2nd
-tooth harmonic sits on mode 1, so no *online* broadband controller can
-selectively reject the near-resonant periodic disturbance on this lightly-damped
-plate) is derived in **`docs/ETUDE_ARCHITECTURES.md`** — a rigorous,
-near-impossibility form of the performance↔robustness trade-off, and the
-strongest theoretical result of the study.
+Among the *fixed* designs **no architecture dominates**: IMC-LQG wins when its
+plant model is good but *diverges* under −15 % detuning (mis-phased inversion
+near resonance); DARC-FF is immune to detuning (spindle-phase-locked) but pays
+for cutting-model error; STSMC+DOB is the *robust corner* (recovers LQG
+everywhere, no cutting model, never diverges — but cannot beat LQG; the
+fundamental near-impossibility reason is derived in
+`docs/ETUDE_ARCHITECTURES.md` §4).
+
+**AIMC resolves the trade-off** — the study's headline contribution. It closes
+the loop the literature leaves open: in-process **identification feeding the
+active cancellation path itself** (not parameter scheduling, not
+SLD re-computation), via *indirect* adaptation — an MMAE bank of
+harmonic-augmented Kalman filters over a detuning grid, Bayesian blending of
+the re-synthesized model-based cancellation gains (no FxLMS-style coefficient
+gradients, which are phase-unstable near resonance). It matches the fixed IMC
+where that is optimal, repairs its divergence (S3: 0.297 vs 15.8), works
+between grid points, and **tracks in-process frequency drift** (material-removal
+proxy) where the fixed design degrades 40×.
 
 ### Sensor robustness (fig10)
 

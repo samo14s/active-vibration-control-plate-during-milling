@@ -107,3 +107,69 @@ def thinning_schedule(t_vec, B_nominal, removed_total,
     k_scale_t = (B_t / B_nominal)**2
     rho_t = B_t / B_nominal - 1.0
     return k_scale_t, B_t, rho_t
+
+
+def machining_modal_schedule(t_vec, mplate, B_nominal, removed_total,
+                             z_frac_start=1.0, z_frac_end=0.5,
+                             t_start=None, t_end=None,
+                             zeta=(0.0031, 0.0017, 0.0027),
+                             n_knots=25, profile='linear', verbose=True):
+    """
+    Construit une PLANIFICATION MODALE PHYSIQUE d'un usinage de paroi mince :
+    ré-dérive (Mp(t), Kp(t), Cp(t)) dans la base fixe des modes nominaux à
+    partir de la GÉOMÉTRIE réellement usinée (amincissement LOCAL).
+
+    Modèle d'usinage : une bande usinée de hauteur croissante près du bord
+    libre.  À l'instant t, la région Z ∈ [z_mach(t)·H_P, H_P] est amincie de
+    `removed_total`, où z_mach passe de ``z_frac_start`` à ``z_frac_end``
+    (fraction de H_P) sur [t_start, t_end] (l'outil descend la paroi ;
+    fraction usinée = 1 − z_mach).  Épaisseur uniforme en X (passe pleine
+    largeur), non uniforme en Z -> dérive PAR MODE différente (loi ω∝B seule
+    ne suffit pas).
+
+    Parameters
+    ----------
+    mplate : instance de MachinedPlate (fournit l'assemblage Ritz + base Φ₀).
+    B_nominal, removed_total : épaisseur pleine et profondeur retirée [m].
+    z_frac_start/end : bord de la région usinée (fraction de H_P) au début/fin.
+    n_knots : nombre d'instantanés modaux (interpolés en escalier par le solveur).
+
+    Returns
+    -------
+    dict schedule : {'t_knots','Mp','Kp','Cp','omega','B_field_diag'} — listes
+        de n_knots matrices 3×3 (+ pulsations instantanées), + méta.  À passer
+        à NewmarkSimulator.simulate(modal_schedule=...).
+    """
+    t = np.asarray(t_vec, dtype=float)
+    T = t[-1]
+    if t_start is None:
+        t_start = 0.2 * T
+    if t_end is None:
+        t_end = 0.8 * T
+    coeff0 = mplate.nominal_basis()
+    ng = len(mplate._zx)
+    Zg = np.meshgrid(mplate._zx, mplate._zz, indexing='ij')[1]
+
+    tk = np.linspace(t[0], T, n_knots)
+    Mp_l, Kp_l, Cp_l, om_l, zmach_l = [], [], [], [], []
+    for tt in tk:
+        frac = np.clip((tt - t_start)/max(t_end - t_start, 1e-12), 0.0, 1.0)
+        if profile == 'smooth':
+            frac = 3*frac**2 - 2*frac**3
+        z_mach = z_frac_start + (z_frac_end - z_frac_start)*frac
+        B = np.full((ng, ng), B_nominal)
+        B[Zg >= z_mach*mplate.hp] = B_nominal - removed_total
+        Mp, Kp, om = mplate.modal_matrices(B, coeff0)
+        Cp = mplate.damping_matrix(Mp, Kp, zeta)
+        Mp_l.append(Mp); Kp_l.append(Kp); Cp_l.append(Cp)
+        om_l.append(om); zmach_l.append(z_mach)
+    if verbose:
+        d0 = (om_l[0]/om_l[0] - 1)*100
+        dend = (om_l[-1]/om_l[0] - 1)*100
+        print(f"[machining] {n_knots} instantanés, région usinée "
+              f"{(1-z_frac_start)*100:.0f}%→{(1-z_frac_end)*100:.0f}% de H_P, "
+              f"−{removed_total*1e3:.2f}mm")
+        print(f"[machining] dérive finale par mode : "
+              f"{np.array2string(dend, precision=1, floatmode='fixed')} %")
+    return dict(t_knots=tk, Mp=Mp_l, Kp=Kp_l, Cp=Cp_l,
+                omega=om_l, z_mach=zmach_l)

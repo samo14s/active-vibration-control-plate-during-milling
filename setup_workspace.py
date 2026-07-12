@@ -80,6 +80,7 @@ def main():
         'kirchhoff_q4',
         'plate_model',
         'material_removal',
+        'machined_plate',
         'piezo_actuator',
         'milling_force',
         'newmark_solver',

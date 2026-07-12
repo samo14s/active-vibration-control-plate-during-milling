@@ -245,6 +245,63 @@ pas modélisées. Ces limites bornent la portée quantitative mais non la
 conclusion qualitative (l'AIMC suit une dérive de fréquence d'origine physique
 là où le modèle figé décroche).
 
+## 6quater. RÉ-DÉRIVATION MODALE depuis la géométrie usinée — le test HONNÊTE de l'AIMC (`01_core/machined_plate.py`, `05_main/main_aimc_physical.py`)
+
+Le §6ter suppose un amincissement **uniforme** (ω_i ∝ B, tous les modes du
+même facteur). C'est exact si toute la paroi maigrit d'un coup, mais l'usinage
+réel enlève la matière **localement** : la zone déjà passée est plus mince que
+celle devant l'outil. On lève ici l'approximation en **ré-dérivant le modèle
+modal à partir du champ d'épaisseur B(X,Z) réellement usiné**, par
+Rayleigh-Ritz sur la base fixe des modes nominaux Φ₀ :
+
+        M_ab = ∫∫ ρ·B(X,Z)·W_a·W_b dX dZ ,   K_ab = ∫∫ D(X,Z)·[flexion] dX dZ ,
+        Mp(t) = Φ₀ᵀ M(B_t) Φ₀ ,   Kp(t) = C·[Φ₀ᵀ K(B_t) Φ₀]·C  (C = diag calib),
+
+matrices **pleines** hors nominal (les modes nominaux ne sont plus propres — le
+couplage inter-modes est le fait physique de l'usinage local). Le solveur Newmark
+les reçoit en escalier via `modal_schedule=` (validé : planning constant-nominal
+== baseline au bit près ; usinage local → dérive **par mode différente**). Les
+fréquences propres de Ritz (527, 1080, 2960 Hz) sont recalées par mode vers les
+ancres FEM (calib = [0.988, 0.991, 0.923]).
+
+**Le résultat honnête est SCÉNARIO-DÉPENDANT** (aucun contrôleur n'est informé
+de la dérive ; `main_aimc_physical.py`, RMS µm après usinage) :
+
+| Scénario d'usinage (T=2 s, enlèvement 0.4–1.6 s) | dérive par mode | LQG | IMC-figé | DARC-FF | **AIMC** |
+|---|---|---|---|---|---|
+| **P1** finition de bord (bande haute, −0.4 mm) | [+3.3, −2.3, −7.6] % | 0.55 | 0.17 | 0.32 | **0.16** |
+| **P2** poche profonde (bande → 10 % H_P, −0.8 mm) | [−8.5, −13.2, −17.5] % | 0.74 | **12.6 ✗** | 0.43 | **0.25** |
+| **P3** agressif vers l'encastrement (−0.8 mm) | [−27, −21, −12] % | **50 ✗** | **50 ✗** | 38 ✗ | **0.31** |
+
+Trois enseignements, chacun contre une conclusion trop belle :
+
+1. **Le mode dominant peut monter OU descendre selon la zone usinée.** En
+   finition de bord (P1), enlever la matière près du bord libre (antinœud de
+   masse du mode 1) **relève** ω₁ (+3.3 %) — cf. la trace non monotone de la
+   fig. (a). L'IMC figé, désaccordé du « bon » côté, **reste robuste** et
+   l'AIMC ≈ IMC : *l'adaptation ne nuit pas quand elle est inutile*.
+2. **Le cas idéalisé « −15 % uniforme » (S3) SURESTIME la fragilité de
+   l'IMC.** Il force les trois modes vers le bas de 15 % simultanément (IMC →
+   15.8 µm au §2). Le modèle physique donne une image plus juste : c'est
+   seulement quand l'usinage **descend vers l'encastrement** (P2, P3) que le
+   mode dominant chute assez pour faire **décrocher** l'IMC (12.6 µm), voire
+   diverger tout modèle figé y compris le LQG (P3). *Nous ne surjouons pas la
+   faiblesse du concurrent.*
+3. **L'AIMC reste l'unique architecture sous-µm dans les trois cas**, y
+   compris P3 où ω₁ dérive de −27 % (au-delà du bord −20 % de la grille MMAE) :
+   le mélange bayésien continue de suivre car la grille **encadre** encore une
+   part suffisante de la dérive et l'identification se déplace vers le nœud
+   extrême. C'est la démonstration la plus forte de la contribution — obtenue
+   sur une dérive d'origine **géométrique**, pas un détuning postulé.
+
+**Limites restantes (honnêteté).** Les projections d'entrée/sortie (Dp, D_obs,
+H_Pe) restent celles de la base nominale fixe — cohérent avec des contrôleurs
+conçus sur le modèle nominal, mais la perte de masse locale modifierait
+légèrement Dp réel. La base de Ritz est finie (6 fonctions produit-de-poutre) :
+les formes propres restent dans ce sous-espace. Ces limites bornent le chiffre,
+pas la hiérarchie : **seule la commande ré-identifiée en ligne survit à
+l'amincissement profond de la paroi**.
+
 ## 7. Pistes de travail (P1 — recherche)
 
 1. **Tester le STSMC+DOB sur une pièce plus amortie / poutre Timoshenko** (là

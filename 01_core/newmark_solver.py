@@ -70,6 +70,7 @@ class NewmarkSimulator:
                  stop_threshold: float = 5e-3,
                  stop_at_time: float = None,
                  k_scale_t=None,
+                 modal_schedule=None,
                  progress: bool = True):
         """
         Lance la simulation de la NDDE non linéaire.
@@ -113,6 +114,13 @@ class NewmarkSimulator:
             Construire k_scale_t avec ``material_removal.thinning_schedule``.
             Le CONTRÔLEUR n'est PAS informé de cette dérive (protocole
             honnête) — c'est le banc d'essai des commandes adaptatives.
+        modal_schedule : planification modale PHYSIQUE complète (amincissement
+            LOCAL, non uniforme) — dict {t_knots, Mp, Kp, Cp} de matrices 3×3
+            ré-dérivées de la géométrie usinée dans la base fixe des modes
+            nominaux (cf. material_removal.machining_modal_schedule).  Prioritaire
+            sur k_scale_t.  Capture la dérive PAR MODE (différente selon les
+            modes, contrairement à k_scale uniforme).  Les projections (Dp,
+            D_obs, H_Pe) restent nominales (base fixe).
         """
         n = self.n_modes
         n_x = 2 * n
@@ -152,6 +160,13 @@ class NewmarkSimulator:
                       else np.zeros(n))
         D_obs = self.plate.D_obs
 
+        # Planification modale physique (usinage local) : index d'escalier
+        if modal_schedule is not None:
+            sched_tk = np.asarray(modal_schedule['t_knots'])
+            sched_Mp = modal_schedule['Mp']; sched_Kp = modal_schedule['Kp']
+            sched_Cp = modal_schedule['Cp']
+            _last_knot = -1
+
         gNM, bNM = 0.5, 0.25
         u_real_prev = 0.0
         diverged_at = 0
@@ -171,9 +186,17 @@ class NewmarkSimulator:
             a4_2 = alpha4_2_t[k]
             a4_3 = alpha4_3_t[k]
 
-            # Dérive en cours d'usinage (proxy enlèvement de matière) :
-            # raideur (et amortissement à ζ constant) variables dans le temps.
-            if k_scale_t is not None:
+            # Dérive en cours d'usinage.
+            if modal_schedule is not None:
+                # PHYSIQUE : matrices modales ré-dérivées (usinage local),
+                # mises à jour en escalier au nœud de planification courant.
+                knot = int(np.searchsorted(sched_tk, self.t_vec[k], 'right') - 1)
+                knot = min(max(knot, 0), len(sched_Mp) - 1)
+                if knot != _last_knot:
+                    Mp = sched_Mp[knot]; Kp_modal = sched_Kp[knot]
+                    Cp_modal = sched_Cp[knot]; _last_knot = knot
+            elif k_scale_t is not None:
+                # proxy uniforme (loi ω∝B, tous les modes ensemble)
                 ks = float(k_scale_t[k])
                 Kp_modal = self.plate.Kp * ks
                 Cp_modal = self.plate.Cp * np.sqrt(ks)

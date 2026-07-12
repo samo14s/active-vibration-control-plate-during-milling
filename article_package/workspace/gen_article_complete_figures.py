@@ -187,25 +187,27 @@ def run_scenario(name, ap, KT_actual, freq_perturb, dt, T_end, sim_purpose="shor
     xp_train = np.minimum(v_feed * sim_d.t_vec, LP)
     kp_train = np.clip(np.round(xp_train/LP * 2000).astype(int), 0, 2000)
     
-    # LQG with SUB-OPTIMAL weights (typical engineer's guess, not full grid search)
-    # This reflects realistic conditions where LQG is hand-tuned, not optimized.
+    # FAIR comparison (same methodology as main_simulation.py):
+    # LQG uses the SAME optimal base (w_q=1e14) as DARC-MPC's backbone, so
+    # DARC's measured advantage is exactly its feedforward + NN residual.
     lqg = LQGController(plate_d, dt=dt, verbose=False)
-    lqg.optimize_weights(w_q_list=[1e13], w_qd_list=[1e8], w_r=1.0)
+    lqg.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0,
+                         gain_norm_max=1e10)
     lqg.discretize_observer()
     res_lqg = sim.simulate(a3, a4, kp, controller=lqg, progress=False)
-    
-    # DARC-MPC uses OPTIMAL LQG base (w_q=1e14) + NN feedforward
-    # This shows : optimal LQG base + smart NN = best of both worlds
-    n_iter = 30 if sim_purpose == "short" else 20
+
+    # DARC-MPC v3 = identical LQG base + anticipative feedforward
+    # (inverse model over tooth-passing harmonics) + NN residual learning
     darc = DARC_MPC_v3_Controller(plate_d, dt=dt,
                                     base_w_q=1e14, base_w_qd=1e8, base_w_r=1.0,
-                                    ff_lr=0.005, ff_max=10.0, ff_alpha=1.0,
+                                    ff_alpha=1.0, ff_max=20.0,
                                     alpha4_periodic=a4_train[:n_per], n_per=n_per,
-                                    safety_alpha=5.0, enable_adaptation=True,
+                                    enable_adaptation=True,
                                     u_max=150.0, verbose=False)
-    darc.pretrain_iterative_simulation(sim_d, a3_train, a4_train, kp_train,
-                                          n_iterations=n_iter, n_epochs_per_iter=15,
-                                          verbose=False)
+    Dp_ff = plate_d.get_Dp_at(int(kp[sim.nstep // 2]))[0]
+    darc.design_periodic_feedforward(FT, a3[:n_per], Dp_ff, n_harm=30)
+    darc.train_nn_residual(sim_d, a3_train, a4_train, kp_train,
+                           n_iter=20, verbose=False)
     reset_darc(darc)
     res_darc = sim.simulate(a3, a4, kp, controller=darc, progress=False)
     

@@ -19,7 +19,15 @@ traitée implicitement — IDENTIQUE à la version d'origine du package, donc le
 comportement nominal (valeurs principales) est conservé.  Les corrections NON
 LINÉAIRES (durcissement λ·η³, coupe a4_2·Δ²+a4_3·Δ³, séparation) sont évaluées
 explicitement sur le prédicteur (négligeables aux amplitudes µm, actives au
-chatter mm).  L'interface des contrôleurs LQG / DARC-MPC est inchangée.
+chatter mm).  L'interface des contrôleurs LQG / DARC est inchangée.
+
+AVERTISSEMENT (grandes amplitudes) : en boucle ouverte au-delà de la limite de
+stabilité, l'amplitude du « cycle limite » dépend du paramètre numérique
+``chip_sat`` (borne du Δ régénératif, défaut 10·f_t) et du seuil de séparation
+``sep_chip``/``sep_amp`` — PAS d'une physique de séparation complète (pas de
+régénération multiple 2τ, 3τ...).  Ne tirer AUCUNE conclusion quantitative des
+amplitudes de chatter en boucle ouverte ; seuls le seuil de stabilité et les
+régimes contrôlés (µm, non-linéarités dormantes) sont exploitables.
 """
 import numpy as np
 
@@ -69,7 +77,7 @@ class NewmarkSimulator:
         ----------
         alpha3_t, alpha4_t : (nstep,) coefficients linéaires (forçage / régén.)
         kp_idx : (nstep,) indice de position outil dans plate.Dp_array
-        controller : LQG / DARC-MPC ou None (pas de contrôle)
+        controller : LQG / DARC ou None (pas de contrôle)
         piezo : PiezoActuator ou None (modèle idéal)
         alpha4_2_t, alpha4_3_t : (nstep,) coeff. coupe quadratique / cubique
             (article Eq. 4/16).  None → coupe linéaire (ossature du package).
@@ -178,7 +186,7 @@ class NewmarkSimulator:
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)
-                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
+                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller', 'DARCController'):
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)

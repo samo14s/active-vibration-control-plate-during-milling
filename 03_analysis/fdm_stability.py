@@ -180,6 +180,183 @@ def fdm_stability_one_mode(omega_n, zeta_n, Dp_modal, m_modal,
     return rho
 
 
+# ===========================================================================
+#  ANALYSE DE FLOQUET DE LA BOUCLE FERMÉE (multi-modes, compensateur inclus)
+# ===========================================================================
+def build_Phi_closed_loop(A0, Bu_col, Dp_vec, C_row, a4_array,
+                          m_div, dt_int, ctrl=None):
+    """
+    Matrice de monodromie sur une période de passage de dent pour le système
+    MULTI-MODES couplé (rang-1 régénératif Dp·Dpᵀ), avec — optionnellement —
+    le COMPENSATEUR LQG NUMÉRIQUE (observateur de Kalman + retour d'état
+    estimé) AUGMENTÉ dans l'état, échantillonné à dt_int.
+
+    État augmenté : z = [ x (2n) ; x̂ (2n, si ctrl) ; w_hist (m_div) ]
+    avec w = Dpᵀ q le déplacement au point outil et w_hist l'historique
+    nécessaire au terme retardé w(t-τ) (semi-discrétisation d'ordre zéro).
+
+    Dynamique par sous-intervalle k (coefficient a4_k gelé) :
+        ẋ = [A0 - a4_k·E] x + Bu·u + a4_k·Bd·w(t-τ)
+        E  = [[0,0],[Dp·Dpᵀ,0]],  Bd = [0 ; Dp]      (M = I, modes normalisés)
+    Compensateur (exactement celui implémenté par LQGController) :
+        u_j    = -K x̂_j
+        x̂_{j+1} = A_obs_d x̂_j + G_u u_j + G_y (C x_j)
+
+    Parameters
+    ----------
+    A0     : (2n, 2n) matrice d'état de la plaque seule
+    Bu_col : (2n,)    colonne d'entrée piézo [0 ; H_Pe]
+    Dp_vec : (n,)     forme propre au point outil
+    C_row  : (2n,)    ligne de mesure [D_obs, 0]
+    a4_array : (m_div,) coefficient régénératif sur une période
+    ctrl   : None (boucle ouverte) ou dict(K, A_obs_d, G_u, G_y)
+             discrétisé à dt_int.
+
+    Returns
+    -------
+    Phi : matrice de monodromie ((2n [+2n]) + m_div carrée)
+    """
+    n_x = A0.shape[0]
+    n = n_x // 2
+    has_ctrl = ctrl is not None
+    n_c = n_x if has_ctrl else 0
+    N = n_x + n_c + m_div
+
+    E = np.zeros((n_x, n_x))
+    E[n:, :n] = np.outer(Dp_vec, Dp_vec)
+    Bd = np.zeros(n_x)
+    Bd[n:] = Dp_vec
+    Dp_ext = np.zeros(n_x)
+    Dp_ext[:n] = Dp_vec                      # w = Dpᵀ q = Dp_ext · x
+
+    if has_ctrl:
+        K = np.atleast_2d(ctrl['K'])
+        A_obs_d = ctrl['A_obs_d']
+        G_u = np.asarray(ctrl['G_u']).reshape(n_x)
+        G_y = np.asarray(ctrl['G_y']).reshape(n_x)
+        A_hat = A_obs_d - np.outer(G_u, K.flatten())   # x̂ -> x̂ (u = -K x̂)
+        GyC = np.outer(G_y, C_row)                     # x  -> x̂
+
+    from scipy.linalg import expm as _expm
+    Phi = np.eye(N)
+    T = np.zeros((N, N))
+    i_h0 = n_x + n_c                          # début du bloc historique
+    for k in range(m_div):
+        a4_k = float(a4_array[k])
+        A_k = A0 - a4_k * E
+        Ad = _expm(A_k * dt_int)
+        try:
+            intExp = np.linalg.solve(A_k, Ad - np.eye(n_x))
+        except np.linalg.LinAlgError:
+            intExp = (np.eye(n_x) * dt_int + A_k * dt_int**2 / 2
+                      + A_k @ A_k * dt_int**3 / 6)
+        Gu_p = intExp @ Bu_col                # entrée commande (ZOH)
+        Gd_p = intExp @ (a4_k * Bd)           # entrée retardée (gelée)
+
+        T[:, :] = 0.0
+        # x_{j+1}
+        T[:n_x, :n_x] = Ad
+        if has_ctrl:
+            T[:n_x, n_x:n_x + n_c] = -np.outer(Gu_p, K.flatten())
+        T[:n_x, i_h0 + m_div - 1] = Gd_p      # w_{j-m_div} (plus ancien)
+        # x̂_{j+1}
+        if has_ctrl:
+            T[n_x:n_x + n_c, :n_x] = GyC
+            T[n_x:n_x + n_c, n_x:n_x + n_c] = A_hat
+        # historique : nouveau w_j en tête, décalage du reste
+        T[i_h0, :n_x] = Dp_ext
+        for j in range(m_div - 1):
+            T[i_h0 + 1 + j, i_h0 + j] = 1.0
+
+        Phi = T @ Phi
+
+    return Phi
+
+
+def compute_SLD_closed_loop(RPM_array, ap_array, plate,
+                            NT, RT, eta_h, phi_st, phi_ex,
+                            k1, k2, kt, hp, Dp_vec,
+                            lqg=None, dt_c=5e-5, verbose=True):
+    """
+    SLD par multiplicateurs de Floquet de la boucle COMPLÈTE :
+    plaque multi-modes couplée (Dp·Dpᵀ) + retard régénératif
+    [+ compensateur LQG numérique si ``lqg`` est fourni].
+
+    - lqg : instance de LQGController (attributs A, B, C, K_lqr, L_kal),
+      conçue sur la plaque NOMINALE ; l'observateur est re-discrétisé à
+      dt_int = τ/m_div pour chaque RPM (m_div = round(τ/dt_c), de sorte que
+      dt_int ≈ dt_c à ±0.7 %).
+    - lqg=None : boucle ouverte (même cadre, mêmes hypothèses -> courbes
+      directement comparables).
+
+    NOTE : contrairement à l'ancienne approche « substitution de pôles »
+    (amortissements de eig(A-BK) réinjectés dans le SLD boucle ouverte),
+    cette analyse contient l'observateur, l'échantillonnage et le couplage
+    retard/compensateur.  Elle reste LINÉAIRE : saturation ±150 V exclue —
+    la frontière n'est valide que là où la tension requise reste < u_max.
+    """
+    import time
+    from scipy.linalg import expm as _expm
+
+    n = plate.n_modes
+    A0 = np.zeros((2 * n, 2 * n))
+    A0[:n, n:] = np.eye(n)
+    A0[n:, :n] = -np.linalg.solve(plate.Mp, plate.Kp)
+    A0[n:, n:] = -np.linalg.solve(plate.Mp, plate.Cp)
+    Bu_col = np.zeros(2 * n)
+    Bu_col[n:] = np.linalg.solve(plate.Mp, plate.H_Pe_modal)
+    C_row = np.zeros(2 * n)
+    C_row[:n] = plate.D_obs
+
+    n_RPM = len(RPM_array)
+    n_ap = len(ap_array)
+    rho_grid = np.zeros((n_ap, n_RPM))
+
+    if verbose:
+        mode = "boucle fermée LQG" if lqg is not None else "boucle ouverte"
+        print(f"[SLD-Floquet-BF] grille {n_ap} x {n_RPM} ({mode})")
+        t0 = time.time()
+
+    for i_rpm, RPM in enumerate(RPM_array):
+        tau = 60.0 / (NT * RPM)
+        Omega_spin = 2 * np.pi * RPM / 60
+        m_div = max(20, int(round(tau / dt_c)))
+        dt_int = tau / m_div
+
+        ctrl = None
+        if lqg is not None:
+            # Re-discrétisation exacte de l'observateur implémenté à dt_int
+            A_obs = lqg.A - lqg.L_kal @ lqg.C
+            A_obs_d = _expm(A_obs * dt_int)
+            try:
+                G_u = np.linalg.solve(A_obs, (A_obs_d - np.eye(2 * n)) @ lqg.B)
+                G_y = np.linalg.solve(A_obs, (A_obs_d - np.eye(2 * n)) @ lqg.L_kal)
+            except np.linalg.LinAlgError:
+                G_u = lqg.B * dt_int
+                G_y = lqg.L_kal * dt_int
+            ctrl = dict(K=lqg.K_lqr, A_obs_d=A_obs_d, G_u=G_u, G_y=G_y)
+
+        for i_ap, ap in enumerate(ap_array):
+            za_low, za_high = hp - ap, hp
+            a4_array = np.zeros(m_div)
+            for k in range(m_div):
+                _, a4 = milling_force_coeffs(
+                    k * dt_int, Omega_spin, NT, RT, eta_h,
+                    phi_st, phi_ex, za_low, za_high, k1, k2, kt)
+                a4_array[k] = a4
+            Phi = build_Phi_closed_loop(A0, Bu_col, Dp_vec, C_row,
+                                        a4_array, m_div, dt_int, ctrl=ctrl)
+            rho_grid[i_ap, i_rpm] = float(np.max(np.abs(np.linalg.eigvals(Phi))))
+
+        if verbose and (i_rpm + 1) % max(1, n_RPM // 5) == 0:
+            print(f"   {100*(i_rpm+1)/n_RPM:5.1f}%  "
+                  f"({time.time()-t0:5.1f}s écoulées)")
+
+    if verbose:
+        print(f"[SLD-Floquet-BF] terminé en {time.time()-t0:.1f}s")
+    return rho_grid
+
+
 def compute_SLD(RPM_array, ap_array,
                  omega_n_list, zeta_list, Dp_list, m_list,
                  NT, RT, eta_h, phi_st, phi_ex,

@@ -83,7 +83,8 @@ def main():
         'milling_force',
         'newmark_solver',
         'lqg_controller',
-        'darc_mpc_v3_controller',
+        'darc_controller',
+        'imc_lqg_controller',
         'fdm_stability',
     ]
     

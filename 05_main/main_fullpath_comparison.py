@@ -4,12 +4,15 @@ main_fullpath_comparison.py
 FULL-PATH fair three-way comparison of the controllers over the ENTIRE feed pass
 (the tool travels the whole width L_P, T_path = L_P / v_feed ≈ 20.4 s):
 
-    1. LQG       — reactive feedback (the shared base)
-    2. DARC      — LQG base + anticipative inverse-model feedforward
-    3. DARC-MPC  — LQG base + feedforward + neural-network nonlinear residual
+    1. LQG        — reactive feedback (the shared base)
+    2. DARC-FF    — LQG base + anticipative inverse-model feedforward
+    3. DARC       — LQG base + feedforward + neural-network residual (full DARC)
 
-The comparison is FAIR: all three share the identical LQG base (w_q=1e14); DARC
-adds the model-based feedforward, DARC-MPC adds the learned NN residual on top.
+The comparison is FAIR: all three share the identical LQG base (w_q=1e14);
+DARC-FF adds the model-based feedforward, full DARC adds the NN residual
+trained on a SEPARATE mid-path segment with train/validation noise seeds
+disjoint from the evaluation seed (no train/test contamination: this
+full-path run IS the held-out evaluation).
 Run on the nonlinear NDDE plant with a fine displacement sensor (0.1 µm noise).
 
 Run:  python main_fullpath_comparison.py
@@ -23,7 +26,7 @@ import matplotlib.pyplot as plt
 from plate_model import PlateModel
 from milling_force import precompute_nonlinear_periodic
 from lqg_controller import LQGController
-from darc_mpc_v3_controller import DARC_MPC_v3_Controller
+from darc_controller import DARCController
 from newmark_solver import NewmarkSimulator
 
 OUT_DIR = "figs_fullpath"
@@ -66,7 +69,7 @@ def force(sim):
 
 print("=" * 70)
 print(f" FULL-PATH comparison  (T_path = {T_PATH:.1f} s, {int(T_PATH/DT):,} steps)")
-print(" LQG  vs  DARC (FF)  vs  DARC-MPC (FF + NN)  — fair, same LQG base")
+print(" LQG  vs  DARC-FF  vs  DARC (FF + NN)  — fair, same LQG base")
 print("=" * 70)
 t_glob = time.time()
 plate = build_plate()
@@ -86,9 +89,9 @@ a3t, a4t, a42t, a43t = force(sim_tr)
 Dp_ff = plate.get_Dp_at(1000)[0]                       # mode shape at mid-path
 
 def run(ctrl):
-    if ctrl is not None and ctrl.__class__.__name__ == 'DARC_MPC_v3_Controller':
+    if ctrl is not None and ctrl.__class__.__name__ == 'DARCController':
         for h in ('history_u_lqg', 'history_u_ff', 'history_u_total',
-                  'history_phase', 'history_safety'):
+                  'history_phase'):
             setattr(ctrl, h, [])
     return sim.simulate(a3, a4, kp, controller=ctrl, alpha4_2_t=a42, alpha4_3_t=a43,
                         sensor_noise=SENSOR_NOISE, sensor_rng=np.random.default_rng(rng_seed),
@@ -108,21 +111,21 @@ lqg.discretize_observer()
 t0 = time.time(); S_lqg = stats(run(lqg)); print(f"      rms={S_lqg['rms']:.4f} um  ({time.time()-t0:.0f}s)")
 
 # 2) DARC (feedforward only)
-print("[2/3] DARC = LQG + inverse-model feedforward (full path) ...")
-darc = DARC_MPC_v3_Controller(plate, dt=DT, base_w_q=1e14, base_w_qd=1e8, ff_alpha=1.0,
-                              ff_max=20.0, alpha4_periodic=a4[:N_PER], n_per=N_PER,
-                              enable_adaptation=True, u_max=150.0, verbose=False)
+print("[2/3] DARC-FF = LQG + inverse-model feedforward (full path) ...")
+darc = DARCController(plate, dt=DT, base_w_q=1e14, base_w_qd=1e8, ff_alpha=1.0,
+                      ff_max=20.0, n_per=N_PER, u_max=150.0, verbose=False)
 darc.design_periodic_feedforward(FT, a3[:N_PER], Dp_ff, n_harm=FF_HARMONICS)
 t0 = time.time(); S_darc = stats(run(darc)); print(f"      rms={S_darc['rms']:.4f} um  ({time.time()-t0:.0f}s)")
 
 # 3) DARC-MPC (feedforward + NN residual)
-print("[3/3] DARC-MPC = LQG + feedforward + NN residual (training + full path) ...")
-darc_mpc = DARC_MPC_v3_Controller(plate, dt=DT, base_w_q=1e14, base_w_qd=1e8, ff_alpha=1.0,
-                                  ff_max=20.0, alpha4_periodic=a4[:N_PER], n_per=N_PER,
-                                  enable_adaptation=True, u_max=150.0, verbose=False)
+print("[3/3] DARC = LQG + feedforward + NN residual (training + full path) ...")
+darc_mpc = DARCController(plate, dt=DT, base_w_q=1e14, base_w_qd=1e8, ff_alpha=1.0,
+                          ff_max=20.0, n_per=N_PER, u_max=150.0, verbose=False)
 darc_mpc.design_periodic_feedforward(FT, a3[:N_PER], Dp_ff, n_harm=FF_HARMONICS)
 darc_mpc.train_nn_residual(sim_tr, a3t, a4t, kptr, alpha4_2_t=a42t, alpha4_3_t=a43t,
-                           n_iter=NN_ITERS, verbose=False)
+                           n_iter=NN_ITERS,
+                           sensor_noise=SENSOR_NOISE,
+                           train_seed=100, val_seed=200, verbose=False)
 t0 = time.time(); S_mpc = stats(run(darc_mpc)); print(f"      rms={S_mpc['rms']:.4f} um  ({time.time()-t0:.0f}s)")
 
 # ---------------------------------------------------------------- summary
@@ -131,8 +134,8 @@ g_mpc = (1 - S_mpc['rms'] / S_lqg['rms']) * 100
 print("\n" + "=" * 70)
 print(f"  FULL-PATH RMS (T = {T_PATH:.1f} s):")
 print(f"    LQG       : {S_lqg['rms']:.4f} um   (u_max {S_lqg['umax']:.1f} V)")
-print(f"    DARC      : {S_darc['rms']:.4f} um   ({g_darc:+.1f}% vs LQG)")
-print(f"    DARC-MPC  : {S_mpc['rms']:.4f} um   ({g_mpc:+.1f}% vs LQG)")
+print(f"    DARC-FF   : {S_darc['rms']:.4f} um   ({g_darc:+.1f}% vs LQG)")
+print(f"    DARC      : {S_mpc['rms']:.4f} um   ({g_mpc:+.1f}% vs LQG)")
 print(f"  Total time: {time.time()-t_glob:.0f} s")
 
 # ---------------------------------------------------------------- figure
@@ -143,15 +146,15 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8),
 ax1.plot(t, S_lqg['res']['y'][::ds] * 1e6, color='#2E8B57', lw=0.6, alpha=0.9,
          label=f"LQG  (RMS {S_lqg['rms']:.3f} µm)")
 ax1.plot(t, S_darc['res']['y'][::ds] * 1e6, color='#1f77b4', lw=0.6, alpha=0.9,
-         label=f"DARC  (RMS {S_darc['rms']:.3f} µm, {g_darc:+.0f}%)")
+         label=f"DARC-FF  (RMS {S_darc['rms']:.3f} µm, {g_darc:+.0f}%)")
 ax1.plot(t, S_mpc['res']['y'][::ds] * 1e6, color='#DC143C', lw=0.6, alpha=0.9,
-         label=f"DARC-MPC  (RMS {S_mpc['rms']:.3f} µm, {g_mpc:+.0f}%)")
+         label=f"DARC  (RMS {S_mpc['rms']:.3f} µm, {g_mpc:+.0f}%)")
 ax1.set_ylabel("Free-corner vibration $y$ (µm)", fontsize=12)
 ax1.set_title(f"Full-pass control over the entire feed path (T = {T_PATH:.1f} s) — fair comparison",
               fontsize=13, fontweight='bold')
 ax1.legend(fontsize=11, loc='upper right'); ax1.grid(True, alpha=0.4)
 
-ax2.bar(['LQG', 'DARC', 'DARC-MPC'], [S_lqg['rms'], S_darc['rms'], S_mpc['rms']],
+ax2.bar(['LQG', 'DARC-FF', 'DARC'], [S_lqg['rms'], S_darc['rms'], S_mpc['rms']],
         color=['#2E8B57', '#1f77b4', '#DC143C'], edgecolor='k', alpha=0.85)
 for i, v in enumerate([S_lqg['rms'], S_darc['rms'], S_mpc['rms']]):
     ax2.text(i, v, f'{v:.3f}', ha='center', va='bottom', fontweight='bold')

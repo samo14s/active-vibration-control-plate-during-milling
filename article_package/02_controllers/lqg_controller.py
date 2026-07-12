@@ -167,10 +167,36 @@ class LQGController:
         self.G_u = G_u
         self.G_y = G_y
 
+        # Matrices ZOH du MODELE pour la compensation d'un retard de
+        # mesure CONNU (latence capteur datasheet) : avant le calcul de
+        # la commande, l'estimee est propagee de `delay_comp_steps` pas
+        # pour que u agisse sur l'etat COURANT et non l'etat retarde.
+        Ad = expm(self.A * self.dt)
+        try:
+            Bd = np.linalg.solve(self.A, (Ad - np.eye(self.n_x)) @ self.B)
+        except np.linalg.LinAlgError:
+            Bd = self.B * self.dt
+        self.Ad_plant = Ad
+        self.Bd_plant = Bd
+        if not hasattr(self, "delay_comp_steps"):
+            self.delay_comp_steps = 0
+
     # ---------------------------------------------------------------
     def step(self, x_hat_prev, u_prev, y_meas):
-        """Une itération de l'observateur Kalman + commande LQR."""
+        """Une itération de l'observateur Kalman + commande LQR.
+
+        Si ``delay_comp_steps`` > 0 (retard capteur connu, en pas dt),
+        l'estimée est propagée en avant par le modèle avant le calcul de
+        la commande (compensation prédictive standard)."""
         x_hat = self.A_obs_d @ x_hat_prev + self.G_u.flatten() * u_prev \
               + self.G_y.flatten() * y_meas
-        u = float(np.squeeze(-self.K_lqr @ x_hat))
+        n_cmp = getattr(self, "delay_comp_steps", 0)
+        if n_cmp > 0:
+            x_fwd = x_hat
+            for _ in range(n_cmp):
+                x_fwd = (self.Ad_plant @ x_fwd
+                         + self.Bd_plant.flatten() * u_prev)
+            u = float(np.squeeze(-self.K_lqr @ x_fwd))
+        else:
+            u = float(np.squeeze(-self.K_lqr @ x_hat))
         return x_hat, u

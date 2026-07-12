@@ -94,10 +94,19 @@ plate.add_piezo_patch(xP1=PATCH_X[0], xP2=PATCH_X[1],
 
 print(f"\n=== Conception LQG ===")
 ctrl = LQGController(plate, dt=DT)
-ctrl.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
-                      w_qd_list=[1e4, 1e6, 1e8],
-                      w_r=1.0)
+# Same sane optimal base as main_simulation.py's fair comparison: the
+# unconstrained grid up to w_q=1e16 selects a design whose commanded
+# voltage (~19 kV) is 2 orders of magnitude beyond the +/-150 V hardware,
+# and the resulting deep saturation destabilises the realistic loop.
+# With the hardware-compatible base (u_max ~ 11 V at this operating
+# point) the realistic piezo tracks the ideal one.
+ctrl.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8],
+                      w_r=1.0, gain_norm_max=1e10)
 ctrl.discretize_observer()
+# Compensation predictive du retard capteur CONNU (50 us = 1 pas dt) :
+# sans elle, le dephasage ~49 deg au mode 3 (2733 Hz) destabilise la
+# boucle realiste (reduction -589 % au lieu de ~99 %).
+ctrl.delay_comp_steps = int(round(PIEZO_SPECS['sensor_delay'] / DT))
 
 
 # =====================================================================

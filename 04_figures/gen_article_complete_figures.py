@@ -6,11 +6,16 @@ ILLUSTRATIVE FIGURE PACKAGE — LQG vs PALF-LQG.
 >>> AUTHORITATIVE numbers come from 05_main/main_simulation.py and
 >>> docs/REPRODUCED_RESULTS.md, NOT from this script. <<<
 
-P0 integrity fixes applied: the fabricated "x1.30 effective damping" SLD/damping
-surrogate has been removed, and the deliberately weakened "sub-optimal LQG" baseline
-has been made symmetric with PALF's feedback design. KNOWN RESIDUAL (P1): this script
-still retrains the feedforward per figure rather than train-once/freeze; do not quote
-its per-figure gains as held-out results — use main_simulation.py for that.
+Integrity fixes applied: no fabricated "x1.30" surrogate; symmetric LQG baseline;
+corrected Eq. (3) forces + Eq. (15) piezo (via the shared PlateModel); the SLD panels
+use the rigorous closed-loop coupled monodromy (`compute_closed_loop_SLD`); and S3 uses
+the −8 % mismatch (within the controlled stability margin) to avoid the divergence the
+old −15 % now causes with the corrected forces.
+
+KNOWN DIFFERENCE vs the authoritative pipeline: this script uses a 3-mode design model
+(no 5-mode spillover, no measurement noise) and retrains the feedforward per figure
+(not train-once/held-out). Its gains are therefore CLOSE to but not identical to
+`main_simulation.py` — the authoritative numbers are in `docs/REPRODUCED_RESULTS.md`.
 
 All figures designed for journal Q1 publication (IEEE TCST, MSSP, etc.)
 
@@ -45,7 +50,7 @@ from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
 from palf_lqg_controller import PALF_LQG_Controller
 from newmark_solver import NewmarkSimulator
-from fdm_stability import compute_SLD
+from fdm_stability import compute_SLD, compute_closed_loop_SLD
 
 
 # ============================================================
@@ -248,7 +253,7 @@ t_global = time.time()
 scenarios_def = [
     ("S1 - Nominal article",      0.3e-3, KT_NOMINAL, 0.0),
     ("S2 - Aggressive ap=0.6mm",  0.6e-3, KT_NOMINAL, 0.0),
-    ("S3 - Uncertainty omega-15%", 0.3e-3, KT_NOMINAL, -0.15),
+    ("S3 - Uncertainty omega-8%",  0.3e-3, KT_NOMINAL, -0.08),
     ("S4 - High K_T +30%",        0.3e-3, 1.3*KT_NOMINAL, 0.0),
 ]
 
@@ -284,7 +289,7 @@ print(f"     done in {time.time()-t_p:.1f}s")
 
 print(f"  >> S3 full path...")
 t_p = time.time()
-s3_full = run_scenario("S3 - Uncertainty", 0.3e-3, KT_NOMINAL, -0.15,
+s3_full = run_scenario("S3 - Uncertainty", 0.3e-3, KT_NOMINAL, -0.08,
                           DT_FULL, T_END_FULL, sim_purpose="full")
 print(f"     done in {time.time()-t_p:.1f}s")
 
@@ -806,30 +811,32 @@ for kp in range(0, 2001, 50):
 Dp_avg = np.mean(Dp_sample, axis=0)
 m_list = np.diag(plate_n.Mp).tolist()
 
-# OL
-print("  Computing SLD OL ...")
-rho_OL, _ = compute_SLD(RPM_arr, ap_arr,
-                          plate_n.omega_n.tolist(), ZETA, Dp_avg.tolist(), m_list,
-                          NT, RT, ETA_H, phi_st, phi_ex,
-                          k1_sld, k2_sld, KT_NOMINAL, HP,
-                          m_div=30, verbose=False)
-
-# LQG closed-loop (grid-searched weights, same as the standalone baseline)
-print("  Computing SLD LQG ...")
+# LQG design (grid-searched weights, same as the standalone baseline)
 lqg_n = LQGController(plate_n, dt=DT_FAST, verbose=False)
 lqg_n.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
                        w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
-omega_LQG_n, zeta_LQG_n = extract_modes(lqg_n.ev_cl, N_MODES)
-rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
-                          omega_LQG_n.tolist(), zeta_LQG_n.tolist(),
-                          Dp_avg.tolist(), m_list,
-                          NT, RT, ETA_H, phi_st, phi_ex,
-                          k1_sld, k2_sld, KT_NOMINAL, HP,
-                          m_div=30, verbose=False)
 
-# PALF-LQG shares the LQG stability boundary: a phase-locked feedforward does not
-# move the closed-loop poles or the regenerative chatter boundary. No x1.30 surrogate.
-print("  Computing SLD PALF-LQG (= LQG boundary) ...")
+# OL — rigorous coupled monodromy (A_ctrl=None)
+print("  Computing SLD OL (coupled monodromy) ...")
+rho_OL = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                 plate_n.omega_n, ZETA, Dp_avg,
+                                 None, None, None, None, None, None,
+                                 NT, RT, ETA_H, phi_st, phi_ex,
+                                 k1_sld, k2_sld, KT_NOMINAL, HP,
+                                 m_div=20, verbose=False)
+
+# LQG — rigorous closed-loop monodromy (controller in the loop)
+print("  Computing SLD LQG (closed-loop monodromy) ...")
+rho_LQG = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                  plate_n.omega_n, ZETA, Dp_avg,
+                                  plate_n.H_Pe_modal, plate_n.D_obs,
+                                  lqg_n.A, lqg_n.B, lqg_n.K_lqr, lqg_n.L_kal,
+                                  NT, RT, ETA_H, phi_st, phi_ex,
+                                  k1_sld, k2_sld, KT_NOMINAL, HP,
+                                  m_div=20, verbose=False)
+
+# PALF-LQG: phase-only feedforward -> du_FF/dx_hat = 0 -> identical monodromy/boundary.
+print("  Computing SLD PALF-LQG (= LQG boundary; du_FF/dx_hat = 0) ...")
 rho_DARC = rho_LQG.copy()
 print(f"  SLD computed in {time.time()-t_sld:.1f}s")
 
@@ -1144,7 +1151,7 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 
 # (a) Bar chart - gain on full path
 ax = axes[0]
-scenarios_labels = ['Nominal', 'Aggressive\nap=0.6mm', 'Uncertainty\nω-15%', 'High K_T\n+30%']
+scenarios_labels = ['Nominal', 'Aggressive\nap=0.6mm', 'Uncertainty\nω-8%', 'High K_T\n+30%']
 y_l_full_v = [m['lqg']['y_rms'] for m in metrics_full]
 y_d_full_v = [m['darc']['y_rms'] for m in metrics_full]
 gains_full = [(1 - d/l)*100 for l, d in zip(y_l_full_v, y_d_full_v)]

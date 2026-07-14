@@ -99,7 +99,7 @@ ax.add_patch(Polygon([iso(PATCH_X[0], -0.5, PATCH_Z[0]),
                        linewidth=2.5, zorder=6, alpha=0.95))
 
 patch_center = iso((PATCH_X[0]+PATCH_X[1])/2, -0.5, (PATCH_Z[0]+PATCH_Z[1])/2)
-ax.annotate('Piezo Patch\n(QDA60-200.7)\n20 × 60 × 0.7 mm',
+ax.annotate('Piezo Patch\n(QDA60-20-0.7)\n20 × 60 × 0.7 mm',
              xy=patch_center, xytext=(patch_center[0]-38, patch_center[1]-8),
              fontsize=10, ha='center', fontweight='bold', color=COLOR_PATCH_EDGE,
              arrowprops=dict(arrowstyle='->', color=COLOR_PATCH_EDGE, lw=1.5),

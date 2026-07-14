@@ -387,7 +387,8 @@ ax.legend(fontsize=10); ax.grid(True, axis='y', alpha=0.5)
 plt.suptitle(" LQG vs PALF-LQG : Bilan global ",
               fontsize=15, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig01_bilan.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig01_bilan.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig01_bilan.pdf", bbox_inches='tight')
 plt.close()
 print(f"\n  ✓ fig01_bilan.png")
 
@@ -425,7 +426,8 @@ for i, s in enumerate(scenarios):
 plt.suptitle("Réponse temporelle $y_p(t)$ - 4 scénarios",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig02_temporal_y.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig02_temporal_y.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig02_temporal_y.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig02_temporal_y.png")
 
@@ -463,7 +465,8 @@ for i, s in enumerate(scenarios):
 plt.suptitle("Tension piezoélectrique u(t) - 4 scénarios",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig03_temporal_u.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig03_temporal_u.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig03_temporal_u.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig03_temporal_u.png")
 
@@ -512,7 +515,8 @@ for i, s in enumerate(scenarios):
 plt.suptitle("Spectres de vibration FFT[$y_p$] - 4 scénarios",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig04_fft_y.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig04_fft_y.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig04_fft_y.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig04_fft_y.png")
 
@@ -565,7 +569,8 @@ for i, s in enumerate(scenarios):
 plt.suptitle("Spectres de commande FFT[u] - 4 scénarios (échelle log)",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig05_fft_u.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig05_fft_u.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig05_fft_u.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig05_fft_u.png")
 
@@ -662,7 +667,8 @@ ax.grid(True, alpha=0.5)
 plt.suptitle("Analyse modale boucle fermée",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig06_poles.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig06_poles.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig06_poles.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig06_poles.png")
 
@@ -764,7 +770,8 @@ for ax, (title, rho_grid, cmap) in zip(axes, cases):
 plt.suptitle("Diagramme des Lobes de Stabilité (SLD) ـ FDM Floquet",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig07_SLD_3panels.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig07_SLD_3panels.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig07_SLD_3panels.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig07_SLD_3panels.png")
 
@@ -841,7 +848,8 @@ ax.fill_between(RPM_arr, 0, ap_arr[-1]*1e3, where=np.zeros_like(RPM_arr),
                   alpha=0)  # placeholder
 
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig08_SLD_overlay.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig08_SLD_overlay.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig08_SLD_overlay.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig08_SLD_overlay.png")
 
@@ -889,7 +897,8 @@ for idx, (metric, ylabel, title) in enumerate(metrics_list):
 plt.suptitle("Comparaison multi-métriques : LQG vs PALF-LQG",
               fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig09_metrics_grid.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig09_metrics_grid.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig09_metrics_grid.pdf", bbox_inches='tight')
 plt.close()
 print(f"  ✓ fig09_metrics_grid.png")
 

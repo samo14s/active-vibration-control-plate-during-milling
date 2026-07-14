@@ -115,6 +115,7 @@ ax[1].grid(True, alpha=0.4); ax[1].set_aspect('equal', 'box')
 
 plt.suptitle("Monte-Carlo robustness: LQG vs PALF-LQG", fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig(f"{OUT_DIR}/fig_robustness_mc.png", dpi=140, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig_robustness_mc.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"{OUT_DIR}/fig_robustness_mc.pdf", bbox_inches='tight')
 plt.close()
 print(f"\n  >>> fig_robustness_mc.png saved in {OUT_DIR}/")

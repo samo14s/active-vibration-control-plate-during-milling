@@ -28,11 +28,11 @@ Output: `figs_article_publication/` with both PNG (300 DPI) + PDF (vector).
 - `fig05_fft_y_4scenarios` — FFT y annotated
 - `fig06_fft_u_4scenarios` — FFT u (log scale)
 - `fig07_poles_damping` — Modal damping + complex plane
-- `fig08_SLD_3panels` — SLD 3 panels (OL/LQG/DARC)
+- `fig08_SLD_3panels` — SLD 3 panels (OL/LQG/PALF)
 - `fig09_SLD_overlay` — SLD overlay (key figure)
 - `fig09b_SLD_hatched` — SLD hatched alternative
 - `fig10_metrics_grid` — 6-panel multi-metric
-- `fig11_DARC_internal` — DARC internal blocks
+- `fig11_DARC_internal` — PALF-LQG internal blocks (feedforward)
 - `fig12_tool_position_full` — Tool position + envelope
 - `fig13_zoom_3phases` — 3 phases zoom
 - `fig14_robustness` — Robustness comparison
@@ -40,7 +40,7 @@ Output: `figs_article_publication/` with both PNG (300 DPI) + PDF (vector).
 ### Control architecture (3 figures)
 - `fig15_control_architecture` — Detailed block diagram
 - `fig16_algorithm_flow` — Algorithm flowchart
-- `fig17_DARC_summary` — Compact 1-page summary
+- `fig17_DARC_summary` — Compact 1-page summary (PALF-LQG)
 
 ## Style guide
 
@@ -49,7 +49,7 @@ All figures follow:
 - **Resolution**: 300 DPI PNG + Vector PDF
 - **Colors**: 
   - LQG: SeaGreen `#2E8B57`
-  - DARC-MPC: Crimson `#DC143C`
+  - PALF-LQG: Crimson `#DC143C`
   - Open-Loop: Gray `#888888`
 - **Axes**: Hidden top/right spines
 - **Subtitles**: (a), (b), (c) for LaTeX referencing

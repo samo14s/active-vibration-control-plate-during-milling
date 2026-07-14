@@ -1,8 +1,16 @@
 """
 gen_article_complete_figures.py
 ================================
-ARTICLE PUBLICATION COMPLETE FIGURE PACKAGE
-   LQG  vs  DARC-MPC
+ILLUSTRATIVE FIGURE PACKAGE — LQG vs PALF-LQG.
+
+>>> AUTHORITATIVE numbers come from 05_main/main_simulation.py and
+>>> docs/REPRODUCED_RESULTS.md, NOT from this script. <<<
+
+P0 integrity fixes applied: the fabricated "x1.30 effective damping" SLD/damping
+surrogate has been removed, and the deliberately weakened "sub-optimal LQG" baseline
+has been made symmetric with PALF's feedback design. KNOWN RESIDUAL (P1): this script
+still retrains the feedforward per figure rather than train-once/freeze; do not quote
+its per-figure gains as held-out results — use main_simulation.py for that.
 
 All figures designed for journal Q1 publication (IEEE TCST, MSSP, etc.)
 
@@ -15,10 +23,10 @@ FIGURES PRODUCED:
   Figure 5  : FFT y(t) - 4 scenarios (publication style)
   Figure 6  : FFT u(t) - 4 scenarios (log scale)
   Figure 7  : Closed-loop pole map + modal damping
-  Figure 8  : SLD - 3 panels (OL, LQG, DARC)
+  Figure 8  : SLD - 3 panels (OL, LQG, PALF)
   Figure 9  : SLD overlay (boundaries comparison)
   Figure 10 : Multi-metric comparison (6 panels)
-  Figure 11 : DARC-MPC internal blocks visualization
+  Figure 11 : PALF-LQG internal blocks visualization
   Figure 12 : Tool position + vibration envelope
   Figure 13 : Zoom 3 phases of cutting path
   Figure 14 : Robustness Monte Carlo
@@ -35,7 +43,7 @@ import matplotlib as mpl
 from plate_model import PlateModel
 from milling_force import precompute_alpha_periodic
 from lqg_controller import LQGController
-from darc_mpc_v3_controller import DARC_MPC_v3_Controller
+from palf_lqg_controller import PALF_LQG_Controller
 from newmark_solver import NewmarkSimulator
 from fdm_stability import compute_SLD
 
@@ -111,12 +119,12 @@ def build_plate(zp_pos, freq_perturb=0.0):
     return plate
 
 
-def reset_darc(darc):
-    darc.history_u_lqg = []
-    darc.history_u_ff = []
-    darc.history_u_total = []
-    darc.history_phase = []
-    darc.history_safety = []
+def reset_palf(palf):
+    palf.history_u_lqg = []
+    palf.history_u_ff = []
+    palf.history_u_total = []
+    palf.history_phase = []
+    palf.history_safety = []
 
 
 def fft_pub(y, dt, i_start_t=0.05, zero_pad_factor=4):
@@ -187,28 +195,27 @@ def run_scenario(name, ap, KT_actual, freq_perturb, dt, T_end, sim_purpose="shor
     xp_train = np.minimum(v_feed * sim_d.t_vec, LP)
     kp_train = np.clip(np.round(xp_train/LP * 2000).astype(int), 0, 2000)
     
-    # LQG with SUB-OPTIMAL weights (typical engineer's guess, not full grid search)
-    # This reflects realistic conditions where LQG is hand-tuned, not optimized.
+    # SYMMETRIC baseline: identical LQR weights for the standalone LQG and for PALF's
+    # internal feedback (grid-searched, not a deliberately weakened "sub-optimal" LQG).
     lqg = LQGController(plate_d, dt=dt, verbose=False)
-    lqg.optimize_weights(w_q_list=[1e13], w_qd_list=[1e8], w_r=1.0)
+    lqg.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                         w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
     lqg.discretize_observer()
     res_lqg = sim.simulate(a3, a4, kp, controller=lqg, progress=False)
-    
-    # DARC-MPC uses OPTIMAL LQG base (w_q=1e14) + NN feedforward
-    # This shows : optimal LQG base + smart NN = best of both worlds
+
+    # PALF-LQG: SAME feedback weights + phase-locked learned feedforward.
     n_iter = 30 if sim_purpose == "short" else 20
-    darc = DARC_MPC_v3_Controller(plate_d, dt=dt,
-                                    base_w_q=1e14, base_w_qd=1e8, base_w_r=1.0,
-                                    ff_lr=0.005, ff_max=10.0, ff_alpha=1.0,
-                                    alpha4_periodic=a4_train[:n_per], n_per=n_per,
-                                    safety_alpha=5.0, enable_adaptation=True,
-                                    u_max=150.0, verbose=False)
+    darc = PALF_LQG_Controller(plate_d, dt=dt,
+                               base_w_q=lqg.w_q, base_w_qd=lqg.w_qd, base_w_r=1.0,
+                               ff_lr=0.005, ff_max=10.0, ff_alpha=1.0,
+                               n_per=n_per, safety_alpha=5.0,
+                               u_max=150.0, verbose=False)
     darc.pretrain_iterative_simulation(sim_d, a3_train, a4_train, kp_train,
                                           n_iterations=n_iter, n_epochs_per_iter=15,
                                           verbose=False)
-    reset_darc(darc)
+    reset_palf(darc)
     res_darc = sim.simulate(a3, a4, kp, controller=darc, progress=False)
-    
+
     return {
         'name': name,
         'res_lqg': res_lqg,
@@ -231,7 +238,7 @@ def run_scenario(name, ap, KT_actual, freq_perturb, dt, T_end, sim_purpose="shor
 # Print header
 # ============================================================
 print("="*72)
-print(" ARTICLE PUBLICATION FIGURES — LQG vs DARC-MPC ")
+print(" ARTICLE PUBLICATION FIGURES — LQG vs PALF-LQG ")
 print("="*72)
 print(f"  Output directory : {OUT_DIR}")
 print(f"  Format           : PNG (300 DPI) + PDF")
@@ -355,7 +362,7 @@ y_d = [m['darc']['y_rms'] for m in metrics_short]
 ax.bar(x - w/2, y_l, w, color=COLOR_LQG, alpha=0.85, edgecolor='k',
         label='LQG', linewidth=1.4)
 ax.bar(x + w/2, y_d, w, color=COLOR_DARC, alpha=0.85, edgecolor='k',
-        label='DARC-MPC', linewidth=1.4)
+        label='PALF-LQG', linewidth=1.4)
 for i, (l, d) in enumerate(zip(y_l, y_d)):
     ax.text(i - w/2, l*1.02, f'{l:.3f}', ha='center', fontsize=9, fontweight='bold')
     ax.text(i + w/2, d*1.02, f'{d:.3f}', ha='center', fontsize=9,
@@ -388,7 +395,7 @@ u_d = [m['darc']['u_max'] for m in metrics_short]
 ax.bar(x - w/2, u_l, w, color=COLOR_LQG, alpha=0.85, edgecolor='k',
         label='LQG', linewidth=1.4)
 ax.bar(x + w/2, u_d, w, color=COLOR_DARC, alpha=0.85, edgecolor='k',
-        label='DARC-MPC', linewidth=1.4)
+        label='PALF-LQG', linewidth=1.4)
 ax.axhline(150, color='red', linestyle='--', linewidth=1.5, alpha=0.6,
             label='Piezo saturation')
 for i, (l, d) in enumerate(zip(u_l, u_d)):
@@ -433,7 +440,7 @@ for i, s in enumerate(scenarios_full):
     ax.plot(t_l, y_l, color=COLOR_LQG, linewidth=0.4, alpha=0.85,
              label=f'LQG  (RMS={rms_l:.3f}$\\mu$m, max={max_l:.2f}$\\mu$m)')
     ax.plot(t_d, y_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85,
-             label=f'DARC-MPC  (RMS={rms_d:.3f}$\\mu$m, max={max_d:.2f}$\\mu$m)')
+             label=f'PALF-LQG  (RMS={rms_d:.3f}$\\mu$m, max={max_d:.2f}$\\mu$m)')
     ax.axhline(0, color='k', linewidth=0.4, alpha=0.5)
     ax.axvline(T_FULL, color='blue', linestyle='--', alpha=0.5,
                 linewidth=1.2, label=f'End of cut (t={T_FULL:.1f}s)')
@@ -477,7 +484,7 @@ for i, s in enumerate(scenarios_full):
     ax.plot(t_l, u_l, color=COLOR_LQG, linewidth=0.4, alpha=0.85,
              label=f'LQG  (RMS={rms_l:.2f}V, max={max_l:.1f}V)')
     ax.plot(t_d, u_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85,
-             label=f'DARC-MPC  (RMS={rms_d:.2f}V, max={max_d:.1f}V)')
+             label=f'PALF-LQG  (RMS={rms_d:.2f}V, max={max_d:.1f}V)')
     ax.axhline(0, color='k', linewidth=0.4, alpha=0.5)
     ax.axvline(T_FULL, color='blue', linestyle='--', alpha=0.5,
                 linewidth=1.2, label=f'End of cut (t={T_FULL:.1f}s)')
@@ -528,12 +535,12 @@ ax.set_ylim([-y_lim, y_lim])
 ax.grid(True, alpha=0.4)
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 
-# (b) Time DARC
+# (b) Time PALF-LQG
 ax = axes[0, 1]
 ax.plot(t_ms[:i_d_200+1], y_d[:i_d_200+1], color=COLOR_DARC, linewidth=0.7)
 ax.set_xlabel("Time (ms)")
 ax.set_ylabel(r"Displacement ($\mu$m)")
-ax.set_title("(b)  DARC-MPC", fontweight='bold')
+ax.set_title("(b)  PALF-LQG", fontweight='bold')
 ax.set_ylim([-y_lim, y_lim])
 ax.grid(True, alpha=0.4)
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
@@ -559,14 +566,14 @@ for n_h, label in zip([1, 2, 3, 4], ['$f_t$', '$2f_t$', '$3f_t$', '$4f_t$']):
 ax.grid(True, alpha=0.4); ax.set_ylim([0, y_max_l])
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 
-# (d) FFT DARC
+# (d) FFT PALF-LQG
 ax = axes[1, 1]
 ax.plot(f_d, Y_d, color=COLOR_DARC, linewidth=1.5)
 ax.fill_between(f_d, 0, Y_d, color=COLOR_DARC, alpha=0.25)
 ax.set_xlim([0, 1600])
 ax.set_xlabel("Frequency (Hz)")
 ax.set_ylabel(r"Amplitude ($\mu$m)")
-ax.set_title("(d)  FFT[DARC-MPC]", fontweight='bold')
+ax.set_title("(d)  FFT[PALF-LQG]", fontweight='bold')
 y_max_d = Y_d.max() * 1.25
 for n_h, label in zip([1, 2, 3, 4], ['$f_t$', '$2f_t$', '$3f_t$', '$4f_t$']):
     f_h = n_h * f_t
@@ -604,7 +611,7 @@ for i, s in enumerate(scenarios_short):
     f_d, Y_d = fft_pub(res_darc['y'][:i_d+1], DT_FAST, zero_pad_factor=4)
     
     ax.plot(f_l, Y_l, color=COLOR_LQG, linewidth=1.4, alpha=0.9, label='LQG')
-    ax.plot(f_d, Y_d, color=COLOR_DARC, linewidth=1.4, alpha=0.9, label='DARC-MPC')
+    ax.plot(f_d, Y_d, color=COLOR_DARC, linewidth=1.4, alpha=0.9, label='PALF-LQG')
     ax.fill_between(f_l, 0, Y_l, color=COLOR_LQG, alpha=0.18)
     ax.fill_between(f_d, 0, Y_d, color=COLOR_DARC, alpha=0.12)
     
@@ -664,7 +671,7 @@ for i, s in enumerate(scenarios_short):
     ax.semilogy(f_l, np.maximum(U_l, 1e-3), color=COLOR_LQG,
                   linewidth=1.3, label='LQG')
     ax.semilogy(f_d, np.maximum(U_d, 1e-3), color=COLOR_DARC,
-                  linewidth=1.3, label='DARC-MPC')
+                  linewidth=1.3, label='PALF-LQG')
     
     for n_h, label in zip([1, 2, 3, 4], ['$f_t$', '$2f_t$', '$3f_t$', '$4f_t$']):
         f_h = n_h * f_t
@@ -708,41 +715,35 @@ plate = s1_short['plate_d']
 omega_OL = plate.omega_n
 zeta_OL = np.array(ZETA)
 
-# LQG sub-optimal (used in simulations)
+# LQG closed-loop modal damping (shared feedback design)
 omega_LQG, zeta_LQG = extract_modes(s1_short['lqg'].ev_cl, N_MODES)
 
-# Build DARC's internal LQG (optimal) for comparison
-lqg_for_darc = LQGController(plate, dt=DT_FAST, verbose=False)
-lqg_for_darc.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0)
-omega_DARC, zeta_DARC = extract_modes(lqg_for_darc.ev_cl, N_MODES)
-# DARC effective damping = LQG optimal + ~30% from FF
-zeta_DARC_eff = zeta_DARC * 1.30
+# PALF-LQG shares the LQG closed-loop poles EXACTLY: the phase-locked feedforward
+# adds periodic forcing, it does not change the closed-loop damping. No fabricated
+# "effective damping" multiplier is applied.
+zeta_PALF = zeta_LQG
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
 
 # (a) Damping ratios
 ax = axes[0]
 modes_x = np.arange(N_MODES)
-w = 0.27
-ax.bar(modes_x - w*1.5, zeta_OL*100, w, color=COLOR_OL, alpha=0.7,
+w = 0.30
+ax.bar(modes_x - w, zeta_OL*100, w, color=COLOR_OL, alpha=0.7,
         edgecolor='k', label='Open-loop', linewidth=1.4)
-ax.bar(modes_x - w*0.5, zeta_LQG*100, w, color=COLOR_LQG, alpha=0.85,
-        edgecolor='k', label='LQG (sub-optimal)', linewidth=1.4)
-ax.bar(modes_x + w*0.5, zeta_DARC*100, w, color='#FFA500', alpha=0.85,
-        edgecolor='k', label='DARC base (optimal LQG)', linewidth=1.4)
-ax.bar(modes_x + w*1.5, zeta_DARC_eff*100, w, color=COLOR_DARC, alpha=0.85,
-        edgecolor='k', label='DARC-MPC (effective)',
+ax.bar(modes_x, zeta_LQG*100, w, color=COLOR_LQG, alpha=0.85,
+        edgecolor='k', label='LQG (closed-loop)', linewidth=1.4)
+ax.bar(modes_x + w, zeta_PALF*100, w, color=COLOR_DARC, alpha=0.85,
+        edgecolor='k', label='PALF-LQG (= LQG poles)',
         linewidth=1.4, hatch='//')
 
 for k in range(N_MODES):
-    ax.text(modes_x[k] - w*1.5, zeta_OL[k]*100 + 0.5,
+    ax.text(modes_x[k] - w, zeta_OL[k]*100 + 0.5,
              f'{zeta_OL[k]*100:.2f}%', ha='center', fontsize=8, fontweight='bold')
-    ax.text(modes_x[k] - w*0.5, zeta_LQG[k]*100 + 0.5,
+    ax.text(modes_x[k], zeta_LQG[k]*100 + 0.5,
              f'{zeta_LQG[k]*100:.1f}%', ha='center', fontsize=8, fontweight='bold')
-    ax.text(modes_x[k] + w*0.5, zeta_DARC[k]*100 + 0.5,
-             f'{zeta_DARC[k]*100:.1f}%', ha='center', fontsize=8, fontweight='bold')
-    ax.text(modes_x[k] + w*1.5, zeta_DARC_eff[k]*100 + 0.5,
-             f'{zeta_DARC_eff[k]*100:.1f}%', ha='center', fontsize=8, fontweight='bold')
+    ax.text(modes_x[k] + w, zeta_PALF[k]*100 + 0.5,
+             f'{zeta_PALF[k]*100:.1f}%', ha='center', fontsize=8, fontweight='bold')
 
 ax.set_xticks(modes_x)
 ax.set_xticklabels([f'Mode {k+1}\n@{plate.freq_n[k]:.0f}Hz' for k in range(N_MODES)])
@@ -765,12 +766,13 @@ ax.scatter([e.real for e in ev_OL], [e.imag for e in ev_OL],
 ax.scatter([e.real for e in s1_short['lqg'].ev_cl],
             [e.imag for e in s1_short['lqg'].ev_cl],
             s=120, marker='o', color=COLOR_LQG,
-            edgecolors='k', linewidths=1.5, label='LQG (sub-optimal)')
-ax.scatter([e.real for e in lqg_for_darc.ev_cl],
-            [e.imag for e in lqg_for_darc.ev_cl],
+            edgecolors='k', linewidths=1.5, label='LQG (closed-loop)')
+# PALF-LQG shares the LQG poles exactly (feedforward does not move them)
+ax.scatter([e.real for e in s1_short['lqg'].ev_cl],
+            [e.imag for e in s1_short['lqg'].ev_cl],
             s=180, marker='*', color=COLOR_DARC,
-            edgecolors='k', linewidths=1.5, label='DARC-MPC (optimal base)',
-            alpha=0.9)
+            edgecolors='k', linewidths=1.5, label='PALF-LQG (= LQG)',
+            alpha=0.7)
 ax.axhline(0, color='k', linewidth=0.8)
 ax.axvline(0, color='k', linewidth=0.8)
 ax.set_xlabel("Re(s)")
@@ -814,10 +816,11 @@ rho_OL, _ = compute_SLD(RPM_arr, ap_arr,
                           k1_sld, k2_sld, KT_NOMINAL, HP,
                           m_div=30, verbose=False)
 
-# LQG (with sub-optimal weights for realistic comparison)
+# LQG closed-loop (grid-searched weights, same as the standalone baseline)
 print("  Computing SLD LQG ...")
 lqg_n = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_n.optimize_weights(w_q_list=[1e13], w_qd_list=[1e8], w_r=1.0)
+lqg_n.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                       w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
 omega_LQG_n, zeta_LQG_n = extract_modes(lqg_n.ev_cl, N_MODES)
 rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
                           omega_LQG_n.tolist(), zeta_LQG_n.tolist(),
@@ -826,21 +829,10 @@ rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
                           k1_sld, k2_sld, KT_NOMINAL, HP,
                           m_div=30, verbose=False)
 
-# DARC-MPC uses OPTIMAL LQG base + feedforward
-# Effective damping ~ 60% larger (optimal base × 1.0 + FF contribution)
-# Compute optimal LQG poles for DARC base
-print("  Computing SLD DARC ...")
-lqg_optimal = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_optimal.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0)
-omega_OPT_n, zeta_OPT_n = extract_modes(lqg_optimal.ev_cl, N_MODES)
-# DARC = optimal LQG + 30% extra from FF
-zeta_DARC_eff = (np.array(zeta_OPT_n) * 1.30).tolist()
-rho_DARC, _ = compute_SLD(RPM_arr, ap_arr,
-                            omega_OPT_n.tolist(), zeta_DARC_eff,
-                            Dp_avg.tolist(), m_list,
-                            NT, RT, ETA_H, phi_st, phi_ex,
-                            k1_sld, k2_sld, KT_NOMINAL, HP,
-                            m_div=30, verbose=False)
+# PALF-LQG shares the LQG stability boundary: a phase-locked feedforward does not
+# move the closed-loop poles or the regenerative chatter boundary. No x1.30 surrogate.
+print("  Computing SLD PALF-LQG (= LQG boundary) ...")
+rho_DARC = rho_LQG.copy()
 print(f"  SLD computed in {time.time()-t_sld:.1f}s")
 
 # Plot 3 panels
@@ -849,7 +841,7 @@ fig, axes = plt.subplots(1, 3, figsize=(20, 6.5), sharey=True)
 cases = [
     ("(a) Open-Loop", rho_OL, 'Greys'),
     ("(b) LQG", rho_LQG, 'Greens'),
-    ("(c) DARC-MPC", rho_DARC, 'Reds'),
+    ("(c) PALF-LQG (= LQG boundary)", rho_DARC, 'Reds'),
 ]
 
 for ax, (title, rho_grid, cmap) in zip(axes, cases):
@@ -911,12 +903,12 @@ ax.plot(4900, ap_crit_OL*1e3, 's', color=COLOR_OL, markersize=11,
 ax.plot(4900, ap_crit_LQG*1e3, 's', color=COLOR_LQG, markersize=11,
          markeredgecolor='k', label=f'$a_p^{{crit}}$ LQG = {ap_crit_LQG*1e3:.2f} mm')
 ax.plot(4900, ap_crit_DARC*1e3, 's', color=COLOR_DARC, markersize=11,
-         markeredgecolor='k', label=f'$a_p^{{crit}}$ DARC = {ap_crit_DARC*1e3:.2f} mm')
+         markeredgecolor='k', label=f'$a_p^{{crit}}$ PALF = {ap_crit_DARC*1e3:.2f} mm')
 
 custom_lines = [
     plt.Line2D([0], [0], color=COLOR_OL, lw=2.5, label='Open-Loop'),
     plt.Line2D([0], [0], color=COLOR_LQG, lw=2.5, label='LQG'),
-    plt.Line2D([0], [0], color=COLOR_DARC, lw=2.5, label='DARC-MPC'),
+    plt.Line2D([0], [0], color=COLOR_DARC, lw=2.5, label='PALF-LQG'),
 ]
 leg1 = ax.legend(handles=custom_lines, loc='upper left', fontsize=12,
                   title='Stability boundary', framealpha=0.95)
@@ -926,7 +918,7 @@ ax.legend(loc='upper right', fontsize=9, framealpha=0.9)
 ax.set_xlabel("Spindle speed (RPM)")
 ax.set_ylabel(r"Axial depth $a_p$ (mm)")
 gain_factor = ap_crit_DARC/ap_crit_OL
-ax.set_title(f"SLD overlay — DARC-MPC stability domain {gain_factor:.1f}x larger than OL",
+ax.set_title(f"SLD overlay — PALF-LQG stability domain {gain_factor:.1f}x larger than OL",
               fontweight='bold')
 ax.grid(True, alpha=0.4)
 ax.set_xlim([RPM_arr.min(), RPM_arr.max()])
@@ -964,7 +956,7 @@ for idx, (key, ylabel, title) in enumerate(metrics_def):
     ax.bar(x - w/2, lqg_v, w, color=COLOR_LQG, alpha=0.85,
             edgecolor='k', label='LQG', linewidth=1.4)
     ax.bar(x + w/2, darc_v, w, color=COLOR_DARC, alpha=0.85,
-            edgecolor='k', label='DARC-MPC', linewidth=1.4)
+            edgecolor='k', label='PALF-LQG', linewidth=1.4)
     
     for i, (l, d) in enumerate(zip(lqg_v, darc_v)):
         ax.text(i - w/2, l*1.02, f'{l:.2f}', ha='center', fontsize=8, fontweight='bold')
@@ -982,9 +974,9 @@ save_fig(fig, "fig10_metrics_grid")
 
 
 # ============================================================
-# FIGURE 11 : DARC-MPC internal blocks (S1)
+# FIGURE 11 : PALF-LQG internal blocks (S1)
 # ============================================================
-print("[Figure 11] DARC-MPC internal blocks ...")
+print("[Figure 11] PALF-LQG internal blocks ...")
 darc = scenarios_short[0]['darc']
 t_pred = np.arange(len(darc.history_u_total)) * DT_FAST * 1e3
 
@@ -1066,7 +1058,7 @@ ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 # (b) y(t)
 ax = axes[1]
 ax.plot(t_dec, y_l, color=COLOR_LQG, linewidth=0.4, alpha=0.85, label='LQG')
-ax.plot(t_dec, y_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85, label='DARC-MPC')
+ax.plot(t_dec, y_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85, label='PALF-LQG')
 ax.axhline(0, color='k', linewidth=0.4, alpha=0.5)
 ax.axvline(T_FULL, color='blue', linestyle='--', alpha=0.5, linewidth=1.2,
             label='End of cut')
@@ -1079,7 +1071,7 @@ ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 # (c) u(t)
 ax = axes[2]
 ax.plot(t_dec, u_l, color=COLOR_LQG, linewidth=0.4, alpha=0.85, label='LQG')
-ax.plot(t_dec, u_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85, label='DARC-MPC')
+ax.plot(t_dec, u_d, color=COLOR_DARC, linewidth=0.4, alpha=0.85, label='PALF-LQG')
 ax.axhline(0, color='k', linewidth=0.4, alpha=0.5)
 ax.axvline(T_FULL, color='blue', linestyle='--', alpha=0.5, linewidth=1.2)
 ax.set_xlabel("Time (s)")
@@ -1130,7 +1122,7 @@ for i, (t_start, t_end, title) in enumerate(windows):
     ax.plot(t_w, y_l_w, color=COLOR_LQG, linewidth=0.5, alpha=0.85,
              label=f'LQG  (RMS = {rms_l:.3f} $\\mu$m)')
     ax.plot(t_d_w, y_d_w, color=COLOR_DARC, linewidth=0.5, alpha=0.85,
-             label=f'DARC-MPC  (RMS = {rms_d:.3f} $\\mu$m)')
+             label=f'PALF-LQG  (RMS = {rms_d:.3f} $\\mu$m)')
     ax.axhline(0, color='k', linewidth=0.4, alpha=0.5)
     
     ax.set_xlim([t_start, t_end])
@@ -1177,7 +1169,7 @@ for i, (gs, gf) in enumerate(zip(gains_short, gains_full)):
 ax.axhline(0, color='k', linewidth=0.8)
 ax.set_xticks(x); ax.set_xticklabels(scenarios_labels)
 ax.set_ylabel(r"$\Delta y_{RMS}$ (%)")
-ax.set_title("(a)  DARC-MPC improvement over LQG", fontweight='bold')
+ax.set_title("(a)  PALF-LQG improvement over LQG", fontweight='bold')
 ax.legend(fontsize=10, loc='upper right')
 ax.grid(True, axis='y', alpha=0.4)
 ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
@@ -1190,7 +1182,7 @@ all_lqg_full = [m['lqg']['y_rms'] for m in metrics_full]
 all_darc_full = [m['darc']['y_rms'] for m in metrics_full]
 
 box_data = [all_lqg_short, all_darc_short, all_lqg_full, all_darc_full]
-labels = ['LQG\n(T=0.5s)', 'DARC-MPC\n(T=0.5s)', 'LQG\n(T=20.4s)', 'DARC-MPC\n(T=20.4s)']
+labels = ['LQG\n(T=0.5s)', 'PALF-LQG\n(T=0.5s)', 'LQG\n(T=20.4s)', 'PALF-LQG\n(T=20.4s)']
 bp = ax.boxplot(box_data, labels=labels, patch_artist=True, widths=0.6)
 
 colors_box = [COLOR_LQG, COLOR_DARC, COLOR_LQG, COLOR_DARC]
@@ -1221,7 +1213,7 @@ print(f" SUMMARY - All figures generated for ARTICLE PUBLICATION ")
 print(f"{'='*72}")
 
 print(f"\n  PERFORMANCE TABLE (T=0.5s) :")
-print(f"  {'Scenario':<28}{'y_RMS LQG':<13}{'y_RMS DARC':<13}{'Gain':<10}")
+print(f"  {'Scenario':<28}{'y_RMS LQG':<13}{'y_RMS PALF':<13}{'Gain':<10}")
 print(f"  {'-'*70}")
 for i, m in enumerate(metrics_short):
     yL = m['lqg']['y_rms']
@@ -1237,7 +1229,8 @@ print(f"  {'AVERAGE':<28}{mL:<13.4f}{mD:<13.4f}{(1-mD/mL)*100:+6.2f}%")
 print(f"\n  STABILITY (SLD) at RPM = 4900 :")
 print(f"     OL    : a_p crit = {ap_crit_OL*1e3:.3f} mm")
 print(f"     LQG   : a_p crit = {ap_crit_LQG*1e3:.3f} mm  ({ap_crit_LQG/ap_crit_OL:.1f}x OL)")
-print(f"     DARC  : a_p crit = {ap_crit_DARC*1e3:.3f} mm  ({ap_crit_DARC/ap_crit_OL:.1f}x OL)")
+print(f"     PALF  : a_p crit = {ap_crit_DARC*1e3:.3f} mm  ({ap_crit_DARC/ap_crit_OL:.1f}x OL)"
+      f"   [= LQG; feedforward does not shift the boundary]")
 
 print(f"\n  Total time : {time.time()-t_global:.1f} s")
 print(f"\n  Figures saved in '{OUT_DIR}/' (PNG 300 DPI + PDF)")

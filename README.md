@@ -1,9 +1,10 @@
 # Active Vibration Control of a Thin-Walled Plate During Milling
 
-**Topic**: LQG feedback vs. LQG augmented with a learned, tooth-passing-phase-locked
-neural feedforward ("DARC-MPC v3" — rename pending, see below) for chatter mitigation
-in peripheral milling of cantilever AL6061 plates. The plant model is anchored to
-Du, Liu, Dai & Long (2024), *Int. J. Mech. Sci.* 274:109257.
+**Topic**: LQG feedback vs. **PALF-LQG** — LQG augmented with a learned,
+tooth-passing-phase-locked neural feedforward (renamed from the earlier over-claiming
+"DARC-MPC v3") — for chatter mitigation in peripheral milling of cantilever AL6061
+plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
+*Int. J. Mech. Sci.* 274:109257.
 
 > **⚠️ Read before citing any number from this repository**
 >
@@ -15,11 +16,17 @@ Du, Liu, Dai & Long (2024), *Int. J. Mech. Sci.* 274:109257.
 > - [`docs/AUDIT_FINDINGS.md`](docs/AUDIT_FINDINGS.md) — 44 verified findings
 >   (integrity, naming, methodology) that must be addressed before submission.
 >
-> Known blocking issues, in brief: the "DARC" stability-lobe diagram is produced by an
-> assumed ×1.30 damping multiplier, not a closed-loop Floquet computation; the NN is
-> trained on the same scenario it is evaluated on; the method name over-claims
-> ("Deep"/"MPC"/"Adaptive" do not describe the code); and two cutting-constant
-> formulas (k1, k2) deviate from the article's Eq. (3).
+> **P0 integrity fixes have been applied** (see `docs/AUDIT_FINDINGS.md` §"P0"):
+> the fabricated ×1.30 "DARC" stability lobe is removed (PALF shares the LQG
+> boundary); the feedforward is now trained **once on the nominal scenario and frozen**,
+> then evaluated on held-out scenarios; the baseline is **symmetric** (identical
+> grid-searched LQG weights for both); dead/mislabeled components ("adaptive RLS",
+> the anti-disturbance pretrainer) are removed; and the controller is renamed from the
+> over-claiming "DARC-MPC" to **PALF-LQG** (Phase-Aware Learned Feedforward + LQG).
+>
+> **Still open (P1, not yet done):** two cutting-constant formulas (k1, k2) deviate
+> from the article's Eq. (3); the simulation plant equals the controller design model
+> (inverse crime); no measurement noise/spillover.
 
 ---
 
@@ -36,7 +43,7 @@ Du, Liu, Dai & Long (2024), *Int. J. Mech. Sci.* 274:109257.
 │
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py         # LQG with Kalman observer (grid-searched weights)
-│   └── darc_mpc_v3_controller.py # LQG + phase-locked NN feedforward (ILC-trained)
+│   └── palf_lqg_controller.py    # LQG + phase-locked NN feedforward (ILC-trained)
 │
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Floquet multipliers (0th-order semi-discretization)
@@ -141,27 +148,26 @@ u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
 
 ## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS vibration vs LQG baseline (T = 0.5 s)
+### RMS vibration vs LQG baseline (T = 0.5 s) — train-once / held-out, symmetric baseline
 
-| Scenario | LQG y_RMS | +FF y_RMS | Gain |
+| Scenario | LQG y_RMS | PALF y_RMS | Gain |
 |---|---:|---:|---:|
 | S1 Nominal | 0.532 µm | 0.507 µm | +4.6 % |
-| S2 Aggressive (a_p = 0.6 mm) | 1.058 µm | 1.011 µm | +4.4 % |
-| S3 Model mismatch (ω −15 %) | 0.606 µm | 0.489 µm | **+19.4 %** |
-| S4 High K_T (+30 %) | 0.692 µm | 0.661 µm | +4.6 % |
+| S2 Aggressive (a_p = 0.6 mm) | 1.058 µm | 1.021 µm | +3.5 % |
+| S3 Model mismatch (ω −15 %) | 0.606 µm | 0.487 µm | **+19.7 %** |
+| S4 High K_T (+30 %) | 0.692 µm | 0.664 µm | +4.1 % |
 
 The learned feedforward buys little on the nominal plant and a lot under model
-mismatch — that robustness asymmetry is the interesting result. (Caveat: the current
-protocol trains on the evaluated scenario; the numbers must be regenerated with a
-train-once/evaluate-held-out protocol before publication — audit finding #18.)
+mismatch — that robustness asymmetry is the interesting, honest result. The
+feedforward is trained once on the nominal scenario and frozen; S2/S3/S4 are held-out.
 
 ### Stability lobes at 4900 RPM (Floquet)
 
 | Configuration | a_p critical |
 |---|---:|
 | Open-Loop | 0.100 mm — **matches the article's experimental limit** |
-| LQG closed loop (equivalent-damping surrogate) | 2.54 mm |
-| "DARC" | *not a computed result — do not cite* (assumed ×1.30 damping multiplier) |
+| LQG closed loop | 2.54 mm (25.4× OL) |
+| PALF-LQG | 2.54 mm — **= LQG** (a phase-locked feedforward does not shift the boundary) |
 
 ---
 

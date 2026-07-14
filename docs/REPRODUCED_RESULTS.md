@@ -1,68 +1,86 @@
 # Reproduced Results — Verification Log
 
-**Date:** 2026-07-14
+**Date:** 2026-07-14 (updated after the P0 integrity fixes)
 **Environment:** Python 3.11, NumPy/SciPy/Matplotlib (latest), Linux x86-64
-**Command:** `python main_simulation.py` (files flattened into one directory per package README)
-**Runs:** 2 independent runs, ~77 s each.
+**Command:** `python main_simulation.py` (files flattened into one directory per README)
+**Protocol:** train-once / freeze / evaluate-held-out, with a **symmetric** feedback
+baseline (the standalone LQG and PALF's internal LQR share identical grid-searched
+weights). Two independent runs; agreement <1 % (RNGs seeded with 42).
 
-## 1. Time-domain comparison (LQG vs DARC v3), T = 0.5 s
+---
 
-Numbers below are from run 1; run 2 agreed to within <1% (NN init is seeded with
-`seed=42`, residual variance comes from the iterative-learning pass).
+## 1. Time-domain comparison (LQG vs PALF-LQG), T = 0.5 s
 
-| Scenario | LQG y_RMS (µm) | DARC y_RMS (µm) | Gain |
+PALF-LQG = LQG feedback + phase-locked learned feedforward. The feedforward is trained
+**once** on the nominal scenario (S1) and then **frozen**; S2/S3/S4 are held-out.
+
+| Scenario | LQG y_RMS (µm) | PALF y_RMS (µm) | Gain |
 |---|---:|---:|---:|
-| S1 — Nominal (a_p = 0.3 mm) | 0.5319 | 0.5073 | **+4.63 %** |
-| S2 — Aggressive (a_p = 0.6 mm) | 1.0577 | 1.0112 | **+4.39 %** |
-| S3 — Uncertainty (ω −15 %) | 0.6059 | 0.4886 | **+19.37 %** |
-| S4 — High K_T (+30 %) | 0.6924 | 0.6605 | **+4.60 %** |
-| **Average** | 0.7220 | 0.6669 | **+7.63 %** |
+| S1 — Nominal (a_p = 0.3 mm) | 0.5319 | 0.5073 | **+4.62 %** |
+| S2 — Aggressive (a_p = 0.6 mm) | 1.0577 | 1.0207 | **+3.49 %** |
+| S3 — Model mismatch (ω −15 %) | 0.6059 | 0.4866 | **+19.69 %** |
+| S4 — High K_T (+30 %) | 0.6924 | 0.6643 | **+4.06 %** |
+| **Average** | 0.7220 | 0.6697 | **+7.23 %** |
 
-Control effort (S1): LQG u_max = 12.81 V, u_RMS = 3.63 V; DARC u_max = 12.60 V,
-u_RMS = 3.70 V (DARC uses *slightly more* RMS voltage in the nominal case).
+Control effort (S1): LQG u_max = 12.81 V, u_RMS = 3.63 V; PALF u_max = 12.61 V,
+u_RMS = 3.70 V (PALF uses marginally more RMS voltage in the nominal case).
 
-### ⚠️ Discrepancy vs the historical package README
+### The result, honestly
 
-The package README claimed +19.2…19.5 % for **all four** scenarios (average
-+19.31 %). The current code reproduces that magnitude **only for S3**
-(model-frequency mismatch). The nominal-scenario gain is ≈ +4.6 %. The README
-figures evidently came from an earlier code version and are not reproducible;
-all reported numbers must be regenerated from the committed code before any
-manuscript submission.
+The learned feedforward buys **little on the nominal plant** (+4.6 %) but **holds its
+gain under model mismatch** (+19.7 % when the feedback design frequency is off by
+−15 %). Because the feedforward is indexed to the tooth-passing phase rather than to
+the model, it keeps cancelling the periodic disturbance even when the feedback model is
+wrong. "Learned periodic feedforward buys robustness to model mismatch, not nominal
+performance" is the defensible, reviewer-proof claim — and it is exactly what the held-
+out data shows (S3 is the only large gain, and it survives the train-once protocol).
 
-The honest headline is arguably *more* interesting: the phase-aware
-feedforward helps most exactly when the feedback model is wrong (S3), which is
-the robustness story.
+### Change vs the historical (pre-fix) numbers
 
-## 2. Stability lobe diagram (FDM/Floquet) at 4900 RPM
+The old package README claimed a uniform +19.2…19.5 % across **all four** scenarios
+(average +19.31 %). That table came from an earlier configuration with a deliberately
+weakened baseline and per-scenario retraining, and it did not reproduce. Under the
+corrected symmetric / held-out protocol the honest picture is S1 +4.6 %, S2 +3.5 %,
+S3 +19.7 %, S4 +4.1 %, average +7.2 %.
+
+## 2. Stability lobe diagram (Floquet) at 4900 RPM
 
 | Configuration | a_p critical | vs Open-Loop |
 |---|---:|---:|
 | Open-Loop | 0.100 mm | 1× |
-| LQG (grid-searched weights) | 2.538 mm | 25.4× |
-| "DARC v3" | 3.188 mm | 31.9× |
+| LQG (closed loop) | 2.538 mm | 25.4× |
+| PALF-LQG | **2.538 mm (= LQG)** | 25.4× |
 
-Two observations:
+Two points:
 
 1. **Open-loop anchor is validated.** The reproduced open-loop critical depth
    (0.10 mm at 4900 RPM) matches the *experimental* stability limit reported by
-   Du et al. (2024), Fig. 18 (< 0.1 mm at most speeds, milling condition T1 at
-   0.3 mm chatters without control). This is a genuine validation point for the
-   FEM + force model + FDM pipeline.
-2. **The DARC SLD row is NOT a computed result.** In `main_simulation.py` the
-   DARC lobe is produced by scaling the LQG closed-loop modal damping by a
-   hard-coded factor 1.30 (`zeta_DARC_eff = zeta_LQG_sld * 1.30`) — an assumed
-   "equivalent damping", not a Floquet analysis of the actual DARC loop. Since
-   the trained network is (by construction of its training data) essentially a
-   function of tool phase only, it acts as a *periodic feedforward*, and pure
-   feedforward does not move closed-loop poles. The honest computation is to
-   linearize the NN around the periodic orbit (periodic gain ∂u_FF/∂x̂) and run
-   the FDM with that periodic feedback term. Until that is done, no SLD claim
-   for DARC should appear in a manuscript.
+   Du et al. (2024), Fig. 18 (< 0.1 mm at most speeds; condition T1 at 0.3 mm chatters
+   without control). This validates the FEM + force model + Floquet pipeline.
+2. **The PALF SLD is no longer fabricated.** The previous code multiplied the LQG
+   closed-loop damping by a hard-coded 1.30 and presented the result as the "DARC"
+   lobe (the source of the retracted "+41 % stable depth" and "31.1 % effective
+   damping" claims). That multiplier is removed. A phase-locked feedforward changes the
+   periodic forcing, not the closed-loop poles, so PALF **shares the LQG boundary**.
+   A genuine closed-loop SLD for the feedforward would require linearizing the trained
+   network around the periodic orbit (periodic gain ∂u_FF/∂x̂) and running the
+   discretization with that periodic feedback term — flagged as future work (P2).
 
 ## 3. Reproducibility notes
 
-- NN initialization and ILC sampling are seeded (`seed=42`); results are
-  repeatable across runs on the same machine to within ~1 %.
-- Total runtime ≈ 77 s for the 4-scenario comparison + 3 SLDs (grid 60×50,
-  m_div = 30) on a standard container. No GPU required.
+- Single shared feedback design + single feedforward pretraining (30 ILC iterations);
+  all RNGs seeded (`seed=42`). Repeatable to within ~1 % across runs.
+- Runtime ≈ 38 s for the 4-scenario comparison + SLDs (grid 60×50, m_div = 30) on a
+  standard container — faster than before because the controller is trained once, not
+  four times. No GPU required.
+
+## 4. Known residuals still to address before submission (not P0)
+
+- **k1, k2 cutting constants** still follow the current package convention and deviate
+  from Du et al. Eq. (3) (k1 ≈ −33 %, k2 ≈ −12 %). Correcting them (P1) will shift all
+  absolute force levels and every SLD depth; the *relative* LQG-vs-PALF comparison is
+  unaffected.
+- **Inverse crime**: the simulation plant still equals the controller design model
+  (3 modes, near-noiseless Kalman). Add unmodeled modes + sensor noise (P1).
+- The 04_figures/ scripts still retrain the feedforward per figure; they are
+  illustrative. Authoritative numbers are those in this file.

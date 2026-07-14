@@ -112,8 +112,9 @@ class NewmarkSimulator:
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)
-                # NRACC nécessite aussi k_step
-                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
+                # PALF-LQG (and legacy NRACC/DARC names) need k_step for the
+                # phase-locked feedforward
+                elif controller.__class__.__name__ in ('PALF_LQG_Controller', 'NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)

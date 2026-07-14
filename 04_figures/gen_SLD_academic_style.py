@@ -1,11 +1,17 @@
 """
 gen_SLD_academic_style.py
 ==========================
-Génère SLD avec style ACADÉMIQUE classique :
+Génère SLD avec style ACADÉMIQUE classique (OL vs LQG closed-loop).
+
+P0 integrity note: the "DARC/PALF" stability boundary is drawn IDENTICAL to the LQG
+boundary because a phase-locked feedforward does not shift the regenerative chatter
+boundary. The earlier fabricated "x1.30 effective damping" surrogate and the
+deliberately weakened "sub-optimal LQG" baseline have been removed (see
+docs/AUDIT_FINDINGS.md). A rigorous closed-loop SLD for the feedforward would require
+periodic-gain Floquet analysis (future work, docs/CONTRIBUTION.md P2).
+
    - Lignes propres (pas de contour fill)
    - Zones stables/instables hachurées ou colorées simplement
-   - Annotations claires
-   - Comparaison directe sur même graphique
    - Style des publications classiques (Schmitz, Altintas, Insperger)
 """
 
@@ -122,9 +128,10 @@ rho_OL, _ = compute_SLD(RPM_arr, ap_arr,
 print(f"   done ({time.time()-t0:.1f}s)")
 
 t0 = time.time()
-print("[2/3] LQG SLD (sub-optimal w_q=1e13) ...")
+print("[2/3] LQG SLD (grid-searched weights) ...")
 lqg_n = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_n.optimize_weights(w_q_list=[1e13], w_qd_list=[1e8], w_r=1.0)
+lqg_n.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                       w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
 omega_LQG_n, zeta_LQG_n = extract_modes(lqg_n.ev_cl, N_MODES)
 rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
                           omega_LQG_n.tolist(), zeta_LQG_n.tolist(),
@@ -135,17 +142,11 @@ rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
 print(f"   done ({time.time()-t0:.1f}s)")
 
 t0 = time.time()
-print("[3/3] DARC-MPC SLD (optimal LQG base + 30% FF) ...")
-lqg_opt = LQGController(plate_n, dt=DT_FAST, verbose=False)
-lqg_opt.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0)
-omega_OPT_n, zeta_OPT_n = extract_modes(lqg_opt.ev_cl, N_MODES)
-zeta_DARC_eff = (np.array(zeta_OPT_n) * 1.30).tolist()
-rho_DARC, _ = compute_SLD(RPM_arr, ap_arr,
-                            omega_OPT_n.tolist(), zeta_DARC_eff,
-                            Dp_avg.tolist(), m_list,
-                            NT, RT, ETA_H, phi_st, phi_ex,
-                            k1_sld, k2_sld, KT_NOMINAL, HP,
-                            m_div=40, verbose=False)
+# PALF-LQG shares the LQG stability boundary: a phase-locked feedforward does not move
+# the closed-loop poles or the regenerative chatter boundary. The earlier "x1.30
+# effective damping" surrogate was a fabrication and is removed (see AUDIT_FINDINGS).
+print("[3/3] PALF-LQG SLD (= LQG boundary; feedforward does not shift it) ...")
+rho_DARC = rho_LQG.copy()
 print(f"   done ({time.time()-t0:.1f}s)")
 
 
@@ -216,7 +217,7 @@ ax.annotate(f'$a_p^{{crit}} = {ap_crit_LQG*1e3:.2f}$ mm  (LQG)',
              fontsize=11, color=COLOR_LQG, fontweight='bold',
              arrowprops=dict(arrowstyle='->', color=COLOR_LQG, lw=1.3))
 
-ax.annotate(f'$a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm  (DARC-MPC)',
+ax.annotate(f'$a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm  (PALF-LQG)',
              xy=(4900, ap_crit_DARC*1e3), xytext=(5500, ap_crit_DARC*1e3 + 0.20),
              fontsize=11, color=COLOR_DARC, fontweight='bold',
              arrowprops=dict(arrowstyle='->', color=COLOR_DARC, lw=1.3))
@@ -229,14 +230,14 @@ ax.text(2800, 0.6, 'STABLE\nzone',
          fontsize=14, fontweight='bold', color='#444', alpha=0.8,
          ha='center', style='italic')
 
-# Improvement annotation (key result for paper)
+# PALF shares the LQG boundary — annotate the OL->LQG improvement (the real result)
 ax.annotate('',
-             xy=(4900, ap_crit_DARC*1e3),
-             xytext=(4900, ap_crit_LQG*1e3),
+             xy=(4900, ap_crit_LQG*1e3),
+             xytext=(4900, ap_crit_OL*1e3),
              arrowprops=dict(arrowstyle='<->', color='blue', lw=2.0))
-ax.text(4720, (ap_crit_LQG + ap_crit_DARC)*1e3/2,
-         f'+{(ap_crit_DARC/ap_crit_LQG-1)*100:.0f}%',
-         fontsize=12, color='blue', fontweight='bold',
+ax.text(4720, (ap_crit_OL + ap_crit_LQG)*1e3/2,
+         f'x{ap_crit_LQG/ap_crit_OL:.0f}\n(LQG = PALF)',
+         fontsize=11, color='blue', fontweight='bold',
          ha='right', va='center',
          bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
                     edgecolor='blue', linewidth=1.2))
@@ -245,7 +246,7 @@ ax.text(4720, (ap_crit_LQG + ap_crit_DARC)*1e3/2,
 custom_lines = [
     plt.Line2D([0], [0], color=COLOR_OL, lw=3, label='Open-loop'),
     plt.Line2D([0], [0], color=COLOR_LQG, lw=3, label='LQG'),
-    plt.Line2D([0], [0], color=COLOR_DARC, lw=3, label='DARC-MPC'),
+    plt.Line2D([0], [0], color=COLOR_DARC, lw=3, label='PALF-LQG'),
     plt.Line2D([0], [0], marker='*', color='gold', markersize=18,
                 markeredgecolor='black', linestyle='None',
                 label='Operating point'),
@@ -281,7 +282,7 @@ fig, axes = plt.subplots(1, 3, figsize=(20, 7), sharey=True)
 cases = [
     ("(a) Open-loop", rho_OL, COLOR_OL, '#E8E8E8'),
     ("(b) LQG", rho_LQG, COLOR_LQG, '#E8F5E8'),
-    ("(c) DARC-MPC", rho_DARC, COLOR_DARC, '#FCE8E8'),
+    ("(c) PALF-LQG", rho_DARC, COLOR_DARC, '#FCE8E8'),
 ]
 
 for ax, (title, rho_grid, line_color, fill_color) in zip(axes, cases):
@@ -364,7 +365,7 @@ custom = [
     plt.Line2D([0], [0], color=COLOR_LQG, lw=2.5,
                 label=f'LQG  ($a_p^{{crit}} = {ap_crit_LQG*1e3:.2f}$ mm)'),
     plt.Line2D([0], [0], color=COLOR_DARC, lw=2.5,
-                label=f'DARC-MPC  ($a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm)'),
+                label=f'PALF-LQG  ($a_p^{{crit}} = {ap_crit_DARC*1e3:.2f}$ mm)'),
     plt.Line2D([0], [0], marker='*', color='gold', markersize=18,
                 markeredgecolor='black', linestyle='None',
                 label='Operating point (4900 RPM, 0.3 mm)'),
@@ -393,6 +394,6 @@ print(f"{'='*70}")
 print(f"  Critical a_p at 4900 RPM:")
 print(f"    Open-loop  : {ap_crit_OL*1e3:.3f} mm")
 print(f"    LQG        : {ap_crit_LQG*1e3:.3f} mm  ({ap_crit_LQG/ap_crit_OL:.1f}x OL)")
-print(f"    DARC-MPC: {ap_crit_DARC*1e3:.3f} mm  ({ap_crit_DARC/ap_crit_OL:.1f}x OL)")
+print(f"    PALF-LQG: {ap_crit_DARC*1e3:.3f} mm  ({ap_crit_DARC/ap_crit_OL:.1f}x OL)")
 print(f"\n  DARC vs LQG: +{(ap_crit_DARC/ap_crit_LQG - 1)*100:.1f}% increase in stability domain")
 print(f"\n  Figures saved: fig09_SLD_overlay + fig08_SLD_3panels + fig09b_SLD_hatched")

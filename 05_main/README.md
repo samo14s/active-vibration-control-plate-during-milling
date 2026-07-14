@@ -1,33 +1,32 @@
 # 05_main — Main Simulation Scripts
 
-This directory contains the **main entry points** for running the simulation.
+Main entry points for running the simulation. **Authoritative numbers** come from
+`main_simulation.py` and are logged in `docs/REPRODUCED_RESULTS.md`.
 
 ## Files
 
 | File | Description | Output |
 |---|---|---|
-| `main_simulation.py` | Full LQG vs DARC-MPC comparison | Console + figs |
-| `main_realistic_piezo.py` | Same but with piezo non-linearities | Console + figs |
+| `main_simulation.py` | LQG vs PALF-LQG comparison (train-once / held-out) | Console + figs |
+| `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py
 
-The **primary script** for reproducing the article results.
+The **primary script**. Comparison protocol (see `docs/AUDIT_FINDINGS.md`):
 
-### What it does
-
-1. Builds plate FEM model (Q4 × 30×24 elements, 3 modes)
-2. Adds piezoelectric patch (QDA60-200.7, 20×60 mm)
-3. Computes cutting force coefficients (3-tooth end-mill)
-4. Builds **LQG controller** with sub-optimal weights
-5. Builds **DARC-MPC controller** with optimal LQG base + NN
-6. **Pre-trains the NN** via 30 iterations of iterative learning control
-7. Runs **4 scenarios**:
+1. Builds plate FEM model (Q4 × 30×24 elements, 3 modes).
+2. Adds piezoelectric patch (QDA60-20-0.7, 20×60 mm).
+3. Computes cutting force coefficients (3-tooth end-mill).
+4. Builds **one shared LQG feedback** (grid-searched weights) used by both the
+   baseline LQG and PALF's internal LQR — a **symmetric** comparison.
+5. Builds **PALF-LQG** = the shared LQG + a phase-locked learned feedforward, and
+   **pre-trains the feedforward ONCE on the nominal scenario (S1), then freezes it**.
+6. Runs **4 scenarios**, evaluating the *frozen* controllers (S2/S3/S4 are held-out):
    - **S1 Nominal**: a_p = 0.3 mm, K_T nominal, ω nominal
-   - **S2 Aggressive**: a_p = 0.6 mm (twice the depth)
-   - **S3 Uncertainty**: ω - 15% (frequency mismatch)
-   - **S4 High K_T**: K_T + 30% (harder material)
-8. Computes metrics: RMS, peak, peak-to-peak, voltage stats
-9. Prints summary table
+   - **S2 Aggressive**: a_p = 0.6 mm
+   - **S3 Uncertainty**: ω − 15 % (frequency mismatch)
+   - **S4 High K_T**: K_T + 30 %
+7. Computes metrics (RMS, peak, peak-to-peak, voltage) and prints the summary.
 
 ### Run
 
@@ -35,88 +34,57 @@ The **primary script** for reproducing the article results.
 python main_simulation.py
 ```
 
-### Expected output
+### Verified output (committed code, ~38 s)
 
 ```
 ========================================================================
- LQG vs DARC-MPC v3 COMPLETE COMPARISON
+ RÉSUMÉ FINAL : LQG vs PALF-LQG
 ========================================================================
+  Scénario                    LQG y_RMS     PALF y_RMS    Gain
+  S1 - Nominal article        0.5319        0.5073         +4.62%
+  S2 - Aggressive ap=0.6mm    1.0577        1.0207         +3.49%
+  S3 - Uncertainty ω-15%      0.6059        0.4866        +19.69%   <- model mismatch
+  S4 - High K_T +30%          0.6924        0.6643         +4.06%
+  MOYENNE                     0.7220        0.6697         +7.23%
 
-[Setup]
-  Plate model         : 30 × 24 elements, 3 modes
-  Modal frequencies   : [521, 1070, 2733] Hz
-  Cutting parameters  : 4900 RPM, 0.3 mm axial, 0.1 mm radial
-  
-[Phase 1] Building controllers ...
-  LQG (sub-optimal)   : w_q=1e13, w_qd=1e8 → ζ_1 = 13.2%
-  DARC-MPC (optimal)  : w_q=1e14, w_qd=1e8 → ζ_1 = 23.9% (base)
-
-[Phase 2] Pre-training DARC-MPC NN ...
-  Iter  1/30 : RMS_residual = 0.587 µm
-  Iter  5/30 : RMS_residual = 0.412 µm
-  Iter 10/30 : RMS_residual = 0.298 µm
-  Iter 30/30 : RMS_residual = 0.107 µm  ✓ converged
-
-[Phase 3] Running 4 scenarios ...
-  S1 Nominal              : LQG 0.628 → DARC 0.507 µm  (+19.20%)
-  S2 Aggressive ap=0.6mm  : LQG 1.253 → DARC 1.009 µm  (+19.51%)
-  S3 Uncertainty ω-15%    : LQG 0.604 → DARC 0.488 µm  (+19.22%)
-  S4 High K_T +30%        : LQG 0.817 → DARC 0.661 µm  (+19.17%)
-  ─────────────────────────────────────────────────────────────────
-  AVERAGE                 : LQG 0.825 → DARC 0.666 µm  (+19.31%)
-
-Done. Total time: ~4 minutes
+  STABILITÉ (SLD) - à RPM = 4900 :
+     a_p crit OPEN-LOOP : 0.100 mm   (matches Du et al. 2024 experiment)
+     a_p crit LQG       : 2.538 mm   (25.4x OL)
+     a_p crit PALF-LQG  : 2.538 mm   (= LQG; feedforward does not shift the boundary)
 ```
 
-### Modifying parameters
+The learned feedforward helps most under **model mismatch** (S3), because it is indexed
+to the tooth-passing phase rather than to the (wrong) feedback model. It does not extend
+the stability lobe — a phase-locked feedforward changes the periodic forcing, not the
+closed-loop poles.
 
-Edit the configuration section near the top of `main_simulation.py`:
+### Key parameters (top of `main_simulation.py`)
 
 ```python
-# ────── PHYSICAL PARAMETERS ──────
-LP = 0.100              # plate length (m)
-HP = 0.080              # plate height (m)
-BP = 0.004              # plate thickness (m)
-RPM = 4900              # spindle speed
-FT = 0.02e-3            # feed per tooth (m)
-AP = 0.3e-3             # axial engagement (m)
-AE = 0.1e-3             # radial engagement (m)
+LP, HP, BP = 0.100, 0.080, 0.004   # plate length/height/thickness (m)
+RPM = 4900                         # spindle speed
+FT  = 0.02e-3                      # feed per tooth (m)
+AE  = 0.1e-3                       # radial engagement (m)
 
-# ────── LQG WEIGHTS ──────
-LQG_W_Q = 1e13          # state penalty (sub-optimal)
-LQG_W_QD = 1e8          # state derivative penalty
-LQG_W_R = 1.0           # control penalty
+# One shared LQG design (grid search), reused by the baseline and by PALF:
+LQG_SHARED.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                            w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
 
-# ────── DARC-MPC PARAMETERS ──────
-DARC_BASE_W_Q = 1e14    # base LQG (optimal)
-DARC_FF_LR = 5e-3       # NN learning rate
-DARC_FF_MAX = 10.0      # FF saturation (V)
-DARC_N_ITER = 30        # ILC iterations
-DARC_N_EPOCHS = 15      # epochs per iteration
+# PALF feedforward: ff_lr=0.005, ff_max=10.0 V, 30 ILC iterations, trained once + frozen
 ```
 
 ## main_realistic_piezo.py
 
-Same as main_simulation.py but uses a **non-linear piezo model** with:
-- Hysteresis (Bouc-Wen model)
-- Rate-dependent saturation
-- Temperature drift compensation
-
-This shows that DARC-MPC remains effective even with realistic actuator
-non-linearities (typical for industrial piezoelectric actuators).
-
-### Run
+LQG with a realistic piezo model (saturation, slew rate, amplifier bandwidth,
+hysteresis, sensor noise/delay). Note: this script still uses the current k1/k2
+convention (P1 item) and does not include PALF.
 
 ```bash
 python main_realistic_piezo.py
 ```
 
-Expected results: ~+15% improvement (slightly less than ideal case due to
-non-linearities, but still very significant).
-
 ## Tips
 
-1. **For first run**: use `main_simulation.py` (faster, ideal piezo)
-2. **For thesis defense**: use `main_realistic_piezo.py` (more realistic)
-3. **For figure regeneration**: use scripts in `04_figures/`
-4. **For SLD analysis only**: use `gen_SLD_academic_style.py` directly
+1. **First run / authoritative numbers**: `main_simulation.py`.
+2. **Realistic actuator study**: `main_realistic_piezo.py`.
+3. **Figures**: scripts in `04_figures/` (illustrative — see their header notes).

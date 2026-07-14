@@ -1,7 +1,7 @@
 """
 gen_control_strategy_diagram.py
 =================================
-Block diagram DARC-MPC — VERSION AMÉLIORÉE avec flèches BIEN VISIBLES.
+Block diagram PALF-LQG — VERSION AMÉLIORÉE avec flèches BIEN VISIBLES.
 """
 import os
 import numpy as np
@@ -163,7 +163,7 @@ make_box(ax, x_alpha, y_top, 1.0, 1.0, r'$\alpha$',
 make_summing_junction(ax, x_sum, y_mid, r=0.35, signs={'top': '+', 'left': '+'})
 
 # Safety
-make_box(ax, x_safety, y_mid, 2.4, 1.5, 'Lyapunov\nSafety Filter',
+make_box(ax, x_safety, y_mid, 2.4, 1.5, 'CLF Voltage\nGovernor',
           COLOR_SAFETY, COLOR_SAFETY_EDGE,
           sublabel=r'$V(x) \leq V_{max}$', fontsize=12)
 
@@ -343,7 +343,7 @@ ax.text(9.5, 9.55,
          '(reactive baseline)            (anticipative feedforward)',
          fontsize=11, ha='center', va='center', style='italic', color='#555')
 
-ax.text(9.5, 11.0, 'DARC-MPC Control Architecture',
+ax.text(9.5, 11.0, 'PALF-LQG Control Architecture',
          fontsize=20, ha='center', va='center', fontweight='bold')
 
 # Legend
@@ -377,7 +377,7 @@ print("[Figure B] Algorithm flowchart (clear arrows) ...")
 
 fig, ax = plt.subplots(figsize=(14, 12))
 
-ax.text(7.0, 15.5, 'DARC-MPC Algorithm Flow',
+ax.text(7.0, 15.5, 'PALF-LQG Algorithm Flow',
          fontsize=18, ha='center', fontweight='bold')
 
 # Initialization
@@ -403,7 +403,7 @@ ax.text(7.0, 12.4, 'For iter = 1 to N (N = 30):',
          fontsize=12, ha='center', fontweight='bold', color=COLOR_LEARN)
 ax.text(2.5, 11.9, r'1. Simulate plant with current $NN_{FF}$',
          fontsize=11, ha='left', va='center')
-ax.text(2.5, 11.55, r'2. Compute residual: $y_{res}(t) = y_{LQG}(t) - y_{DARC}(t)$',
+ax.text(2.5, 11.55, r'2. Compute residual: $y_{res}(t) = y_{LQG}(t) - y_{PALF}(t)$',
          fontsize=11, ha='left', va='center')
 ax.text(2.5, 11.2, r'3. Targets: $u_{target}(t) = -K_{corr} \cdot y_{res}(t)$',
          fontsize=11, ha='left', va='center')
@@ -465,7 +465,7 @@ make_box(ax, 7.0, 3.9, 6.5, 0.7,
           r'4. Combine: $u^{*} = u_{LQG} + \alpha \cdot u_{FF}$',
           COLOR_SUM, COLOR_SUM_EDGE, fontsize=12)
 make_box(ax, 7.0, 2.5, 7.0, 0.7,
-          r'5. Safety: $u = $ Lyapunov_filter$(u^{*}, \hat{x})$',
+          r'5. Safety: $u = $ CLF_governor$(u^{*}, \hat{x})$ (heuristic)',
           COLOR_SAFETY, COLOR_SAFETY_EDGE, fontsize=12)
 make_box(ax, 7.0, 1.2, 7.5, 0.7,
           '6. Apply $u(t_k)$ to piezoelectric actuator',
@@ -554,7 +554,7 @@ fig, axes = plt.subplots(2, 1, figsize=(18, 13),
                            gridspec_kw={'height_ratios': [1.2, 1]})
 
 ax = axes[0]
-ax.text(9.0, 11.0, 'DARC-MPC: Deep Adaptive Robust Control with MPC',
+ax.text(9.0, 11.0, 'PALF-LQG: Phase-Aware Learned Feedforward + LQG',
          fontsize=20, ha='center', fontweight='bold')
 
 eq_box = FancyBboxPatch((2.5, 10.0), 13.0, 0.7,
@@ -584,7 +584,7 @@ make_box(ax, 6.7, y_top, 0.9, 0.9, r'$\alpha$',
 make_summing_junction(ax, 9.0, y_mid, r=0.35, signs={'top': '+', 'left': '+'})
 
 # Safety
-make_box(ax, 11.5, y_mid, 2.2, 1.3, 'Lyapunov\nSafety Filter',
+make_box(ax, 11.5, y_mid, 2.2, 1.3, 'CLF Voltage\nGovernor',
           COLOR_SAFETY, COLOR_SAFETY_EDGE, fontsize=12)
 
 # Plant
@@ -697,8 +697,8 @@ features = [
             '• Optimal LQR + Kalman observer',
             '• Stabilizes 3 dominant modes',
             '• Damping: 0.31% → 23.9%',
-            '• Pole placement guarantees',
-            '• Robust to model errors',
+            '• Places closed-loop poles (LQR)',
+            '• Reactive, model-based baseline',
         ]
     },
     {
@@ -714,13 +714,13 @@ features = [
     },
     {
         'x': 15.0, 'color': COLOR_SAFETY, 'edge': COLOR_SAFETY_EDGE,
-        'title': '3. Safety Filter (Lyapunov)',
+        'title': '3. CLF Voltage Governor (heuristic)',
         'features': [
-            r'• Quadratic Lyapunov: $V(x) = x^T P x$',
-            r'• Filter rejects unsafe $u^{*}$',
+            r'• Quadratic $V(x) = x^T P x$ on nominal loop',
+            r'• Blends $u^{*}$ toward LQG when $\dot V$ grows',
             '• Falls back to LQG if needed',
             r'• Voltage saturation: $|u| \leq 150 V$',
-            '• Stability guarantees preserved',
+            '• Soft guard, NOT a stability certificate',
         ]
     },
 ]
@@ -733,13 +733,14 @@ for feat in features:
                  fontsize=11, ha='left', va='center')
 
 ax.text(9.0, 0.5,
-         '→ Combined effect:  +19% RMS reduction  ·  +41% stability domain  ·  +100× modal damping',
-         fontsize=14, ha='center', fontweight='bold',
+         '→ Held-out effect:  +4.6% RMS (nominal) · +19.7% RMS under model mismatch · '
+         'SLD unchanged (feedforward does not move poles)',
+         fontsize=12, ha='center', fontweight='bold',
          color='darkgreen', style='italic',
          bbox=dict(boxstyle='round,pad=0.5', facecolor='#E8F5E8',
                     edgecolor='darkgreen', linewidth=2.5))
 
-ax.text(9.0, 7.0, 'Key Innovations of DARC-MPC',
+ax.text(9.0, 7.0, 'Key Innovations of PALF-LQG',
          fontsize=16, ha='center', fontweight='bold')
 
 ax.set_xlim([0, 18])

@@ -6,9 +6,16 @@ control for milling chatter suppression of flexible workpieces*, Int. J. Mech. S
 274:109257.
 **Status of this document:** synthesis of (i) a full read of the reference article,
 (ii) a 3-way independent code audit with adversarial re-verification of every
-critical/major finding (44 findings, see `AUDIT_FINDINGS.md`), (iii) two verification
+critical/major finding (44 findings, see `AUDIT_FINDINGS.md`), (iii) verification
 runs of the committed code (see `REPRODUCED_RESULTS.md`), and (iv) a 28-work
 literature-positioning search across 2005–2026.
+
+> **P0 integrity fixes are now applied** (2026-07-14). The fabricated ×1.30 stability
+> lobe is removed; the feedforward is trained once on the nominal scenario and frozen
+> (held-out evaluation); the baseline is symmetric (identical LQG weights for both);
+> the dead "adaptive/RLS" path and the unused anti-disturbance pretrainer are deleted;
+> and the controller is renamed **DARC-MPC → PALF-LQG**. The honest, held-out numbers
+> are in §4 and `REPRODUCED_RESULTS.md`. P1/P2 items in §6.3–6.4 remain open.
 
 ---
 
@@ -75,27 +82,31 @@ on this plant is meaningful.
    amplifier bandwidth, hysteresis, sensor noise/delay — absent from the article's
    simulations.
 5. **Closed-loop stability lobes** — the article gives open-loop SLDs plus time-domain
-   verification only. *(Currently the package's closed-loop SLD is not honestly
-   computed — see §6.1; once fixed via periodic-gain Floquet analysis it becomes a
-   real methodological increment over Zhang et al. 2019's LTI-averaged CLSLD.)*
+   verification only. *(The P0 fix removed the fabricated ×1.30 lobe; the package now
+   honestly reports PALF = LQG on the SLD, since a phase-locked feedforward does not
+   move the boundary. A genuine periodic-gain Floquet closed-loop SLD — a real
+   methodological increment over Zhang et al. 2019's LTI-averaged CLSLD — remains P2.)*
 
-## 4. The honest numbers (as of the committed code, 2 verification runs)
+## 4. The honest numbers (committed code, train-once / held-out, symmetric baseline)
 
 | Quantity | Reproduced value | Old README claim | Verdict |
 |---|---:|---:|---|
-| RMS gain vs LQG, nominal (S1) | **+4.6 %** | +19.2 % | claim not reproducible |
-| RMS gain, aggressive ap (S2) | +4.4 % | +19.5 % | claim not reproducible |
-| RMS gain, model mismatch ω−15 % (S3) | **+19.4 %** | +19.2 % | ✅ reproduces |
-| RMS gain, KT+30 % (S4) | +4.6 % | +19.2 % | claim not reproducible |
-| SLD critical depth, open loop | 0.100 mm | 0.14 mm | recomputed |
+| RMS gain vs LQG, nominal (S1) | **+4.6 %** | +19.2 % | old claim not reproducible |
+| RMS gain, aggressive ap (S2) | +3.5 % | +19.5 % | old claim not reproducible |
+| RMS gain, model mismatch ω−15 % (S3) | **+19.7 %** | +19.2 % | ✅ survives held-out protocol |
+| RMS gain, KT+30 % (S4) | +4.1 % | +19.2 % | old claim not reproducible |
+| Average RMS gain | **+7.2 %** | +19.3 % | old claim not reproducible |
+| SLD critical depth, open loop | 0.100 mm | 0.14 mm | recomputed; matches article experiment |
 | SLD critical depth, LQG | 2.54 mm | 2.17 mm | recomputed |
-| SLD critical depth, "DARC" | *(not a computed result — fabricated ×1.30 multiplier)* | 3.05 mm | **must be removed** |
+| SLD critical depth, PALF-LQG | 2.54 mm (= LQG) | 3.05 mm | fabrication removed ✓ |
 
 **The honest story is better than the inflated one.** A phase-locked feedforward
 cannot beat a well-tuned feedback loop by much on the *nominal* plant (+4.6 %), but it
-holds its gain when the feedback design model is wrong (+19.4 % under −15 % frequency
+holds its gain when the feedback design model is wrong (+19.7 % under −15 % frequency
 mismatch) because the learned compensation is indexed to the tooth-passing phase, not
-to the model. "Learned feedforward buys robustness to model mismatch, not nominal
+to the model. This survives the train-once/held-out protocol (S3 is the only scenario
+with a large gain, and the feedforward never saw it during training).
+"Learned feedforward buys robustness to model mismatch, not nominal
 performance" is a defensible, interesting, reviewer-proof claim — and it is exactly
 what the data shows.
 
@@ -128,50 +139,45 @@ FEM benchmark as a second contribution.*
 Full register with file:line evidence in `AUDIT_FINDINGS.md` (44 findings, all
 critical/major ones adversarially confirmed). The blocking items:
 
-### 6.1 Integrity (🔴 non-negotiable)
+### 6.1 Integrity (🔴 non-negotiable) — ✅ DONE (P0)
 
-1. **Fabricated DARC stability lobe.** `main_simulation.py:636` multiplies the LQG
-   closed-loop damping by a hard-coded 1.30 and presents the rerun lobe as the DARC
-   SLD; the "+41 % stable depth" and "31.1 % effective damping" headline claims are
-   artifacts of this multiplier (which also appears in two figure generators). The
-   code's own pole plot admits the feedforward does not move closed-loop poles.
-   *Fix:* either drop the DARC SLD claim, or do it properly — linearize the trained
-   NN around the periodic orbit (periodic gain ∂u_FF/∂x̂(φ)) and run the discretization
-   with that periodic feedback term. Done properly this becomes contribution §3.5.
-2. **Training on the evaluation scenario.** Each scenario (including the
-   "robustness" scenarios S3/S4) pre-trains the NN on the *exact* perturbed plant,
-   force arrays, and trajectory it is then scored on — the +19 % robustness claims
-   are circular as coded. *Fix:* train once on the nominal scenario, freeze the
-   weights, evaluate on held-out perturbed scenarios. (The S3 result will likely
-   survive — that is the story worth having.)
-3. **Irreproducible README numbers.** The +19 % ×4-scenarios table cannot be produced
-   by the committed code (§4). *Fix:* regenerate every number from the repository
-   head; results tables in the README now point to `REPRODUCED_RESULTS.md`.
+1. ✅ **Fabricated DARC stability lobe — REMOVED.** The hard-coded ×1.30 damping
+   multiplier is gone from `main_simulation.py` and both figure generators. The package
+   now reports PALF = LQG on the SLD, with an explicit note that a phase-locked
+   feedforward does not move the closed-loop poles or the regenerative boundary. The
+   "+41 %"/"31.1 %" claims are retracted. *(Remaining P2: a genuine periodic-gain
+   Floquet closed-loop SLD — becomes contribution §3.5 if pursued.)*
+2. ✅ **Training on the evaluation scenario — FIXED.** The feedforward is now trained
+   **once** on the nominal scenario (S1) in a shared controller, then **frozen** and
+   evaluated on the held-out scenarios S2/S3/S4. The +19.7 % S3 result survived the
+   held-out protocol — that is the story worth having.
+3. ✅ **Irreproducible numbers — REGENERATED.** All results tables (README,
+   `REPRODUCED_RESULTS.md`, this doc §4) now come from the committed code under the
+   corrected protocol. The old uniform +19 % table is retracted.
 
-### 6.2 Naming (🔴 — reviewers will reject the vocabulary before reading the results)
+### 6.2 Naming (🔴) — ✅ DONE (P0)
 
-"DARC-MPC: Deep Adaptive Robust Control with MPC" is indefensible: there is **no MPC**
-(no receding horizon, no online optimization), the network is **not deep** (one hidden
-layer, 16 tanh units, ~161 parameters), the **adaptive component is dead code**
-(`lambda_robust` computed and never used; the "RLS" is a sign-gradient nudge), and the
-**"Lyapunov" filter certifies the wrong plant** (nominal delay-free LTI, no milling
-force, applied to the estimate, silent fallback to P=I). *Fix:* delete or repair the
-dead/mislabeled components and rename honestly — e.g. **PALF-LQG** (Phase-Aware
-Learned Feedforward LQG) or **ILC-FF/LQG**. The safety filter can stay if described
-as a heuristic CLF-based voltage governor on the nominal model.
+The controller has been renamed **DARC-MPC → PALF-LQG** (Phase-Aware Learned
+Feedforward + LQG). The indefensible components are gone: the dead "adaptive/RLS" path
+(`lambda_robust`, `OnlineRLSAdapter`) is deleted; the unused `pretrain_anti_disturbance`
+is deleted; the safety filter is renamed `CLFVoltageGovernor` and documented honestly as
+a heuristic voltage governor on the nominal model (not a stability certificate); the
+NN is documented as a one-hidden-layer (16 tanh, ~161-param) network — **not** "Deep"
+and **not** "MPC". The state channel is fed zeros consistently at train and deploy time,
+so the feedforward is honestly a learned periodic map `u_FF(φ)`.
 
-### 6.3 Methodology (🟠)
+### 6.3 Methodology (🟠 — P1, still open)
 
-- **Inverse crime:** the simulation plant equals the controller design model (same 3
-  modes, no unmodeled dynamics, near-noiseless Kalman with V=1e-12). Add ≥2 extra
-  plant modes not given to the controller (spillover test) and realistic sensor noise.
-- **NN state inputs are untrained:** training samples set x=0, so the state pathway
-  carries its random initialization into deployment. Either train it or remove it and
-  present the method honestly as u_FF(φ) — a learned periodic map.
-- **Baseline symmetry:** give DARC's internal LQR the same grid search as the
-  baseline LQG (or fix both to identical weights) so the delta is attributable to the
-  feedforward alone; clip both controllers identically.
-- **Cutting-constant formulas:** `k2` drops the parentheses of Eq. (3) and uses the
+- **Inverse crime:** the simulation plant still equals the controller design model
+  (same 3 modes, near-noiseless Kalman with V=1e-12). Add ≥2 extra plant modes not
+  given to the controller (spillover test) and realistic sensor noise.
+- ✅ **NN state inputs / "state-aware" claim — RESOLVED (P0).** The deployment now feeds
+  zeros to the state channel (matching training), so the method is honestly `u_FF(φ)`.
+- ✅ **Baseline symmetry — RESOLVED (P0).** The standalone LQG and PALF's internal LQR
+  now use identical grid-searched weights, so the delta is attributable to the
+  feedforward alone. *(Identical hard clipping of both controllers remains a minor P1.)*
+- **Cutting-constant formulas (still open, P1):** `k2` drops the parentheses of Eq. (3)
+  and uses the
   helix angle where the rake angle belongs (−12.4 %); `k1` uses kn·cos η where the
   article has kn/cos η (−33 %). One-line fixes in `main_simulation.py:142-143` (and
   4 copies in other scripts — deduplicate into one module). All absolute force
@@ -189,12 +195,12 @@ as a heuristic CLF-based voltage governor on the nominal model.
 
 ### 6.4 Priorities
 
-| Priority | Items | Effort |
+| Priority | Items | Status |
 |---|---|---|
-| P0 (integrity) | 6.1.1–6.1.3, rename (6.2) | days |
-| P1 (survives review) | train/test split, k1/k2 fix + dedup, baseline symmetry, spillover + noise | 1–2 weeks |
-| P2 (strengthens) | periodic-gain closed-loop SLD, coupled multi-mode SLD, Eq. (15) piezo, Monte Carlo rewire, mesh convergence note | 2–4 weeks |
-| P3 (transforms) | experimental validation on a physical plate (the article's rig is fully specified — Tables 1–3 + Fig. 17 list every instrument) | months |
+| P0 (integrity) | 6.1.1–6.1.3, rename (6.2), baseline symmetry, honest u_FF(φ) | ✅ **DONE (2026-07-14)** |
+| P1 (survives review) | k1/k2 fix + dedup, spillover + noise (inverse crime), identical clipping | open, 1–2 weeks |
+| P2 (strengthens) | periodic-gain closed-loop SLD, coupled multi-mode SLD, Eq. (15) piezo, Monte Carlo rewire, mesh convergence note | open, 2–4 weeks |
+| P3 (transforms) | experimental validation on a physical plate (the article's rig is fully specified — Tables 1–3 + Fig. 17 list every instrument) | open, months |
 
 ## 7. Suggested manuscript
 

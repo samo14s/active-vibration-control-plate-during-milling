@@ -6,6 +6,29 @@ All were **CONFIRMED**. Minor findings were not adversarially re-verified.
 
 Legend: 🔴 critical (blocks submission) · 🟠 major (reviewers will catch it) · 🟡 minor
 
+> ## ✅ P0 resolution status (2026-07-14)
+>
+> The **integrity-blocking (P0)** findings have been fixed in the committed code. See
+> `docs/CONTRIBUTION.md` §6.1–6.2 and `docs/REPRODUCED_RESULTS.md` for the corrected
+> numbers. Specifically resolved:
+> - **Fabricated ×1.30 "DARC" SLD / "31.1 % effective damping"** — removed from
+>   `main_simulation.py`, `gen_article_complete_figures.py`, `gen_SLD_academic_style.py`.
+>   PALF now honestly shares the LQG boundary.
+> - **Training on the evaluation scenario** — replaced by train-once-on-nominal /
+>   freeze / evaluate-held-out in `main_simulation.py`.
+> - **Rigged "sub-optimal LQG vs optimal DARC" baseline** — both now use identical
+>   grid-searched LQG weights (symmetric comparison).
+> - **Misleading name + dead code** — `DARC_MPC_v3_Controller` → `PALF_LQG_Controller`;
+>   removed `OnlineRLSAdapter`/`lambda_robust` (dead "adaptive"), removed
+>   `pretrain_anti_disturbance` (dead), renamed the "Lyapunov filter" →
+>   `CLFVoltageGovernor` with an honest docstring, and made the feedforward a genuine
+>   phase-only `u_FF(φ)` map (state channel zeroed at train and deploy).
+> - **Irreproducible numbers** — regenerated from the committed code.
+>
+> **Still open (P1/P2):** k1/k2 cutting-constant formulas (findings #1–2), inverse
+> crime / no spillover / no measurement noise, per-mode decoupled SLD, Monte Carlo
+> rewiring, Eq. (15) piezo coefficient. These are NOT yet fixed.
+
 
 ## Physical model fidelity (01_core)
 

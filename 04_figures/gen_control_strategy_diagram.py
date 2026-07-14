@@ -696,7 +696,7 @@ features = [
         'features': [
             '• Optimal LQR + Kalman observer',
             '• Stabilizes 3 dominant modes',
-            '• Damping: 0.31% → 23.9%',
+            '• Damping: 0.31% → 20.3%',
             '• Places closed-loop poles (LQR)',
             '• Reactive, model-based baseline',
         ]
@@ -733,7 +733,7 @@ for feat in features:
                  fontsize=11, ha='left', va='center')
 
 ax.text(9.0, 0.5,
-         '→ Held-out effect:  +4.6% RMS (nominal) · +19.7% RMS under model mismatch · '
+         '→ Held-out effect:  +4.8% RMS (nominal) · +9.8% RMS under -8% model mismatch · '
          'SLD unchanged (feedforward does not move poles)',
          fontsize=12, ha='center', fontweight='bold',
          color='darkgreen', style='italic',

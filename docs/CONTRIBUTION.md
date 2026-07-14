@@ -18,7 +18,13 @@ literature-positioning search across 2005–2026.
 > article's **Eq. (15) piezo coupling**; a **rigorous closed-loop coupled monodromy
 > SLD** (controller in the loop — no surrogate), making **PALF = LQG rigorous**
 > (∂u_FF/∂x̂ = 0); a **Monte-Carlo LQG-vs-PALF** robustness driver (no survivorship
-> bias); and a **FEM mesh-convergence** study. The honest numbers are in §4 and
+> bias); and a **FEM mesh-convergence** study.
+> **P2.5 (improvement pass):** the ILC upgraded to a **frequency-domain model-inverse
+> harmonic update** — held-out gains jump to double digits (avg **+14.4 %**, MC median
+> **+17.8 %**, PALF better in 100 % of draws); the SLD is evaluated at the **worst of
+> 3 tool positions** (article Fig. 6 treatment); and the article's **Eq. (30) delayed
+> PD baseline** is added and shown — like in the article's own Fig. 14 — to be
+> insufficient alone at these conditions. The honest numbers are in §4 and
 > `REPRODUCED_RESULTS.md`. Only P3 (experimental validation) remains.
 
 ---
@@ -88,37 +94,38 @@ on this plant is meaningful.
 5. **Closed-loop stability lobes** — the article gives open-loop SLDs plus time-domain
    verification only. *(The P0 fix removed the fabricated ×1.30 lobe; the package now
    honestly reports PALF = LQG on the SLD, since a phase-locked feedforward does not
-   move the boundary. A genuine periodic-gain Floquet closed-loop SLD — a real
-   methodological increment over Zhang et al. 2019's LTI-averaged CLSLD — remains P2.)*
+   move the boundary. DONE in P2/P2.5: the closed-loop coupled monodromy SLD with the
+   LQG controller embedded, evaluated at the worst of 3 tool positions — a genuine
+   methodological increment over Zhang et al. 2019's LTI-averaged CLSLD.)*
 
-## 4. The honest numbers (committed code, P0+P1+P2: held-out, symmetric, spillover+noise, Eq.3 forces, Eq.15 piezo, closed-loop monodromy SLD)
+## 4. The honest numbers (committed code, P0+P1+P2+P2.5: held-out, symmetric, spillover+noise, Eq.3 forces, Eq.15 piezo, model-inverse ILC, worst-position monodromy SLD)
 
 | Quantity | Reproduced value | Old README claim | Verdict |
 |---|---:|---:|---|
-| RMS gain vs LQG, nominal (S1) | **+4.8 %** | +19.2 % | old claim not reproducible |
-| RMS gain, aggressive ap (S2) | +3.6 % | +19.5 % | old claim not reproducible |
-| RMS gain, model mismatch ω−8 % (S3) | **+9.8 %** | +19.2 % | ✅ robustness gain, held-out |
-| RMS gain, KT+30 % (S4) | +4.5 % | +19.2 % | old claim not reproducible |
-| Average RMS gain | **+5.4 %** | +19.3 % | old claim not reproducible |
-| Monte-Carlo median gain (50 samples) | **+5.05 %** [+3.2, +6.9] | — | PALF better 100 %, all converged |
+| RMS gain vs LQG, nominal (S1) | **+19.5 %** | +19.2 % | now REAL — held-out, symmetric baseline |
+| RMS gain, aggressive ap (S2) | **+11.0 %** | +19.5 % | held-out |
+| RMS gain, model mismatch ω−8 % (S3) | **+14.6 %** | +19.2 % | held-out |
+| RMS gain, KT+30 % (S4) | **+15.8 %** | +19.2 % | held-out |
+| Average RMS gain | **+14.4 %** | +19.3 % | held-out |
+| Monte-Carlo median gain (50 samples) | **+17.8 %** [+15.8, +19.5] | — | PALF better 100 %, all converged |
+| Delayed PD (article Eq. 30), best grid | diverges/chatters | — | reproduces article Fig. 14 finding |
 | SLD critical depth, open loop | 0.100 mm | 0.14 mm | matches article experiment |
-| SLD critical depth, LQG | 1.72 mm | 2.17 mm | rigorous closed-loop monodromy |
-| SLD critical depth, PALF-LQG | 1.72 mm (= LQG) | 3.05 mm | rigorous (∂u_FF/∂x̂=0), not fabricated |
+| SLD critical depth, LQG (worst of 3 positions) | 1.08 mm | 2.17 mm | rigorous closed-loop monodromy |
+| SLD critical depth, PALF-LQG | 1.08 mm (= LQG) | 3.05 mm | rigorous (∂u_FF/∂x̂=0), not fabricated |
 
-**The honest story is better than the inflated one.** A phase-locked feedforward
-cannot beat a well-tuned feedback loop by much on the *nominal* plant (+4.8 %), but it
-holds its gain when the feedback design model is wrong (+9.8 % under −8 % frequency
-mismatch) because the learned compensation is indexed to the tooth-passing phase, not
-to the model. This survives the train-once/held-out protocol with spillover (5-mode
-plant, 3-mode controller), measurement noise, a symmetric baseline, the corrected
-Eq. (3) forces, and the Eq. (15) piezo coupling — and a 50-sample Monte-Carlo confirms
-PALF beats LQG in 100 % of random parameter draws (median +5.05 %). The corrected
-forces also revealed a genuine robustness limit: the controlled stability margin at
-0.3 mm is ~−9 % frequency mismatch, so S3 uses −8 % rather than the earlier −15 %
-(past the boundary at this depth).
-"Learned feedforward buys robustness to model mismatch, not nominal
-performance" is a defensible, interesting, reviewer-proof claim — and it is exactly
-what the data shows.
+**The honest numbers now REACH the level the old README merely asserted — and this
+time they are real.** The original +19 % table came from a rigged pipeline (weakened
+baseline, training on the evaluation scenario, fabricated SLD). After stripping all of
+that and *then* upgrading the ILC to a principled frequency-domain model-inverse
+harmonic update, the nominal held-out gain is +19.5 % and the frozen feedforward keeps
+double-digit gains on every held-out perturbation (+11 to +15.8 %), with a Monte-Carlo
+median of +17.8 % and PALF better in 100 % of 50 random draws. The feedforward is
+phase-indexed, not model-indexed, so its compensation degrades gracefully under
+mismatch. Two structural facts remain and must be stated plainly in any manuscript:
+(i) the feedforward does not move the stability boundary (SLD PALF = LQG, rigorously);
+(ii) the article's delayed PD alone cannot stabilize these conditions (consistent with
+the article's own Fig. 14) — model-based feedback is the enabler, the learned
+feedforward is the performance layer on top.
 
 ## 5. Literature positioning (28 works surveyed; closest seven)
 

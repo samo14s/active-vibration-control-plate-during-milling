@@ -45,8 +45,11 @@ u(t) = u_LQG(x̂)  +  α · u_FF(φ)
 
 - **Feedback**: LQG (LQR gain + Kalman observer), the reactive baseline.
 - **Feedforward**: a small MLP, `(n_x+2) → 16 → 1` with **tanh** activations
-  (~161 parameters), trained by hand-coded SGD inside an iterative-learning loop.
-  Its training data is a function of the tooth-passing phase φ, and at deployment the
+  (~161 parameters). The periodic target it fits is produced by **frequency-domain
+  model-inverse ILC**: each trial simulates the current closed loop to its periodic
+  steady state, DFTs the residual over 4 tooth periods, and updates the feedforward
+  harmonics `U_h ← U_h − η·Y_h/G(jhω_τ)` with `G` the design closed-loop FRF from the
+  feedforward input to `y`; the best-so-far harmonic set is frozen. At deployment the
   state channel is fed zeros, so the learned object is a **periodic map `u_FF(φ)`**
   (repetitive-control-like), not a state-feedback network.
 - **Safety**: a heuristic control-Lyapunov-style **voltage governor** evaluated on the
@@ -83,18 +86,21 @@ palf.pretrain_iterative_simulation(
 x_hat, u = palf.step(x_hat_prev, u_prev, y_meas, k_step)
 ```
 
-## Verified comparison (committed code, P0+P1+P2 — see docs/REPRODUCED_RESULTS.md)
+## Verified comparison (committed code, P0+P1+P2 + model-inverse ILC — see docs/REPRODUCED_RESULTS.md)
 
 | Metric | LQG | PALF-LQG | Gain |
 |---|---:|---:|---:|
-| RMS vibration, nominal (S1) | 0.777 µm | 0.739 µm | +4.8 % |
-| RMS vibration, model mismatch ω−8 % (S3) | 0.900 µm | 0.812 µm | **+9.8 %** |
-| Monte-Carlo median (50 samples) | — | — | **+5.05 %** (PALF better 100 %) |
-| Stability domain (a_p crit @4900 RPM) | 1.72 mm | **1.72 mm** | ∂u_FF/∂x̂=0 → identical monodromy |
+| RMS vibration, nominal (S1) | 0.777 µm | 0.625 µm | **+19.5 %** |
+| RMS vibration, model mismatch ω−8 % (S3) | 0.900 µm | 0.769 µm | **+14.6 %** |
+| RMS vibration, held-out average (S1–S4) | 1.062 µm | 0.908 µm | **+14.4 %** |
+| Stability domain (a_p crit @4900 RPM, worst of 3 positions) | 1.08 mm | **1.08 mm** | ∂u_FF/∂x̂=0 → identical monodromy |
 
 (Plant carries 5 modes, controller sees 3 — spillover; 10 nm measurement noise;
-corrected Eq. 3 forces; Eq. 15 piezo coupling; rigorous closed-loop monodromy SLD.
-Kalman `kalman_V` and clipping `u_max` are constructor args.)
+corrected Eq. 3 forces; Eq. 15 piezo coupling; rigorous closed-loop monodromy SLD at
+the worst of 3 tool positions. Kalman `kalman_V` and clipping `u_max` are constructor
+args. A third baseline — the article's Eq. 30 delayed PD, `delayed_pd_controller.py` —
+cannot stabilize these conditions even after a gain grid search, reproducing the
+article's own Fig. 14 finding; see `main_delayed_pd_baseline.py`.)
 
 The feedforward buys little on the nominal plant but preserves its gain under model
 mismatch — that robustness asymmetry is the result worth reporting. It does **not**

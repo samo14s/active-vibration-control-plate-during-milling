@@ -34,6 +34,12 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > **Monte-Carlo LQG-vs-PALF** robustness driver (divergence reported, no survivorship
 > bias); and a **FEM mesh-convergence** study reconciling the frequencies vs Table 4.
 >
+> **P2.5 applied (improvement pass):** the ILC is upgraded to a **frequency-domain
+> model-inverse harmonic update** (gains jump to double digits, still held-out); the
+> SLD is evaluated at the **worst of 3 tool positions** (article Fig. 6 treatment);
+> and the article's **Eq. (30) delayed PD** is added as a third baseline — it cannot
+> stabilize these conditions, reproducing the article's own Fig. 14 finding.
+>
 > **Remaining (P3):** experimental validation on a physical plate — everything here is
 > simulation.
 
@@ -164,36 +170,42 @@ u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
 
 ## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric, spillover + noise, Eq. (15) piezo
+### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric, spillover + noise, Eq. (15) piezo, model-inverse ILC
 
 | Scenario | LQG y_RMS | PALF y_RMS | Gain |
 |---|---:|---:|---:|
-| S1 Nominal | 0.777 µm | 0.739 µm | +4.8 % |
-| S2 Aggressive (a_p = 0.6 mm) | 1.558 µm | 1.501 µm | +3.6 % |
-| S3 Model mismatch (ω −8 %) | 0.900 µm | 0.812 µm | **+9.8 %** |
-| S4 High K_T (+30 %) | 1.013 µm | 0.968 µm | +4.5 % |
+| S1 Nominal | 0.777 µm | 0.625 µm | **+19.5 %** |
+| S2 Aggressive (a_p = 0.6 mm) | 1.558 µm | 1.386 µm | **+11.0 %** |
+| S3 Model mismatch (ω −8 %) | 0.900 µm | 0.769 µm | **+14.6 %** |
+| S4 High K_T (+30 %) | 1.013 µm | 0.853 µm | **+15.8 %** |
+| **Average** | 1.062 µm | 0.908 µm | **+14.4 %** |
 
-The learned feedforward buys little on the nominal plant and most under model
-mismatch — that robustness asymmetry is the honest result. Trained once on the nominal
-scenario and frozen; S2/S3/S4 are held-out. Plant carries 5 modes, controller sees 3
-(spillover); 10 nm measurement noise; Eq. (15) piezo coupling.
+The frequency-domain model-inverse ILC cancels most of the tooth-passing-periodic
+residual that survives LQG: +19.5 % nominal, and the FROZEN feedforward keeps
+double-digit gains on every held-out perturbation (graceful degradation). Trained once
+on the nominal scenario; S2/S3/S4 held-out; 5-mode plant / 3-mode controllers
+(spillover); 10 nm noise; ~8 % more RMS voltage (6.0 vs 5.6 V).
 
 **Monte-Carlo robustness** (`main_robustness_mc.py`, 50 samples, ±15 % cutting / ±3 %
 freq / ±20 % damping): 50/50 converged for both controllers; **PALF beats LQG in 100 %**
-of samples, median RMS gain **+5.05 %** [p05 +3.2 %, p95 +6.9 %].
+of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %].
 
-### Stability lobes at 4900 RPM — rigorous closed-loop coupled monodromy
+**Four-way benchmark** (`main_delayed_pd_baseline.py`): the article's Eq. (30) delayed
+PD — even grid-tuned — cannot stabilize these conditions (hundreds of µm or divergence),
+reproducing the article's own Fig. 14 finding; OL ✗ → PD ✗ → LQG 0.78 µm → PALF 0.62 µm.
+
+### Stability lobes at 4900 RPM — closed-loop coupled monodromy, worst of 3 tool positions
 
 | Configuration | a_p critical |
 |---|---:|
-| Open-Loop (coupled monodromy) | 0.100 mm — **matches the article's experimental limit** |
-| LQG (closed-loop monodromy) | 1.72 mm (17.2× OL) |
-| PALF-LQG | 1.72 mm — **= LQG, rigorously** (∂u_FF/∂x̂ = 0 → identical monodromy) |
+| Open-Loop | 0.100 mm — **matches the article's experimental limit** |
+| LQG (closed-loop monodromy) | 1.08 mm (10.8× OL) |
+| PALF-LQG | 1.08 mm — **= LQG, rigorously** (∂u_FF/∂x̂ = 0 → identical monodromy) |
 
-All three panels come from the monodromy matrix of the full coupled, time-periodic
-delayed loop with the LQG controller (state feedback + Kalman observer) embedded — no
-"equivalent damping" surrogate. (The critical depth is lower than the earlier 2.05 mm
-because the Eq. 15 coupling is weaker and the rigorous method accounts for the observer.)
+All panels come from the monodromy of the full coupled, time-periodic delayed loop
+with the LQG controller embedded, evaluated at x = 0, L/4, L/2 (worst case — the
+article's Fig. 6 treatment). The controlled critical depth is now the same order as
+the article's experimentally achieved 0.6–0.8 mm limits.
 
 ---
 

@@ -7,7 +7,9 @@ Main entry points for running the simulation. **Authoritative numbers** come fro
 
 | File | Description | Output |
 |---|---|---|
-| `main_simulation.py` | LQG vs PALF-LQG comparison (train-once / held-out) | Console + figs |
+| `main_simulation.py` | LQG vs PALF-LQG comparison (train-once / held-out) + SLD | Console + figs |
+| `main_robustness_mc.py` | Monte-Carlo robustness (50 samples, divergence reported) | Console + fig |
+| `main_delayed_pd_baseline.py` | Four-way benchmark incl. article Eq. (30) delayed PD | Console + fig |
 | `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py
@@ -37,27 +39,29 @@ The **primary script**. Comparison protocol (see `docs/AUDIT_FINDINGS.md`):
 python main_simulation.py
 ```
 
-### Verified output (committed code, ~35 s)
+### Verified output (committed code, ~62 s)
 
 ```
 ========================================================================
  RÉSUMÉ FINAL : LQG vs PALF-LQG
 ========================================================================
   Scénario                    LQG y_RMS     PALF y_RMS    Gain
-  S1 - Nominal article        0.7765        0.7393         +4.79%
-  S2 - Aggressive ap=0.6mm    1.5580        1.5014         +3.63%
-  S3 - Uncertainty ω-8%       0.9001        0.8115         +9.84%   <- model mismatch
-  S4 - High K_T +30%          1.0127        0.9675         +4.47%
-  MOYENNE                     1.0618        1.0049         +5.36%
+  S1 - Nominal article        0.7765        0.6252        +19.48%
+  S2 - Aggressive ap=0.6mm    1.5580        1.3864        +11.01%
+  S3 - Uncertainty ω-8%       0.9001        0.7689        +14.58%   <- model mismatch
+  S4 - High K_T +30%          1.0127        0.8533        +15.75%
+  MOYENNE                     1.0618        0.9084        +14.44%
 
-  STABILITÉ (SLD, closed-loop monodromy) - à RPM = 4900 :
+  STABILITÉ (SLD, closed-loop monodromy, worst of 3 positions) - à RPM = 4900 :
      a_p crit OPEN-LOOP : 0.100 mm   (matches Du et al. 2024 experiment)
-     a_p crit LQG       : 1.725 mm   (17.2x OL)
-     a_p crit PALF-LQG  : 1.725 mm   (= LQG rigorously; du_FF/dx_hat = 0)
+     a_p crit LQG       : 1.075 mm   (10.8x OL)
+     a_p crit PALF-LQG  : 1.075 mm   (= LQG rigorously; du_FF/dx_hat = 0)
 ```
 
 Monte-Carlo robustness (`main_robustness_mc.py`, 50 samples): PALF beats LQG in 100 %
-of samples, median RMS gain +5.05 % [p05 +3.2 %, p95 +6.9 %], all converged.
+of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %], all converged.
+Four-way benchmark (`main_delayed_pd_baseline.py`): the article's Eq. (30) delayed PD
+cannot stabilize these conditions even grid-tuned (reproduces article Fig. 14).
 
 The learned feedforward helps most under **model mismatch** (S3), because it is indexed
 to the tooth-passing phase rather than to the (wrong) feedback model. It does not extend

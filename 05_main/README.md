@@ -37,24 +37,27 @@ The **primary script**. Comparison protocol (see `docs/AUDIT_FINDINGS.md`):
 python main_simulation.py
 ```
 
-### Verified output (committed code, ~41 s)
+### Verified output (committed code, ~35 s)
 
 ```
 ========================================================================
  RÉSUMÉ FINAL : LQG vs PALF-LQG
 ========================================================================
   Scénario                    LQG y_RMS     PALF y_RMS    Gain
-  S1 - Nominal article        0.7437        0.7060         +5.07%
-  S2 - Aggressive ap=0.6mm    1.4914        1.4331         +3.91%
-  S3 - Uncertainty ω-8%       0.8530        0.7443        +12.74%   <- model mismatch
-  S4 - High K_T +30%          0.9698        0.9265         +4.46%
-  MOYENNE                     1.0145        0.9525         +6.11%
+  S1 - Nominal article        0.7765        0.7393         +4.79%
+  S2 - Aggressive ap=0.6mm    1.5580        1.5014         +3.63%
+  S3 - Uncertainty ω-8%       0.9001        0.8115         +9.84%   <- model mismatch
+  S4 - High K_T +30%          1.0127        0.9675         +4.47%
+  MOYENNE                     1.0618        1.0049         +5.36%
 
-  STABILITÉ (SLD) - à RPM = 4900 :
+  STABILITÉ (SLD, closed-loop monodromy) - à RPM = 4900 :
      a_p crit OPEN-LOOP : 0.100 mm   (matches Du et al. 2024 experiment)
-     a_p crit LQG       : 2.050 mm   (20.5x OL)
-     a_p crit PALF-LQG  : 2.050 mm   (= LQG; feedforward does not shift the boundary)
+     a_p crit LQG       : 1.725 mm   (17.2x OL)
+     a_p crit PALF-LQG  : 1.725 mm   (= LQG rigorously; du_FF/dx_hat = 0)
 ```
+
+Monte-Carlo robustness (`main_robustness_mc.py`, 50 samples): PALF beats LQG in 100 %
+of samples, median RMS gain +5.05 % [p05 +3.2 %, p95 +6.9 %], all converged.
 
 The learned feedforward helps most under **model mismatch** (S3), because it is indexed
 to the tooth-passing phase rather than to the (wrong) feedback model. It does not extend

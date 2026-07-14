@@ -42,9 +42,24 @@ Legend: 🔴 critical (blocks submission) · 🟠 major (reviewers will catch it
 > controlled SLD critical depth is 2.05 mm (was 2.54 mm with wrong forces), and the
 > honest held-out gains are S1 +5.1 %, S2 +3.9 %, S3 (ω−8 %) +12.7 %, S4 +4.5 %.
 >
-> **Still open (P2):** periodic-gain closed-loop SLD, coupled/position-resolved SLD
-> (findings on the SLD machinery), Monte Carlo rewiring, Eq. (15) piezo coefficient,
-> FEM mesh-convergence note (finding #3). These are NOT yet fixed.
+> ## ✅ P2 resolution status (2026-07-14)
+>
+> The **strengthening (P2)** findings are also fixed:
+> - **SLD machinery (equivalent-damping surrogate, per-mode decoupling)** — replaced by
+>   `fdm_stability.compute_closed_loop_SLD`, a rigorous coupled monodromy with the LQG
+>   controller (state feedback + Kalman observer) in the loop. PALF = LQG is now a
+>   rigorous consequence of ∂u_FF/∂x̂ = 0, not an assertion.
+> - **Eq. (15) piezo coefficient** — implemented in `add_piezo_patch` (C_P0 with P_M);
+>   coupling ~16 % weaker than the old simplified constant.
+> - **Monte Carlo dead code / survivorship bias** — `run_mc_lqg_vs_palf` runs the frozen
+>   held-out controllers over uncertainty and reports divergence explicitly (50/50
+>   converged; PALF better 100 %, median +5.05 %). Driver `main_robustness_mc.py`.
+> - **FEM frequency gap (finding #3)** — `mesh_convergence.py` shows convergence to
+>   <0.1 % and reconciles the ~2.6 % offset vs the article's Chebyshev-Ritz theory.
+>
+> **Remaining (P3):** experimental validation on a physical plate. Everything above is
+> simulation. Minor future refinements: worst-position (vs path-averaged) Dp in the SLD,
+> fractional-delay interpolation — both second-order here.
 
 
 ## Physical model fidelity (01_core)

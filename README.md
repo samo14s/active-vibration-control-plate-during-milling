@@ -24,14 +24,18 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > the anti-disturbance pretrainer) are removed; and the controller is renamed from the
 > over-claiming "DARC-MPC" to **PALF-LQG** (Phase-Aware Learned Feedforward + LQG).
 >
-> **P1 fixes now applied too:** the cutting constants k1, k2 are corrected to the
-> article's Eq. (3) and deduplicated into `milling_force.cutting_constants`; the
-> inverse crime is removed (the simulated plant carries **5 modes**, the controllers
-> are designed on the **first 3** — spillover); **10 nm measurement noise** is injected;
-> and both controllers clip identically to ±150 V.
+> **P1 applied:** cutting constants k1, k2 corrected to Eq. (3) and deduplicated; the
+> inverse crime is removed (5-mode plant, controllers on the first 3 — spillover);
+> 10 nm measurement noise; identical ±150 V clipping.
 >
-> **Still open (P2):** periodic-gain closed-loop SLD, coupled/position-resolved SLD,
-> Eq. (15) piezo coefficient, Monte-Carlo wiring, FEM mesh-convergence note.
+> **P2 applied:** the article's **Eq. (15) piezo coupling** C_P0; a **rigorous
+> closed-loop coupled monodromy SLD** (controller in the loop — no surrogate, no
+> per-mode decoupling), making PALF = LQG a rigorous consequence of ∂u_FF/∂x̂ = 0; a
+> **Monte-Carlo LQG-vs-PALF** robustness driver (divergence reported, no survivorship
+> bias); and a **FEM mesh-convergence** study reconciling the frequencies vs Table 4.
+>
+> **Remaining (P3):** experimental validation on a physical plate — everything here is
+> simulation.
 
 ---
 
@@ -114,8 +118,8 @@ python main_simulation.py
 | Voltage saturation | u_max | ±150 V |
 
 Note: the patch couples to the plate through a modal force vector only (no added
-stiffness/mass in the current FEM assembly), and the coupling scalar is a simplified
-induced-moment constant, not the article's Eq. (15) — see audit finding #4.
+stiffness/mass in the current FEM assembly); the coupling scalar is the article's
+**Eq. (15) C_P0** coefficient (P2 fix).
 
 ### Tool and cutting parameters (article condition T1)
 
@@ -153,32 +157,36 @@ u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
 
 ## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric baseline, spillover + noise
+### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric, spillover + noise, Eq. (15) piezo
 
 | Scenario | LQG y_RMS | PALF y_RMS | Gain |
 |---|---:|---:|---:|
-| S1 Nominal | 0.744 µm | 0.706 µm | +5.1 % |
-| S2 Aggressive (a_p = 0.6 mm) | 1.491 µm | 1.433 µm | +3.9 % |
-| S3 Model mismatch (ω −8 %) | 0.853 µm | 0.744 µm | **+12.7 %** |
-| S4 High K_T (+30 %) | 0.970 µm | 0.927 µm | +4.5 % |
+| S1 Nominal | 0.777 µm | 0.739 µm | +4.8 % |
+| S2 Aggressive (a_p = 0.6 mm) | 1.558 µm | 1.501 µm | +3.6 % |
+| S3 Model mismatch (ω −8 %) | 0.900 µm | 0.812 µm | **+9.8 %** |
+| S4 High K_T (+30 %) | 1.013 µm | 0.968 µm | +4.5 % |
 
 The learned feedforward buys little on the nominal plant and most under model
 mismatch — that robustness asymmetry is the honest result. Trained once on the nominal
-scenario and frozen; S2/S3/S4 are held-out. The plant carries 5 modes, the controller
-sees 3 (spillover), and the measurement has 10 nm noise. With the corrected (stronger)
-forces the controlled stability margin at 0.3 mm is ~−9 % frequency mismatch, so S3
-uses −8 % (see `docs/REPRODUCED_RESULTS.md`).
+scenario and frozen; S2/S3/S4 are held-out. Plant carries 5 modes, controller sees 3
+(spillover); 10 nm measurement noise; Eq. (15) piezo coupling.
 
-### Stability lobes at 4900 RPM (Floquet)
+**Monte-Carlo robustness** (`main_robustness_mc.py`, 50 samples, ±15 % cutting / ±3 %
+freq / ±20 % damping): 50/50 converged for both controllers; **PALF beats LQG in 100 %**
+of samples, median RMS gain **+5.05 %** [p05 +3.2 %, p95 +6.9 %].
+
+### Stability lobes at 4900 RPM — rigorous closed-loop coupled monodromy
 
 | Configuration | a_p critical |
 |---|---:|
-| Open-Loop | 0.100 mm — **matches the article's experimental limit** |
-| LQG closed loop | 2.05 mm (20.5× OL) |
-| PALF-LQG | 2.05 mm — **= LQG** (a phase-locked feedforward does not shift the boundary) |
+| Open-Loop (coupled monodromy) | 0.100 mm — **matches the article's experimental limit** |
+| LQG (closed-loop monodromy) | 1.72 mm (17.2× OL) |
+| PALF-LQG | 1.72 mm — **= LQG, rigorously** (∂u_FF/∂x̂ = 0 → identical monodromy) |
 
-(The controlled critical depth is lower than the earlier 2.54 mm because the corrected
-k1/k2 give ~15–20 % stronger cutting forces.)
+All three panels come from the monodromy matrix of the full coupled, time-periodic
+delayed loop with the LQG controller (state feedback + Kalman observer) embedded — no
+"equivalent damping" surrogate. (The critical depth is lower than the earlier 2.05 mm
+because the Eq. 15 coupling is weaker and the rigorous method accounts for the observer.)
 
 ---
 

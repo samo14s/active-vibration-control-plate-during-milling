@@ -1,43 +1,53 @@
-# Article Simulation Package — Active Vibration Control of Thin-Walled Milling
+# Active Vibration Control of a Thin-Walled Plate During Milling
 
-**Topic**: Comparison between LQG and DARC-MPC controllers for chatter mitigation in peripheral milling of cantilever AL6061 plates.
+**Topic**: LQG feedback vs. LQG augmented with a learned, tooth-passing-phase-locked
+neural feedforward ("DARC-MPC v3" — rename pending, see below) for chatter mitigation
+in peripheral milling of cantilever AL6061 plates. The plant model is anchored to
+Du, Liu, Dai & Long (2024), *Int. J. Mech. Sci.* 274:109257.
 
-**Target journals**: IEEE TCST · MSSP · Mechatronics · Automatica · CIRP Annals · JSV
+> **⚠️ Read before citing any number from this repository**
+>
+> - [`docs/CONTRIBUTION.md`](docs/CONTRIBUTION.md) — what this work contributes,
+>   literature positioning, and the publication roadmap.
+> - [`docs/REPRODUCED_RESULTS.md`](docs/REPRODUCED_RESULTS.md) — verified numbers from
+>   the committed code (the historical results table of this README did **not**
+>   reproduce and has been replaced below).
+> - [`docs/AUDIT_FINDINGS.md`](docs/AUDIT_FINDINGS.md) — 44 verified findings
+>   (integrity, naming, methodology) that must be addressed before submission.
+>
+> Known blocking issues, in brief: the "DARC" stability-lobe diagram is produced by an
+> assumed ×1.30 damping multiplier, not a closed-loop Floquet computation; the NN is
+> trained on the same scenario it is evaluated on; the method name over-claims
+> ("Deep"/"MPC"/"Adaptive" do not describe the code); and two cutting-constant
+> formulas (k1, k2) deviate from the article's Eq. (3).
 
 ---
 
 ## 📂 Package Structure
 
 ```
-article_simulation_package/
-│
+.
 ├── 01_core/              ← Physical models (FEM + dynamics)
-│   ├── kirchhoff_q4.py           # Kirchhoff Q4 plate element FEM
+│   ├── kirchhoff_q4.py           # Kirchhoff Q4 plate element FEM (consistent mass)
 │   ├── plate_model.py            # Plate assembly + modal reduction
-│   ├── piezo_actuator.py         # Piezoelectric actuator model (QDA60-200.7)
-│   ├── milling_force.py          # Cutting force model (3-tooth end-mill)
-│   └── newmark_solver.py         # Newmark-β time integration
+│   ├── piezo_actuator.py         # Piezo patch model (QDA60-20-0.7), modal force only
+│   ├── milling_force.py          # Helical-engagement force kernels (article Eq. 4)
+│   └── newmark_solver.py         # Newmark-β time integration with regenerative delay
 │
 ├── 02_controllers/        ← Control algorithms
-│   ├── lqg_controller.py         # LQG with Kalman observer
-│   └── darc_mpc_v3_controller.py # DARC-MPC: LQG + NN feedforward
+│   ├── lqg_controller.py         # LQG with Kalman observer (grid-searched weights)
+│   └── darc_mpc_v3_controller.py # LQG + phase-locked NN feedforward (ILC-trained)
 │
 ├── 03_analysis/           ← Stability & robustness analysis
-│   ├── fdm_stability.py          # Floquet multipliers (FDM, Insperger-Stépán)
-│   └── uncertainty_analysis.py   # Monte Carlo robustness analysis
+│   ├── fdm_stability.py          # Floquet multipliers (0th-order semi-discretization)
+│   └── uncertainty_analysis.py   # Monte Carlo sampling (not yet wired into main)
 │
-├── 04_figures/            ← Publication-quality figure generators
-│   ├── gen_article_complete_figures.py    # 14 main figures
-│   ├── gen_SLD_academic_style.py          # SLD academic style
-│   ├── gen_geometry_figure.py             # Setup geometry (3D + views)
-│   ├── gen_geometry_custom.py             # Customizable geometry
-│   └── gen_control_strategy_diagram.py    # Control architecture diagram
-│
+├── 04_figures/            ← Figure generators
 ├── 05_main/               ← Main simulation scripts
-│   ├── main_simulation.py        # Full LQG vs DARC-MPC comparison
+│   ├── main_simulation.py        # Full LQG vs feedforward-augmented comparison
 │   └── main_realistic_piezo.py   # With realistic piezo non-linearities
 │
-└── README.md             ← This file
+└── docs/                  ← Contribution, audit, reproduced results
 ```
 
 ---
@@ -52,36 +62,22 @@ pip install numpy scipy matplotlib
 
 ### Setup
 
-All Python files must be in the **same directory** to allow imports.
-Concatenate the package or use a single working folder:
+All Python files must be in the **same directory** to allow imports:
 
 ```bash
-# Option 1: flat structure (recommended for first run)
 cp 01_core/*.py 02_controllers/*.py 03_analysis/*.py 04_figures/*.py 05_main/*.py ./
 ```
 
 ### Run main simulation
 
 ```bash
-# Full simulation (LQG vs DARC-MPC, 4 scenarios, ~4 min)
+# Full comparison (4 scenarios + 3 SLDs, ~80 s)
 python main_simulation.py
-
-# Generate all 14 publication figures (~4 min)
-python gen_article_complete_figures.py
-
-# Generate SLD with FDM/Floquet method
-python gen_SLD_academic_style.py
-
-# Generate geometry figures
-python gen_geometry_figure.py
-
-# Generate control architecture diagram
-python gen_control_strategy_diagram.py
 ```
 
 ---
 
-## 📐 Physical Setup
+## 📐 Physical Setup (identical to Du et al. 2024, Tables 1–3)
 
 ### Plate (AL6061, vertical cantilever)
 
@@ -93,340 +89,108 @@ python gen_control_strategy_diagram.py
 | Density | ρ | 2830 kg/m³ |
 | Young's modulus | E | 69 GPa |
 | Poisson ratio | ν | 0.33 |
-| Damping (Mode 1, 2, 3) | ζ₁, ζ₂, ζ₃ | 0.31%, 0.17%, 0.27% |
+| Damping (modes 1–3, measured in the article) | ζ₁, ζ₂, ζ₃ | 0.31%, 0.17%, 0.27% |
 
-### Piezo patch (QDA60-200.7)
+### Piezo patch (QDA60-20-0.7, SINOCERA)
 
 | Parameter | Symbol | Value |
 |---|---|---:|
-| Position (X) | — | 0–20 mm |
-| Position (Z) | — | 0–60 mm (lower-left) |
+| Position | — | lower-left corner (x: 0–20 mm, z: 0–60 mm) |
 | Thickness | h_Pa | 0.7 mm |
 | Piezo coefficient | d₃₁ | 175 pm/V |
 | Young's modulus | E_Pe | 63 GPa |
 | Voltage saturation | u_max | ±150 V |
 
-### Tool (end-mill, peripheral milling)
+Note: the patch couples to the plate through a modal force vector only (no added
+stiffness/mass in the current FEM assembly), and the coupling scalar is a simplified
+induced-moment constant, not the article's Eq. (15) — see audit finding #4.
 
-| Parameter | Symbol | Value |
-|---|---|---:|
-| Diameter | D | 10 mm |
-| Number of teeth | N_T | 3 |
-| Helix angle | η | 35° |
-| Rake angle | γ_n | 15° |
-| Friction coefficient | μ_c | 0.20 |
-| Tangential cutting coeff | K_T | 925 MPa |
-| Normal cutting ratio | k_N | 0.26 |
+### Tool and cutting parameters (article condition T1)
 
-### Cutting parameters
-
-| Parameter | Symbol | Value |
-|---|---|---:|
-| Spindle speed | Ω | 4900 RPM |
-| Feed per tooth | f_t | 0.02 mm/tooth |
-| Axial engagement | a_p | 0.3 mm |
-| Radial engagement | a_e | 0.1 mm |
-| Feed velocity | v_feed | 4.9 mm/s |
-| Path duration | T_path | 20.4 s |
+| Parameter | Value | Parameter | Value |
+|---|---:|---|---:|
+| Diameter | 10 mm | Spindle speed | 4900 RPM |
+| Teeth | 3 | Feed per tooth | 0.02 mm |
+| Helix angle | 35° | Axial depth a_p | 0.3 mm |
+| Rake angle | 15° | Radial depth a_e | 0.1 mm |
+| K_T | 925 MPa | k_N | 0.26 |
 
 ---
 
-## 🔬 Module Descriptions
+## 🔬 What the controller actually is
 
-### 01_core — Physical Models
-
-#### `kirchhoff_q4.py`
-Kirchhoff plate Q4 (4-node quadrilateral) finite element with 3 DOF/node
-(w, θ_x, θ_y). Provides:
-- Element stiffness matrix `K_elem`
-- Element mass matrix `M_elem` (consistent and lumped options)
-- Shape functions for displacement and rotation
-
-#### `plate_model.py`
-Full plate assembly:
-- Q4 mesh generation (N1 × N2 elements, default 30 × 24 = 720 elements)
-- Cantilever boundary conditions (clamped at z = 0)
-- Modal reduction to N_modes (default 3)
-- Pre-computation of D_p(x_p) shape function values along tool path
-- Piezo patch addition with stiffness/mass coupling
-
-#### `piezo_actuator.py`
-QDA60-200.7 piezoelectric patch model:
-- d₃₁ formulation (transverse mode)
-- Stress-charge constitutive equation
-- Linear voltage-to-moment mapping (with optional non-linearity)
-
-#### `milling_force.py`
-Cutting force model for 3-tooth end-mill:
-- Per-tooth force computation with helix angle
-- Lehmann-Engin model for tangential and normal forces
-- Numba-compiled `precompute_alpha_periodic()` for fast simulation
-- Returns α₃(t), α₄(t) coefficients used by FEM
-
-#### `newmark_solver.py`
-Newmark-β time integration scheme (β = 1/4, γ = 1/2):
-- Average acceleration method (unconditionally stable)
-- dt = 5×10⁻⁵ s (50 µs) for high-resolution
-- Supports any controller via `controller.compute(x_hat, y_meas, k)`
-- Tracks both physical states and observer estimates
-
-### 02_controllers — Control Algorithms
-
-#### `lqg_controller.py`
-Linear Quadratic Gaussian controller:
-- LQR design via Riccati equation (`scipy.linalg.solve_continuous_are`)
-- Kalman observer for state estimation
-- Grid search over (w_q, w_qd, w_r) weights
-- Discretization for real-time implementation
-
-**Key parameters**:
-- `w_q`: state penalty (default 1×10¹³ for sub-optimal, 1×10¹⁴ for optimal)
-- `w_qd`: state derivative penalty (1×10⁸)
-- `w_r`: control penalty (1.0)
-
-#### `darc_mpc_v3_controller.py`
-**DARC-MPC**: Deep Adaptive Robust Control with MPC, our novel method:
-
-**Architecture**:
 ```
-u(t) = u_LQG(x̂) + α · NN_FF(φ, x̂)
+u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
 ```
 
-**Components**:
-1. **Reactive baseline**: LQG controller (optimal weights)
-2. **Anticipative feedforward**: Phase-aware Neural Network
-   - Inputs: tool phase φ ∈ [0, 2π], state estimate x̂
-   - Architecture: 3 → 16 → 16 → 1 (sigmoid activation)
-   - Output: u_FF ∈ [-10, 10] V (saturated)
-3. **Lyapunov safety filter**: rejects unsafe u* commands
-4. **Iterative Learning Control**:
-   - 30 iterations of simulation + NN training
-   - Target: u_target = -K_corr · y_residual
-   - Adam optimizer with lr = 5×10⁻³
-
-**Pre-training**:
-```python
-darc.pretrain_iterative_simulation(
-    simulator, alpha3, alpha4, kp_idx,
-    n_iterations=30,
-    n_epochs_per_iter=15
-)
-```
-
-### 03_analysis — Stability & Robustness
-
-#### `fdm_stability.py`
-Stability Lobe Diagram (SLD) via Full-Discretization Method:
-
-**Theory**: Insperger-Stépán (2004) method computes monodromy matrix Φ over
-one tooth-passing period τ, then evaluates Floquet multipliers ρ = max|λ(Φ)|.
-- Stable if ρ < 1
-- Unstable (chatter) if ρ ≥ 1
-
-**Implementation**:
-- m_div = 40 subdivisions per period
-- Augmented state for time delay handling
-- Analytical 2×2 matrix exponential (fast)
-- Multi-mode support (3 modes superimposed)
-
-```python
-rho_grid, _ = compute_SLD(
-    RPM_array, ap_array,
-    omega_n_list, zeta_list, Dp_list, m_list,
-    NT, RT, eta_h, phi_st, phi_ex,
-    k1, k2, kt, hp,
-    m_div=40
-)
-```
-
-#### `uncertainty_analysis.py`
-Monte Carlo robustness analysis:
-- Random sampling of (ω_n, ζ, K_T) within ±15%
-- 100 simulation samples
-- Statistical metrics: mean, std, 95% confidence intervals
-
-### 04_figures — Figure Generators
-
-All scripts produce **PNG (300 DPI) + PDF** in `figs_article_publication/`.
-
-#### `gen_article_complete_figures.py`
-Generates **14 main figures**:
-1. Global summary (3-panel)
-2. Temporal y(t) full path (4 scenarios)
-3. Temporal u(t) full path (4 scenarios)
-4. Time + FFT side-by-side (S1)
-5. FFT y(t) (4 scenarios with annotations)
-6. FFT u(t) (log scale)
-7. Modal damping + complex plane poles
-8. SLD 3 panels (OL/LQG/DARC)
-9. SLD overlay
-10. 6-panel multi-metric
-11. DARC internal blocks
-12. Tool position + envelope
-13. Zoom 3 phases
-14. Robustness comparison
-
-#### `gen_SLD_academic_style.py`
-Three SLD styles:
-- Overlay (single panel with all 3 controllers)
-- 3-panel (separated)
-- Hatched (Insperger-Stépán style)
-
-#### `gen_geometry_figure.py` and `gen_geometry_custom.py`
-Setup geometry visualization:
-- 3D isometric perspective
-- Front view (Y=0 plane)
-- Top view (Z=H_P plane, **key for peripheral milling**)
-
-The `_custom.py` version has all parameters at the top for easy modification.
-
-#### `gen_control_strategy_diagram.py`
-Control architecture diagrams:
-- Detailed block diagram (Fig. 15)
-- Algorithm flowchart (Fig. 16)
-- Compact summary (Fig. 17)
-
-### 05_main — Simulation Scripts
-
-#### `main_simulation.py`
-Complete simulation pipeline:
-1. Build plate model (FEM + modal reduction)
-2. Build LQG controller (sub-optimal weights)
-3. Build DARC-MPC controller (optimal LQG base + NN)
-4. Pre-train NN via iterative learning (30 iterations)
-5. Run 4 scenarios:
-   - S1: Nominal (a_p = 0.3 mm)
-   - S2: Aggressive (a_p = 0.6 mm)
-   - S3: Uncertainty (ω - 15%)
-   - S4: High K_T (+30%)
-6. Compute metrics (RMS, peak, voltage, etc.)
-
-#### `main_realistic_piezo.py`
-Same pipeline but with realistic piezo non-linearities:
-- Hysteresis modeling
-- Rate-dependent saturation
-- Temperature drift
+- **Feedback**: LQG (LQR gain + Kalman observer), weights grid-searched.
+- **Feedforward**: a small MLP, (n_x+2) → 16 → 1 with tanh activations (~161
+  parameters), input = estimated modal state + (cos φ, sin φ) of the tooth-passing
+  phase, output saturated to ±30 V. Trained by hand-coded SGD through an iterative
+  learning loop (simulate → collect → retrain, 30 iterations). In the current
+  training protocol the state inputs receive zero gradient (samples use x = 0), so
+  the trained object is effectively a **learned periodic map u_FF(φ)** — i.e.
+  repetitive-control-like feedforward.
+- **Safety filter**: a CLF-style voltage governor on the nominal delay-free model
+  (heuristic — not a stability proof for the true delayed periodic loop).
+- The historical name "DARC-MPC" (Deep Adaptive Robust Control with MPC) does not
+  describe this architecture; renaming (e.g. **PALF-LQG**, Phase-Aware Learned
+  Feedforward LQG) is part of the pre-submission roadmap.
 
 ---
 
-## 📊 Key Results
+## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS Vibration Reduction (T = 0.5 s)
+### RMS vibration vs LQG baseline (T = 0.5 s)
 
-| Scenario | LQG | DARC-MPC | Gain |
+| Scenario | LQG y_RMS | +FF y_RMS | Gain |
 |---|---:|---:|---:|
-| S1 Nominal | 0.628 µm | 0.507 µm | **+19.20%** |
-| S2 Aggressive | 1.253 µm | 1.009 µm | **+19.51%** |
-| S3 Uncertainty | 0.604 µm | 0.488 µm | **+19.22%** |
-| S4 High K_T | 0.817 µm | 0.661 µm | **+19.17%** |
-| **AVERAGE** | **0.825 µm** | **0.666 µm** | **+19.31%** 🏆 |
+| S1 Nominal | 0.532 µm | 0.507 µm | +4.6 % |
+| S2 Aggressive (a_p = 0.6 mm) | 1.058 µm | 1.011 µm | +4.4 % |
+| S3 Model mismatch (ω −15 %) | 0.606 µm | 0.489 µm | **+19.4 %** |
+| S4 High K_T (+30 %) | 0.692 µm | 0.661 µm | +4.6 % |
 
-### Stability Domain (SLD at 4900 RPM)
+The learned feedforward buys little on the nominal plant and a lot under model
+mismatch — that robustness asymmetry is the interesting result. (Caveat: the current
+protocol trains on the evaluated scenario; the numbers must be regenerated with a
+train-once/evaluate-held-out protocol before publication — audit finding #18.)
 
-| Method | a_p critical | vs Open-Loop |
-|---|---:|---:|
-| Open-Loop | 0.14 mm | 1× |
-| LQG | 2.17 mm | 15.5× |
-| DARC-MPC | **3.05 mm** | **21.7×** (+41% vs LQG) |
+### Stability lobes at 4900 RPM (Floquet)
 
-### Modal Damping (Mode 1, 521 Hz)
-
-| Configuration | ζ |
+| Configuration | a_p critical |
 |---|---:|
-| Open-Loop | 0.31% |
-| LQG (sub-optimal) | 13.2% |
-| DARC base (optimal LQG) | 23.9% |
-| DARC-MPC effective | **31.1%** |
+| Open-Loop | 0.100 mm — **matches the article's experimental limit** |
+| LQG closed loop (equivalent-damping surrogate) | 2.54 mm |
+| "DARC" | *not a computed result — do not cite* (assumed ×1.30 damping multiplier) |
 
 ---
 
-## 📚 Citation
+## 📚 Reference
 
-If you use this code or build upon this work, please cite:
+The plant model, parameters, and experimental anchors come from:
 
-```bibtex
-@article{darcmpc2026,
-  title   = {Deep Adaptive Robust Control with Phase-Aware Neural Feedforward 
-             for Chatter Mitigation in Thin-Walled Milling},
-  author  = {[Author names]},
-  journal = {[Journal name]},
-  year    = {2026},
-  note    = {DARC-MPC achieves +19% RMS vibration reduction and +41% stability 
-             domain extension compared to LQG baseline.}
-}
-```
+> Du J., Liu X., Dai H., Long X. (2024). Robust combined time delay control for
+> milling chatter suppression of flexible workpieces. *International Journal of
+> Mechanical Sciences* 274:109257. https://doi.org/10.1016/j.ijmecsci.2024.109257
 
-### Key references
-
-1. **FEM**: Bathe, K.-J. (2014). *Finite Element Procedures*. Prentice Hall.
-2. **LQG**: Anderson & Moore (2007). *Optimal Control: Linear Quadratic Methods*.
-3. **FDM/Floquet**: Insperger, T. & Stépán, G. (2004). "Updated semi-discretization 
-   method for periodic delay-differential equations". *Int. J. Numer. Meth. Eng.* 61: 117–141.
-4. **Milling forces**: Altintas, Y. (2012). *Manufacturing Automation*. 2nd ed.
+Key methods: Insperger & Stépán (2004) semi-discretization; Altintas (2012)
+*Manufacturing Automation*; Anderson & Moore (2007) *Optimal Control*.
 
 ---
 
-## 💻 Computational Requirements
+## 💻 Computational requirements
 
-| Task | Time | Memory |
-|---|---:|---:|
-| Single simulation (T = 0.5 s, dt = 50 µs) | ~10 s | <500 MB |
-| Single simulation full path (T = 20.4 s) | ~30 s | <1 GB |
-| DARC-MPC pre-training (30 iter × 15 epochs) | ~3 min | <1 GB |
-| SLD computation (60 × 50 = 3000 grid points) | ~80 s | <500 MB |
-| Full 14-figure generation | ~4 min | <2 GB |
+| Task | Time |
+|---|---:|
+| Full 4-scenario comparison + 3 SLDs | ~80 s |
+| Single simulation (T = 0.5 s, dt = 50 µs) | ~10 s |
 
-**Tested on**: Python 3.12, NumPy 1.26, SciPy 1.13, Matplotlib 3.9
-**OS**: Linux/macOS/Windows
-
----
-
-## 🛠️ Troubleshooting
-
-### Common issues
-
-**Issue**: `ImportError: No module named 'plate_model'`
-**Solution**: All Python files must be in the **same directory**.
-
-**Issue**: SLD takes too long
-**Solution**: Reduce grid resolution in `gen_SLD_academic_style.py`:
-```python
-RPM_arr = np.linspace(2500, 7500, 30)  # was 60
-ap_arr = np.linspace(0.005e-3, 4e-3, 30)  # was 60
-```
-
-**Issue**: NN training diverges
-**Solution**: Reduce learning rate in DARC-MPC:
-```python
-darc = DARC_MPC_v3_Controller(plate_d, dt=dt,
-    ff_lr=0.001,  # was 0.005
-    ...
-)
-```
-
-**Issue**: Controller saturates voltage
-**Solution**: Use sub-optimal LQG weights:
-```python
-lqg.optimize_weights(w_q_list=[1e13],  # was 1e14
-                     w_qd_list=[1e8], w_r=1.0)
-```
+Tested on Python 3.11–3.12, NumPy ≥1.26, SciPy ≥1.13. No GPU required.
 
 ---
 
 ## 📝 License & Disclaimer
 
-This code is provided for academic research purposes. The authors make no
-warranty regarding fitness for any particular purpose. Use at your own risk
-in industrial applications.
-
----
-
-## 📧 Contact
-
-For questions or collaboration:
-- [Author email]
-- [Lab website]
-
----
-
-*Last updated: April 2026*
+This code is provided for academic research purposes, without warranty. Do not cite
+performance numbers from this repository that are not listed in
+`docs/REPRODUCED_RESULTS.md`.

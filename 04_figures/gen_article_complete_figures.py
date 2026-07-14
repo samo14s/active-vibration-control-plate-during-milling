@@ -1183,7 +1183,11 @@ all_darc_full = [m['darc']['y_rms'] for m in metrics_full]
 
 box_data = [all_lqg_short, all_darc_short, all_lqg_full, all_darc_full]
 labels = ['LQG\n(T=0.5s)', 'PALF-LQG\n(T=0.5s)', 'LQG\n(T=20.4s)', 'PALF-LQG\n(T=20.4s)']
-bp = ax.boxplot(box_data, labels=labels, patch_artist=True, widths=0.6)
+# matplotlib >=3.9 renamed boxplot's `labels` kwarg to `tick_labels`
+try:
+    bp = ax.boxplot(box_data, tick_labels=labels, patch_artist=True, widths=0.6)
+except TypeError:
+    bp = ax.boxplot(box_data, labels=labels, patch_artist=True, widths=0.6)
 
 colors_box = [COLOR_LQG, COLOR_DARC, COLOR_LQG, COLOR_DARC]
 for patch, color in zip(bp['boxes'], colors_box):

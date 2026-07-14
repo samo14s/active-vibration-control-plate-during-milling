@@ -181,14 +181,33 @@ class PlateModel:
                         d31: float, h_Pa: float,
                         E_Pe: float, nu_Pe: float):
         """
-        Ajoute un patch piézoélectrique et calcule H_Pe_modal :
-        force modale induite par 1 V appliqué au patch.
+        Ajoute un patch piézoélectrique et calcule H_Pe_modal (force modale par volt).
 
-        Modèle de couplage en flexion (Eq. 15) :
-            m_piezo = -E_Pe * d31 * (bp + h_Pa) / (2*(1 - nu_Pe))
-            H_Pe(x) = m_piezo * ∇²N(x) intégré sur le patch
+        Coupling coefficient from Du et al. (2024), Eq. (15) — P2 fix. The induced
+        bending moment per volt is m_piezo = -C_P0 * d31 / h_Pa, with
+
+            P_M  = -(E_Pe/E_P) * (1 - nu_P^2)/(1 - nu_Pe^2)
+                    * 3*h_Pa*bp*(bp + h_Pa) / (0.5*bp^3 + 4*h_Pa^3 + 3*bp*h_Pa^2)
+            C_P0 = -(1/6) * (1 + nu_Pe)/(1 - nu_P) * E_P * bp^2 * P_M
+                    / (1 + nu_P - (1 + nu_Pe)*P_M)
+
+        (The previous code used the simplified constant
+         -E_Pe*d31*(bp+h_Pa)/(2*(1-nu_Pe)), which is ~16 % larger.) The spatial part
+        g_lap = integral of the Laplacian of the shape functions over the patch is,
+        by the divergence theorem, the article's Eq. (14) bracket of patch-edge slope
+        line integrals — that structure is unchanged; only the scalar prefactor is
+        corrected here.
         """
-        m_piezo = -E_Pe * d31 * (self.bp + h_Pa) / (2 * (1 - nu_Pe))
+        E_P = self.E
+        nu_P = self.nu
+        bp = self.bp
+        P_M = (-(E_Pe / E_P) * (1 - nu_P**2) / (1 - nu_Pe**2)
+               * 3 * h_Pa * bp * (bp + h_Pa)
+               / (0.5 * bp**3 + 4 * h_Pa**3 + 3 * bp * h_Pa**2))
+        C_P0 = (-(1.0 / 6.0) * (1 + nu_Pe) / (1 - nu_P) * E_P * bp**2 * P_M
+                / (1 + nu_P - (1 + nu_Pe) * P_M))
+        m_piezo = -C_P0 * d31 / h_Pa
+
         g_lap = laplace_n_patch(xP1, xP2, zP1, zP2,
                                 self.N1, self.N2,
                                 self.lex, self.ley,
@@ -197,10 +216,11 @@ class PlateModel:
         H_Pe_phys = m_piezo * g_lap
         self.H_Pe_modal = self.V.T @ H_Pe_phys[self.DOFf]    # (n_modes,)
         self.patch = dict(xP1=xP1, xP2=xP2, zP1=zP1, zP2=zP2,
-                          m_piezo=m_piezo)
+                          m_piezo=m_piezo, C_P0=C_P0, P_M=P_M)
 
         if self.verbose:
-            print(f"[PlateModel] ||H_Pe_modal|| = {np.linalg.norm(self.H_Pe_modal):.3e} N/V")
+            print(f"[PlateModel] C_P0 = {C_P0:.4e}, m_piezo = {m_piezo:.4e}; "
+                  f"||H_Pe_modal|| = {np.linalg.norm(self.H_Pe_modal):.3e} N/V")
 
     # ---------------------------------------------------------------
     def get_Dp_at(self, kp: int):

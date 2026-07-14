@@ -255,32 +255,98 @@ class PALF_LQG_Controller:
         print(f"  u_FF max   : +/-{self.ff_nn.u_FF_max}V")
         print(f"  ||K_LQR||  : {np.linalg.norm(self.K_lqr):.2e}")
 
+    def _closed_loop_frf(self, omega_arr):
+        """
+        FRF G(jw) from an ADDITIVE feedforward voltage (entering where u does) to the
+        measured displacement y, for the DESIGN closed loop (plant model + LQR gain +
+        Kalman observer; no delay/regeneration). Used by the model-inverse ILC.
+
+            xi = [x; x_hat]
+            x_dot    = A x - B K x_hat + B u_ff
+            x_hat_dot= L C x + (A - B K - L C) x_hat + B u_ff
+            y        = C x
+        """
+        n2 = self.n_x
+        A = self.A
+        B = self.B.reshape(n2, 1)
+        C = self.C.reshape(1, n2)
+        K = self.K_lqr.reshape(1, n2)
+        L = self.L_kal.reshape(n2, 1)
+        Acl = np.block([[A, -B @ K],
+                        [L @ C, A - B @ K - L @ C]])
+        Bcl = np.vstack([B, B])
+        Ccl = np.hstack([C, np.zeros_like(C)])
+        G = np.empty(len(omega_arr), dtype=complex)
+        I = np.eye(2 * n2)
+        for i, w in enumerate(omega_arr):
+            G[i] = (Ccl @ np.linalg.solve(1j * w * I - Acl, Bcl))[0, 0]
+        return G
+
     def pretrain_iterative_simulation(self, simulator, alpha3_t, alpha4_t, kp_idx,
-                                      n_iterations=5, n_epochs_per_iter=30,
+                                      n_iterations=10, n_epochs_per_iter=30,
+                                      n_harmonics=10, eta_ilc=0.5,
                                       verbose=True):
         """
-        Iterative Learning Control via simulation.
+        Frequency-domain MODEL-INVERSE Iterative Learning Control.
 
-        Each iteration:
-          1. Simulate the current controller (LQG + alpha*u_FF).
-          2. Collect (phase, y) along the run.
-          3. Form a corrected feedforward target that would have reduced y:
-             u_target = u_FF_current + eta * (-K_corr * sign(gain) * y).
-          4. Train the phase network toward u_target.
+        The residual y after LQG is dominated by the tooth-passing-periodic forced
+        response. Each ILC trial:
+          1. Simulate the current controller (LQG + alpha*u_FF) on the design scenario
+             long enough to reach the periodic steady state.
+          2. DFT the steady-state residual over an integer number of tooth periods to
+             get the harmonic coefficients Y_h (h = 0..n_harmonics).
+          3. Model-inverse update of the feedforward harmonics:
+                 U_h <- U_h - eta * Y_h / G(j h w_tau)
+             where G is the design closed-loop FRF from u_ff to y (_closed_loop_frf).
+             Because the update iterates against the TRUE simulated plant (5 modes +
+             regenerative delay), plant/model mismatch at the harmonics is absorbed by
+             the iteration (standard frequency-domain ILC contraction argument).
+          4. Rebuild the periodic target u_target(phi) from the harmonics and train
+             the phase network on it.
 
-        IMPORTANT: this must be called ONCE on the nominal (design) scenario, then the
-        weights FROZEN. Do not re-train per evaluation scenario — that would score the
-        controller on its own training data (see docs/AUDIT_FINDINGS.md).
+        The best-so-far harmonic set (lowest steady-state y_RMS) is kept, so a late
+        divergent trial cannot degrade the frozen controller.
+
+        IMPORTANT: call ONCE on the nominal (design) scenario, then FREEZE the weights.
+        Do not re-train per evaluation scenario (docs/AUDIT_FINDINGS.md).
         """
         if verbose:
-            print(f"\n--- ILC feedforward pretraining (nominal scenario) ---")
-            print(f"   iterations: {n_iterations}, epochs/iter: {n_epochs_per_iter}")
+            print(f"\n--- Model-inverse ILC feedforward pretraining (nominal) ---")
+            print(f"   trials: {n_iterations}, harmonics: {n_harmonics}, "
+                  f"eta: {eta_ilc}")
 
         rng = np.random.default_rng(42)
-        all_iter_history = []
+        n_per = self.n_per
+        H = int(min(n_harmonics, n_per // 2 - 1))
 
-        # A few tooth-passing periods are enough to capture the periodic target
-        n_sim_steps = min(simulator.nstep, 4 * self.n_per)
+        # Simulation horizon: settle + FFT windows (periodic steady state)
+        P_settle, P_fft = 6, 4
+        n_sim_steps = min(simulator.nstep, (P_settle + P_fft) * n_per)
+        n_fft = P_fft * n_per
+
+        # Design closed-loop FRF at the tooth-passing harmonics (tiled period n_per*dt)
+        w_tau = 2 * np.pi / (n_per * self.dt)
+        omega_h = np.arange(1, H + 1) * w_tau
+        G_h = self._closed_loop_frf(omega_h)
+        G_0 = self._closed_loop_frf(np.array([1e-6]))[0].real   # DC gain
+        g_floor = 1e-3 * np.max(np.abs(G_h))                     # ill-conditioned guard
+
+        U = np.zeros(H + 1, dtype=complex)     # current FF harmonics (U[0] = DC)
+        best = dict(y_rms=np.inf, U=U.copy())
+        all_iter_history = []
+        k_idx = np.arange(n_per)
+        phases = 2 * np.pi * k_idx / n_per
+
+        def _target_from_harmonics(Uh):
+            u_t = np.full(n_per, Uh[0].real)
+            for h in range(1, H + 1):
+                u_t += 2.0 * np.real(Uh[h] * np.exp(1j * h * 2 * np.pi * k_idx / n_per))
+            return np.clip(u_t, -self.ff_nn.u_FF_max, self.ff_nn.u_FF_max)
+
+        def _fit_nn(u_t):
+            for _ in range(n_epochs_per_iter):
+                for j in rng.permutation(n_per):
+                    self.ff_nn.backward(self._zero_state, phases[j], u_t[j])
 
         for it in range(n_iterations):
             self.history_u_lqg = []
@@ -289,65 +355,52 @@ class PALF_LQG_Controller:
             self.history_phase = []
             self.history_safety = []
 
-            # 1. Simulate with the current controller
+            # 1. Simulate current controller to periodic steady state
             res = simulator.simulate(alpha3_t, alpha4_t, kp_idx,
-                                     controller=self,
-                                     progress=False,
+                                     controller=self, progress=False,
                                      stop_at_time=n_sim_steps * self.dt)
+            n_got = res['stop_idx'] + 1
+            if n_got < n_sim_steps:            # diverged trial: keep best, stop
+                if verbose:
+                    print(f"   Trial {it+1}: diverged — reverting to best trial")
+                break
+            y_ss = res['y'][n_sim_steps - n_fft:n_sim_steps]
+            y_rms = np.sqrt(np.mean(y_ss**2)) * 1e6
 
-            y_sim = res['y'][:n_sim_steps]
-            y_rms = np.sqrt(np.mean(y_sim**2)) * 1e6
+            # 2. Harmonics of the steady-state residual (DFT bins h*P_fft are exact)
+            Yf = np.fft.fft(y_ss) / n_fft
+            Y_h = np.array([Yf[h * P_fft] for h in range(H + 1)])
 
+            if y_rms < best['y_rms']:
+                best = dict(y_rms=y_rms, U=U.copy())
+
+            # 3. Model-inverse harmonic update
+            U_new = U.copy()
+            U_new[0] -= eta_ilc * (Y_h[0].real / G_0 if abs(G_0) > 1e-30 else 0.0)
+            for h in range(1, H + 1):
+                if np.abs(G_h[h - 1]) > g_floor:
+                    U_new[h] -= eta_ilc * Y_h[h] / G_h[h - 1]
+            U = U_new
+
+            # 4. Rebuild periodic target and refit the phase network
+            u_t = _target_from_harmonics(U)
+            _fit_nn(u_t)
+
+            errs = [(self.ff_nn.forward(self._zero_state, phases[j])[0] - u_t[j])**2
+                    for j in range(n_per)]
+            rmse = float(np.sqrt(np.mean(errs)))
+            all_iter_history.append({'iter': it + 1, 'y_rms': y_rms, 'rmse': rmse,
+                                     'u_target_std': float(u_t.std())})
             if verbose:
-                print(f"\n   Iter {it+1}: y_RMS sim = {y_rms:.4f} um")
+                print(f"   Trial {it+1}: y_RMS(ss) = {y_rms:.4f} um | "
+                      f"NN fit RMSE {rmse:.3f} V | u_t std {u_t.std():.2f} V")
 
-            # 2-3. Build corrected feedforward targets from the run
-            n_collected = min(len(self.history_phase), n_sim_steps)
-            X_train, Phase_train, U_target_train = [], [], []
-
-            B_flat = self.B.flatten()
-            gain_dc = float(self.plate.D_obs[0] * B_flat[self.n_modes])
-            gain_sign = np.sign(gain_dc) if abs(gain_dc) > 1e-30 else 1.0
-            K_correction = 1e6   # 1 V correction per 1 um vibration (heuristic)
-            eta = 0.3            # iterative-learning step
-
-            for k in range(n_collected):
-                phase = self.history_phase[k]
-                u_ff_curr = self.history_u_ff[k]
-                y_k = y_sim[k]
-                u_correction = -K_correction * gain_sign * y_k
-                u_target = np.clip(u_ff_curr + eta * u_correction,
-                                   -self.ff_nn.u_FF_max, self.ff_nn.u_FF_max)
-                # Phase-only learned map: state channel trained on zeros
-                X_train.append(self._zero_state.copy())
-                Phase_train.append(phase)
-                U_target_train.append(u_target)
-
-            X_train = np.array(X_train)
-            Phase_train = np.array(Phase_train)
-            U_target_train = np.array(U_target_train)
-
-            # 4. Train the phase network
-            for epoch in range(n_epochs_per_iter):
-                idx = rng.permutation(len(X_train))
-                for j in idx[:min(len(idx), 500)]:
-                    self.ff_nn.backward(X_train[j], Phase_train[j],
-                                        U_target_train[j])
-
-            errs = []
-            for j in range(min(len(X_train), 200)):
-                u_p, _, _ = self.ff_nn.forward(X_train[j], Phase_train[j])
-                errs.append((u_p - U_target_train[j])**2)
-            rmse = np.sqrt(np.mean(errs)) if errs else float('nan')
-
-            all_iter_history.append({
-                'iter': it+1, 'y_rms': y_rms, 'rmse': rmse,
-                'u_target_std': float(U_target_train.std()) if len(U_target_train) else 0.0,
-            })
-
+        # Freeze on the BEST harmonic set (guards against a late bad trial)
+        if best['y_rms'] < np.inf:
+            u_t = _target_from_harmonics(best['U'])
+            _fit_nn(u_t)
             if verbose:
-                print(f"     RMSE NN: {rmse:.3f}V, "
-                      f"u_target std: {U_target_train.std():.2f}V")
+                print(f"   Frozen at best trial: y_RMS(ss) = {best['y_rms']:.4f} um")
 
         return all_iter_history
 

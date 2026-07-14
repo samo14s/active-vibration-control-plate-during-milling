@@ -55,16 +55,23 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 │   └── palf_lqg_controller.py    # LQG + phase-locked NN feedforward (ILC-trained)
 │
 ├── 03_analysis/           ← Stability & robustness analysis
-│   ├── fdm_stability.py          # Floquet multipliers (0th-order semi-discretization)
-│   └── uncertainty_analysis.py   # Monte Carlo sampling (not yet wired into main)
+│   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled monodromy
+│   ├── uncertainty_analysis.py   # Monte-Carlo LQG-vs-PALF (run_mc_lqg_vs_palf)
+│   └── mesh_convergence.py       # FEM natural-frequency convergence vs Table 4
 │
-├── 04_figures/            ← Figure generators
+├── 04_figures/            ← Figure generators (illustrative)
 ├── 05_main/               ← Main simulation scripts
-│   ├── main_simulation.py        # Full LQG vs feedforward-augmented comparison
+│   ├── main_simulation.py        # Authoritative LQG vs PALF-LQG comparison + SLD
+│   ├── main_robustness_mc.py     # Monte-Carlo robustness driver
 │   └── main_realistic_piezo.py   # With realistic piezo non-linearities
 │
+├── figures/               ← Curated publication figures (vector PDF, 300 DPI)
 └── docs/                  ← Contribution, audit, reproduced results
 ```
+
+The `figures/` directory holds a committed snapshot of the publication set (vector PDF);
+see `figures/README.md` for provenance and regeneration commands. All figures are
+regenerable from the scripts above.
 
 ---
 

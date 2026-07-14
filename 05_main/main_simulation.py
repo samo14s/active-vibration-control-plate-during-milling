@@ -50,7 +50,7 @@ from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
 from palf_lqg_controller import PALF_LQG_Controller
 from newmark_solver import NewmarkSimulator
-from fdm_stability import compute_SLD
+from fdm_stability import compute_SLD, compute_closed_loop_SLD
 
 
 # ============================================================
@@ -691,36 +691,40 @@ for kp in range(0, 2001, 50):
 Dp_avg = np.mean(Dp_sample, axis=0)
 m_list = np.diag(plate_nominal.Mp).tolist()
 
-# SLD Open-Loop (référence)
-print(f"  ▷ SLD OPEN-LOOP...")
-omega_OL_sld = plate_nominal.omega_n.tolist()
-rho_OL, _ = compute_SLD(RPM_arr, ap_arr,
-                          omega_OL_sld, ZETA, Dp_avg.tolist(), m_list,
-                          NT, RT, ETA_H, phi_st, phi_ex,
-                          k1_sld, k2_sld, KT_NOMINAL, HP,
-                          m_div=30, verbose=False)
-print(f"     done.")
-
-# SLD LQG (utilise zeta améliorés par LQG)
-print(f"  ▷ SLD LQG...")
-lqg_sld = LQGController(plate_nominal, dt=DT, verbose=False)
+# SLD design controller (same weights/observer as the time-domain LQG)
+lqg_sld = LQGController(plate_nominal, dt=DT, verbose=False, kalman_V=KALMAN_V)
 lqg_sld.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
                           w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
-omega_LQG_sld, zeta_LQG_sld = extract_modes(lqg_sld.ev_cl, N_MODES)
-rho_LQG, _ = compute_SLD(RPM_arr, ap_arr,
-                           omega_LQG_sld.tolist(), zeta_LQG_sld.tolist(),
-                           Dp_avg.tolist(), m_list,
-                           NT, RT, ETA_H, phi_st, phi_ex,
-                           k1_sld, k2_sld, KT_NOMINAL, HP,
-                           m_div=30, verbose=False)
+
+# SLD Open-Loop — rigorous COUPLED monodromy (A_ctrl=None): multi-mode, no surrogate
+print(f"  ▷ SLD OPEN-LOOP (coupled monodromy)...")
+rho_OL = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                 plate_nominal.omega_n, ZETA, Dp_avg,
+                                 None, None, None, None, None, None,
+                                 NT, RT, ETA_H, phi_st, phi_ex,
+                                 k1_sld, k2_sld, KT_NOMINAL, HP,
+                                 m_div=20, verbose=False)
 print(f"     done.")
 
-# SLD PALF-LQG : a phase-locked feedforward does NOT move the closed-loop poles or
-# the regenerative chatter boundary, so PALF shares the LQG stability boundary.
-# (The earlier "x1.30 effective damping" surrogate was a fabrication and is removed;
-#  a rigorous closed-loop SLD would require periodic-gain Floquet analysis of the
-#  linearised feedforward — flagged as future work, docs/CONTRIBUTION.md P2.)
-print(f"  ▷ SLD PALF-LQG (= LQG boundary; feedforward does not shift it)...")
+# SLD LQG — rigorous CLOSED-LOOP monodromy with the controller (state feedback +
+# Kalman observer + regenerative delay) in the loop. Replaces the old "equivalent
+# damping" surrogate: no closed-loop-damping-into-open-loop-formula shortcut.
+print(f"  ▷ SLD LQG (closed-loop monodromy, controller in the loop)...")
+rho_LQG = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                  plate_nominal.omega_n, ZETA, Dp_avg,
+                                  plate_nominal.H_Pe_modal, plate_nominal.D_obs,
+                                  lqg_sld.A, lqg_sld.B, lqg_sld.K_lqr, lqg_sld.L_kal,
+                                  NT, RT, ETA_H, phi_st, phi_ex,
+                                  k1_sld, k2_sld, KT_NOMINAL, HP,
+                                  m_div=20, verbose=False)
+print(f"     done.")
+
+# SLD PALF-LQG : the feedforward is a phase-only learned map u_FF(phi), so its gain
+# with respect to the estimated state is EXACTLY zero (du_FF/dx_hat = 0). It therefore
+# does not enter the closed-loop Jacobian: the monodromy matrix — and hence every
+# Floquet multiplier and the stability boundary — is IDENTICAL to LQG. Not an
+# assertion now but a consequence of the phase-only architecture.
+print(f"  ▷ SLD PALF-LQG (= LQG boundary; du_FF/dx_hat = 0)...")
 rho_PALF = rho_LQG.copy()
 print(f"     done. SLD computed in {time.time()-t_sld:.1f}s")
 

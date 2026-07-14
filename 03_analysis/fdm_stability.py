@@ -25,8 +25,128 @@ Le système modal est :
    q̈ + 2 ζ ω q̇ + ω² q + (a4(t)/m_eff) Dp² q = (a4(t)/m_eff) Dp² q(t-τ)
 """
 import numpy as np
+from scipy.linalg import expm
 
 from milling_force import milling_force_coeffs
+
+
+# ====================================================================
+# Rigorous CLOSED-LOOP, COUPLED, multi-mode monodromy SLD (P2)
+# ====================================================================
+def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                    A_ctrl, B_ctrl, K_lqr, L_kal,
+                    RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
+                    k1, k2, kt, m_div=25):
+    """
+    Spectral radius of the monodromy matrix of the FULL closed-loop, COUPLED,
+    time-periodic delayed system over one tooth-passing period, via semi-
+    discretization (Insperger–Stépán). Unlike the per-mode `fdm_stability_one_mode`,
+    this keeps the rank-1 inter-modal regenerative coupling α4(t)·Dp·Dpᵀ AND embeds
+    the actual LQG controller (state feedback + Kalman observer) in the loop, instead
+    of feeding a closed-loop "equivalent damping" into an open-loop formula.
+
+    Continuous augmented state ξ = [q; q̇; x̂]  (dim 4n if a controller is given,
+    else 2n for the open loop). The regenerative term couples q(t) to q(t-τ):
+
+        q̈ = -(K + α4·DpDpᵀ) q - C q̇ - H_Pe·(K_lqr x̂) + α4·DpDpᵀ q(t-τ)
+        x̂̇ = (A_ctrl - B_ctrl K_lqr - L C_ctrl) x̂ + L·D_obs·q         (C_ctrl=[D_obs 0])
+
+    Pass A_ctrl=None to get the open-loop coupled system (no control) — used for
+    verification against the per-mode open-loop SLD.
+    """
+    n = len(omega_n)
+    K = np.diag(np.asarray(omega_n, float) ** 2)
+    Cdamp = np.diag(2.0 * np.asarray(zeta_n, float) * np.asarray(omega_n, float))
+    DpDpT = np.outer(Dp_vec, Dp_vec)
+
+    closed = A_ctrl is not None
+    nx = 4 * n if closed else 2 * n           # continuous state dimension
+
+    tau = 60.0 / (NT * RPM)
+    dt = tau / m_div
+    za_low, za_high = hp - ap, hp
+    Omega_spin = 2 * np.pi * RPM / 60.0
+
+    # Periodic milling coefficient α4(t) over one period
+    a4 = np.empty(m_div)
+    for k in range(m_div):
+        _, a4k = milling_force_coeffs(k * dt, Omega_spin, NT, RT, eta_h,
+                                      phi_st, phi_ex, za_low, za_high, k1, k2, kt)
+        a4[k] = a4k
+
+    # Constant (α4-independent) blocks
+    if closed:
+        H_Pe = np.asarray(H_Pe, float).reshape(n)
+        D_obs = np.asarray(D_obs, float).reshape(n)
+        K_lqr = np.asarray(K_lqr, float).reshape(2 * n)
+        L = np.asarray(L_kal, float).reshape(2 * n)
+        A_xh = A_ctrl - np.outer(B_ctrl.reshape(2 * n), K_lqr) \
+             - np.outer(L, np.concatenate([D_obs, np.zeros(n)]))   # A - B K - L C
+        LD = np.outer(L, D_obs)                                    # (2n × n)
+        HK = np.outer(H_Pe, K_lqr)                                 # (n × 2n)
+
+    N = nx + n * m_div                        # augmented (with delay buffer)
+    Phi = np.eye(N)
+    Iv = slice(n, 2 * n)                       # velocity rows of ξ
+
+    for k in range(m_div):
+        Ac = np.zeros((nx, nx))
+        Ac[0:n, n:2*n] = np.eye(n)                        # q̇ = v
+        Ac[n:2*n, 0:n] = -(K + a4[k] * DpDpT)             # v̇ stiffness (self-coupling)
+        Ac[n:2*n, n:2*n] = -Cdamp                         # v̇ damping
+        if closed:
+            Ac[n:2*n, 2*n:4*n] = -HK                      # v̇ from control
+            Ac[2*n:4*n, 0:n] = LD                         # x̂̇ from measured q
+            Ac[2*n:4*n, 2*n:4*n] = A_xh                   # x̂̇ observer/feedback
+
+        Ad = expm(Ac * dt)
+        # Ic = ∫₀^dt exp(Ac s) ds  (delayed term held constant over the step)
+        try:
+            Ic = np.linalg.solve(Ac, Ad - np.eye(nx))
+        except np.linalg.LinAlgError:
+            Ic = np.eye(nx) * dt + Ac * dt**2 / 2.0
+        # delayed q enters the v-block with gain α4·DpDpᵀ
+        Bd = Ic[:, Iv] @ (a4[k] * DpDpT)                  # (nx × n)
+
+        # Augmented one-step map T
+        T = np.zeros((N, N))
+        T[0:nx, 0:nx] = Ad
+        T[0:nx, nx + (m_div - 1) * n: nx + m_div * n] = Bd   # uses oldest buffered q
+        T[nx:nx + n, 0:n] = np.eye(n)                        # newest buffer entry = q_k
+        for i in range(1, m_div):                            # shift buffer
+            T[nx + i * n: nx + (i + 1) * n,
+              nx + (i - 1) * n: nx + i * n] = np.eye(n)
+        Phi = T @ Phi
+
+    return float(np.max(np.abs(np.linalg.eigvals(Phi))))
+
+
+def compute_closed_loop_SLD(RPM_array, ap_array,
+                            omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                            A_ctrl, B_ctrl, K_lqr, L_kal,
+                            NT, RT, eta_h, phi_st, phi_ex,
+                            k1, k2, kt, hp, m_div=25, verbose=True):
+    """Grid of closed-loop (or open-loop if A_ctrl is None) spectral radii."""
+    import time
+    n_RPM, n_ap = len(RPM_array), len(ap_array)
+    rho = np.zeros((n_ap, n_RPM))
+    if verbose:
+        tag = "closed-loop" if A_ctrl is not None else "open-loop (coupled)"
+        print(f"[SLD-CL] {tag} monodromy, {n_ap}x{n_RPM} grid, m_div={m_div}")
+        t0 = time.time()
+    for i_rpm, RPM in enumerate(RPM_array):
+        for i_ap, ap in enumerate(ap_array):
+            rho[i_ap, i_rpm] = closed_loop_rho(
+                omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                A_ctrl, B_ctrl, K_lqr, L_kal,
+                RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
+                k1, k2, kt, m_div=m_div)
+        if verbose and (i_rpm + 1) % max(1, n_RPM // 10) == 0:
+            el = time.time() - t0
+            print(f"   {100*(i_rpm+1)/n_RPM:5.1f}%  RPM={RPM:.0f}  ({el:5.1f}s)")
+    if verbose:
+        print(f"[SLD-CL] done in {time.time()-t0:.1f}s")
+    return rho
 
 
 def expm_2x2_analytical(A, dt):

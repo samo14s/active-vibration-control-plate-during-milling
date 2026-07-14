@@ -689,12 +689,13 @@ phi_st = np.pi - np.arccos(1 - AE/RT)
 phi_ex = np.pi
 k1_sld, k2_sld = cutting_constants(KN, MU_C, ETA_H, GAMMA_N)
 
-# Average Dp across all positions
-Dp_sample = []
-for kp in range(0, 2001, 50):
-    Dp_, _ = plate_nominal.get_Dp_at(kp)
-    Dp_sample.append(Dp_)
-Dp_avg = np.mean(Dp_sample, axis=0)
+# Position-resolved analysis (P2.5): the regenerative coupling alpha4*Dp*Dp^T varies
+# with the tool position along the upper edge. Instead of a single path-averaged Dp
+# (which is optimistic where the mode shapes peak), evaluate the monodromy at THREE
+# representative tool positions — start, L/4, L/2, as in the article's Fig. 6 — and
+# take the WORST CASE (elementwise max spectral radius) as the reported boundary.
+KP_POSITIONS = [0, 500, 1000]          # xp_array indices for x = 0, L/4, L/2
+Dp_positions = [plate_nominal.get_Dp_at(kp)[0] for kp in KP_POSITIONS]
 m_list = np.diag(plate_nominal.Mp).tolist()
 
 # SLD design controller (same weights/observer as the time-domain LQG)
@@ -702,27 +703,32 @@ lqg_sld = LQGController(plate_nominal, dt=DT, verbose=False, kalman_V=KALMAN_V)
 lqg_sld.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
                           w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
 
-# SLD Open-Loop — rigorous COUPLED monodromy (A_ctrl=None): multi-mode, no surrogate
-print(f"  ▷ SLD OPEN-LOOP (coupled monodromy)...")
-rho_OL = compute_closed_loop_SLD(RPM_arr, ap_arr,
-                                 plate_nominal.omega_n, ZETA, Dp_avg,
-                                 None, None, None, None, None, None,
-                                 NT, RT, ETA_H, phi_st, phi_ex,
-                                 k1_sld, k2_sld, KT_NOMINAL, HP,
-                                 m_div=20, verbose=False)
+# SLD Open-Loop — rigorous COUPLED monodromy (A_ctrl=None), worst of 3 positions
+print(f"  ▷ SLD OPEN-LOOP (coupled monodromy, worst of 3 tool positions)...")
+rho_OL = None
+for Dp_pos in Dp_positions:
+    rho_p = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                    plate_nominal.omega_n, ZETA, Dp_pos,
+                                    None, None, None, None, None, None,
+                                    NT, RT, ETA_H, phi_st, phi_ex,
+                                    k1_sld, k2_sld, KT_NOMINAL, HP,
+                                    m_div=20, verbose=False)
+    rho_OL = rho_p if rho_OL is None else np.maximum(rho_OL, rho_p)
 print(f"     done.")
 
 # SLD LQG — rigorous CLOSED-LOOP monodromy with the controller (state feedback +
-# Kalman observer + regenerative delay) in the loop. Replaces the old "equivalent
-# damping" surrogate: no closed-loop-damping-into-open-loop-formula shortcut.
-print(f"  ▷ SLD LQG (closed-loop monodromy, controller in the loop)...")
-rho_LQG = compute_closed_loop_SLD(RPM_arr, ap_arr,
-                                  plate_nominal.omega_n, ZETA, Dp_avg,
-                                  plate_nominal.H_Pe_modal, plate_nominal.D_obs,
-                                  lqg_sld.A, lqg_sld.B, lqg_sld.K_lqr, lqg_sld.L_kal,
-                                  NT, RT, ETA_H, phi_st, phi_ex,
-                                  k1_sld, k2_sld, KT_NOMINAL, HP,
-                                  m_div=20, verbose=False)
+# Kalman observer + regenerative delay) in the loop, worst of 3 positions.
+print(f"  ▷ SLD LQG (closed-loop monodromy, worst of 3 tool positions)...")
+rho_LQG = None
+for Dp_pos in Dp_positions:
+    rho_p = compute_closed_loop_SLD(RPM_arr, ap_arr,
+                                    plate_nominal.omega_n, ZETA, Dp_pos,
+                                    plate_nominal.H_Pe_modal, plate_nominal.D_obs,
+                                    lqg_sld.A, lqg_sld.B, lqg_sld.K_lqr, lqg_sld.L_kal,
+                                    NT, RT, ETA_H, phi_st, phi_ex,
+                                    k1_sld, k2_sld, KT_NOMINAL, HP,
+                                    m_div=20, verbose=False)
+    rho_LQG = rho_p if rho_LQG is None else np.maximum(rho_LQG, rho_p)
 print(f"     done.")
 
 # SLD PALF-LQG : the feedforward is a phase-only learned map u_FF(phi), so its gain

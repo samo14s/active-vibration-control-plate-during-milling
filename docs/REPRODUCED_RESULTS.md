@@ -84,14 +84,38 @@ Notes:
 4. Monodromy verification: no-cutting ρ = 0.56 < 1; open-loop coupled = per-mode
    open-loop = 0.079 mm on a fine grid.
 
-## 3. FEM verification (mesh convergence)
+## 3. Material-removal drift — A-PALF-LQG (per-step parameter update)
+
+`python main_adaptive_removal.py`. The plant's modal frequencies drift DURING the
+pass (solver schedule: Kp·s(t)², Cp·s(t); ramp over 60 % of the pass, then hold).
+All controllers designed/trained once on the nominal model and frozen; A-PALF-LQG
+additionally tracks the plant online (probe-based sliding-DFT FRF matching over a
+θ grid, 0.4 V/line at 5 non-harmonic DFT-bin lines; dwell + hysteresis switching of
+pre-solved LQR/observer pairs).
+
+| Drift scenario | LQG (fixed) | PALF (fixed) | **A-PALF-LQG** |
+|---|---:|---:|---:|
+| +15 % (article's direction) | 0.681 µm | 0.589 µm | **0.580 µm** (best) |
+| −12 % (beyond fixed margin) | 261 µm ✗ | 286 µm ✗ | **0.742 µm — survives** |
+| no drift (sanity) | 0.776 µm | 0.616 µm | **0.616 µm** (adaptation costs nothing) |
+
+Key identifiability finding (documented in the controller): under stable cutting all
+signals are tooth-periodic with an unknown periodic force, so observer innovations
+alone do NOT discriminate the plant parameters — persistent excitation via the probe
+is what makes the per-step update well-posed. Anti-leakage design: the DFT window is
+an integer number of tooth periods and the probe lines sit on DFT bins, so the forced
+harmonics leak exactly zero into the identification lines. The tracked θ̂(t) follows
+the true schedule with ~half-window lag and grid-step quantization
+(`figs_lqg_vs_palf/fig_adaptive_removal.*`).
+
+## 4. FEM verification (mesh convergence)
 
 `python 03_analysis/mesh_convergence.py`: frequencies converged to <0.1 % by 30×24
 (521.1/1069.9/2732.8/3334/4145 Hz); uniform ~2.6 % below the article's Chebyshev-Ritz
 *theory* (discretisation-model difference — the non-conforming element converges from
 below) but within **0.2–0.6 % of the MEASURED** modes 2, 4, 5 (Table 4).
 
-## 4. Reproducibility notes
+## 5. Reproducibility notes
 
 - One eigensolve builds the nominal 5-mode plant; truncation feeds the controllers,
   perturbed copies feed the scenarios (consistent mode signs).
@@ -100,7 +124,7 @@ below) but within **0.2–0.6 % of the MEASURED** modes 2, 4, 5 (Table 4).
 - Runtime ≈ 62 s (`main_simulation.py`, incl. the 6 worst-position monodromy grids);
   ≈ 1 min Monte-Carlo. No GPU.
 
-## 5. Remaining items (P3)
+## 6. Remaining items (P3)
 
 - Experimental validation on a physical plate (the article's rig is fully specified —
   Tables 1–3 + Fig. 17 list every instrument). Everything above is simulation.

@@ -22,8 +22,13 @@ literature-positioning search across 2005–2026.
 > **P2.5 (improvement pass):** the ILC upgraded to a **frequency-domain model-inverse
 > harmonic update** — held-out gains jump to double digits (avg **+14.4 %**, MC median
 > **+17.8 %**, PALF better in 100 % of draws); the SLD is evaluated at the **worst of
-> 3 tool positions** (article Fig. 6 treatment). The honest numbers are in §4 and
-> `REPRODUCED_RESULTS.md`. Only P3 (experimental validation) remains.
+> 3 tool positions** (article Fig. 6 treatment).
+> **P2.6 (adaptive layer):** **A-PALF-LQG** — per-step online parameter updating
+> during material removal (probe-based sliding-DFT FRF tracking over a model grid +
+> gain scheduling). Under a sustained −12 % drift, beyond the fixed margin, the fixed
+> controllers diverge while A-PALF-LQG survives (0.74 µm); no drift → zero cost. The
+> honest numbers are in §4 and `REPRODUCED_RESULTS.md`. Only P3 (experimental
+> validation) remains.
 
 ---
 
@@ -95,6 +100,17 @@ on this plant is meaningful.
    move the boundary. DONE in P2/P2.5: the closed-loop coupled monodromy SLD with the
    LQG controller embedded, evaluated at the worst of 3 tool positions — a genuine
    methodological increment over Zhang et al. 2019's LTI-averaged CLSLD.)*
+6. **A-PALF-LQG adaptive layer (P2.6)** — per-step online updating of the plant
+   parameters during material removal: probe-based sliding-DFT FRF tracking over a
+   frequency-scale model grid + dwell/hysteresis gain scheduling of pre-solved
+   LQR/observer pairs. Includes a documented **identifiability result**: under stable
+   cutting, observer innovations alone cannot discriminate the plant parameters (the
+   unknown periodic force dominates), so persistent excitation via a low-amplitude
+   multisine probe — placed on DFT bins orthogonal to the force harmonics — is what
+   makes per-step adaptation well-posed. The article treats drift only as a bounded
+   perturbation to be tolerated robustly; here it is tracked and compensated, which
+   extends the survivable drift range beyond the fixed-design margin (−12 % drift:
+   fixed controllers diverge, adaptive survives at 0.74 µm).
 
 ## 4. The honest numbers (committed code, P0+P1+P2+P2.5: held-out, symmetric, spillover+noise, Eq.3 forces, Eq.15 piezo, model-inverse ILC, worst-position monodromy SLD)
 

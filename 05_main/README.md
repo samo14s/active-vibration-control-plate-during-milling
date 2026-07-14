@@ -9,6 +9,7 @@ Main entry points for running the simulation. **Authoritative numbers** come fro
 |---|---|---|
 | `main_simulation.py` | LQG vs PALF-LQG comparison (train-once / held-out) + SLD | Console + figs |
 | `main_robustness_mc.py` | Monte-Carlo robustness (50 samples, divergence reported) | Console + fig |
+| `main_adaptive_removal.py` | Material-removal drift: fixed vs A-PALF-LQG (per-step parameter update) | Console + fig |
 | `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py
@@ -59,6 +60,11 @@ python main_simulation.py
 
 Monte-Carlo robustness (`main_robustness_mc.py`, 50 samples): PALF beats LQG in 100 %
 of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %], all converged.
+
+Material-removal drift (`main_adaptive_removal.py`, frequency schedule in the solver):
+under a sustained −12 % drift the fixed LQG and fixed PALF both DIVERGE while
+**A-PALF-LQG** (per-step probe-FRF parameter tracking + gain scheduling) survives at
+0.74 µm; +15 % drift: adaptive best (0.58 µm); no drift: identical to fixed PALF.
 
 The learned feedforward helps most under **model mismatch** (S3), because it is indexed
 to the tooth-passing phase rather than to the (wrong) feedback model. It does not extend

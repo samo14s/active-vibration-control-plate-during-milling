@@ -38,6 +38,12 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > model-inverse harmonic update** (gains jump to double digits, still held-out); the
 > SLD is evaluated at the **worst of 3 tool positions** (article Fig. 6 treatment).
 >
+> **P2.6 applied (adaptive layer):** **A-PALF-LQG** updates the plant-parameter
+> estimate at EVERY step during material removal (probe-based sliding-DFT FRF
+> tracking over a model grid + LQR/observer gain scheduling). Under a sustained
+> −12 % frequency drift — beyond the fixed-design margin — the fixed controllers
+> diverge while A-PALF-LQG survives at 0.74 µm; with no drift it costs nothing.
+>
 > **Remaining (P3):** experimental validation on a physical plate — everything here is
 > simulation.
 
@@ -56,7 +62,8 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 │
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py         # LQG with Kalman observer (grid-searched weights)
-│   └── palf_lqg_controller.py    # LQG + phase-locked NN feedforward (ILC-trained)
+│   ├── palf_lqg_controller.py    # LQG + phase-locked NN feedforward (ILC-trained)
+│   └── adaptive_palf_lqg_controller.py  # + per-step parameter tracking (A-PALF)
 │
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled monodromy
@@ -67,6 +74,7 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 ├── 05_main/               ← Main simulation scripts
 │   ├── main_simulation.py        # Authoritative LQG vs PALF-LQG comparison + SLD
 │   ├── main_robustness_mc.py     # Monte-Carlo robustness driver
+│   ├── main_adaptive_removal.py  # Material-removal drift: fixed vs adaptive
 │   └── main_realistic_piezo.py   # With realistic piezo non-linearities
 │
 ├── figures/               ← Curated publication figures (vector PDF, 300 DPI)

@@ -10,6 +10,7 @@ v3"; see `docs/AUDIT_FINDINGS.md` for why the old name was indefensible.
 |---|---|---|
 | `lqg_controller.py` | Linear Quadratic Gaussian | `LQGController` |
 | `palf_lqg_controller.py` | LQG + phase-locked learned feedforward | `PALF_LQG_Controller` |
+| `adaptive_palf_lqg_controller.py` | + per-step online parameter tracking (material removal) | `AdaptivePALF_LQG_Controller` |
 
 ## LQG Controller
 
@@ -104,3 +105,28 @@ The feedforward buys little on the nominal plant but preserves its gain under mo
 mismatch — that robustness asymmetry is the result worth reporting. It does **not**
 increase modal damping or extend the stability lobe (a phase-locked feedforward changes
 the periodic forcing, not the closed-loop poles).
+
+## A-PALF-LQG Controller (adaptive — parameter update during material removal)
+
+**A-PALF-LQG** adds ONLINE system-parameter updating at every control step, for the
+frequency drift caused by progressive material removal (the article measured
++9 %/+17 % over a machining series; the fixed-design margin here is ~−9 %).
+
+- **Identifiability (key design fact):** under stable cutting all signals are
+  tooth-periodic with an unknown periodic force, so observer innovations alone do NOT
+  discriminate plant parameters (verified by this package's diagnostics). The remedy
+  is **persistent excitation**: a low-amplitude multisine **probe** (0.4 V/line)
+  injected through the piezo at 5 lines placed ON DFT bins of a window of an integer
+  number of tooth periods and AWAY from the force harmonics — bin orthogonality makes
+  the huge forced-vibration harmonics leak exactly zero into the probe lines.
+- **Per-step update:** a sliding DFT (O(1)/step/line) refreshes Y(jω_p), U(jω_p);
+  the plant FRF samples are matched against a pre-designed model grid
+  (θ scaling: Kp∼θ², Cp∼θ) with a balanced, resonance-safe residual norm.
+- **Gain scheduling:** a bank of parallel Kalman observers (state continuity) and
+  pre-solved LQR gains per θ; the active model switches with a dwell window and a
+  hysteresis margin. The phase-locked feedforward is inherited unchanged.
+
+Verified (`main_adaptive_removal.py`): under a sustained −12 % drift
+(beyond the fixed margin) the fixed LQG and fixed PALF both DIVERGE while A-PALF-LQG
+survives at 0.74 µm; under +15 % drift it is the best of the three (0.58 µm); with no
+drift it matches fixed PALF exactly (0.616 µm — adaptation and probe cost ≈ nothing).

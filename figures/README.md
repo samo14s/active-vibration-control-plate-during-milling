@@ -17,6 +17,7 @@ the source of truth is the scripts.
 | `08_SLD_overlay.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
 | `09_robustness_montecarlo.pdf` | `05_main/main_robustness_mc.py` | **authoritative** |
 | `11_feedforward_decomposition.pdf` | `04_figures/gen_article_complete_figures.py` | illustrative (qualitative) |
+| `12_adaptive_removal.pdf` | `05_main/main_adaptive_removal.py` | **authoritative** (drift benchmark + θ̂ tracking) |
 | `15_control_architecture.pdf` | `04_figures/gen_control_strategy_diagram.py` | schematic |
 
 ```bash
@@ -39,6 +40,8 @@ closed-loop monodromy SLD at the worst of 3 tool positions. Headline numbers:
 - RMS gain vs LQG: S1 +19.5 %, S2 +11.0 %, S3 (ω−8 %) +14.6 %, S4 +15.8 % (avg +14.4 %).
 - Monte-Carlo (50 samples): PALF beats LQG 100 %, median +17.8 % [p05 +15.8, p95 +19.5].
 - SLD @4900 RPM: OL 0.10 mm (= article experiment), LQG = PALF 1.08 mm (∂u_FF/∂x̂=0).
+- Material-removal drift: at sustained −12 % the fixed controllers diverge while
+  A-PALF-LQG (per-step probe-FRF parameter update) survives at 0.74 µm.
 
 The two **illustrative/qualitative** figures (`11_...`, `15_...`) and the **setup**
 figure (`00_...`) carry no conflicting headline numbers; `11_...` shows the u_LQG+u_FF

@@ -39,6 +39,7 @@ class NewmarkSimulator:
                  kp_idx, controller=None,
                  piezo=None, rng=None,
                  meas_noise_std: float = 0.0,
+                 omega_scale_t=None,
                  stop_threshold: float = 5e-3,
                  stop_at_time: float = None,
                  progress: bool = True):
@@ -55,6 +56,10 @@ class NewmarkSimulator:
         meas_noise_std : écart-type du bruit de mesure (m) ajouté à y (0 = idéal).
             Le PLAN peut avoir plus de modes que le contrôleur (spillover) : l'état
             estimé x_hat est dimensionné sur le contrôleur, pas sur le plan.
+        omega_scale_t : None ou (nstep,) — MATERIAL-REMOVAL drift schedule: at step k
+            the plant's natural frequencies are scaled by s = omega_scale_t[k]
+            (stiffness Kp*s^2, damping Cp*s), modelling the progressive change of the
+            plate dynamics as material is removed along the pass. None = frozen plant.
         stop_threshold : interrompt si |y_p| > ce seuil (sécurité)
         stop_at_time : interrompt à ce temps (utilisé pour Sim 1 sans contrôle)
         """
@@ -124,7 +129,7 @@ class NewmarkSimulator:
                                                 k_step=k)
                 # PALF-LQG (and legacy NRACC/DARC names) need k_step for the
                 # phase-locked feedforward
-                elif controller.__class__.__name__ in ('PALF_LQG_Controller', 'NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
+                elif controller.__class__.__name__ in ('PALF_LQG_Controller', 'AdaptivePALF_LQG_Controller', 'NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
                     step_out = controller.step(x_hat[:, k-1],
                                                 u_real_prev, y_obs_now,
                                                 k_step=k)
@@ -158,8 +163,17 @@ class NewmarkSimulator:
             else:
                 q_delay = np.zeros(n)
 
+            # Plant drift (material removal): scale stiffness/damping at this step
+            if omega_scale_t is not None:
+                s_k = omega_scale_t[k]
+                Kp_k = Kp_modal * s_k**2
+                Cp_k = Cp_modal * s_k
+            else:
+                Kp_k = Kp_modal
+                Cp_k = Cp_modal
+
             # Forces (la tension RÉELLE est utilisée)
-            K_eff = Kp_modal + a4 * DpT_Dp_now
+            K_eff = Kp_k + a4 * DpT_Dp_now
             F_now = self.ft * a3 * Dp_now \
                   + a4 * DpT_Dp_now @ q_delay \
                   + H_Pe_modal * u_actual
@@ -167,8 +181,8 @@ class NewmarkSimulator:
             # Newmark implicite
             qd_pred = qmd[:, k-1] + (1-gNM)*dt * qmdd[:, k-1]
             q_pred  = qm [:, k-1] + dt*qmd[:, k-1] + (0.5-bNM)*dt**2 * qmdd[:, k-1]
-            S_eff = Mp + gNM*dt*Cp_modal + bNM*dt**2 * K_eff
-            rhs = F_now - Cp_modal @ qd_pred - K_eff @ q_pred
+            S_eff = Mp + gNM*dt*Cp_k + bNM*dt**2 * K_eff
+            rhs = F_now - Cp_k @ qd_pred - K_eff @ q_pred
 
             qmdd[:, k] = np.linalg.solve(S_eff, rhs)
             qmd [:, k] = qd_pred + gNM*dt * qmdd[:, k]

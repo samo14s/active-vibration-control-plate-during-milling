@@ -17,16 +17,19 @@ The **primary script**. Comparison protocol (see `docs/AUDIT_FINDINGS.md`):
 1. Builds plate FEM model (Q4 × 30×24 elements, 3 modes).
 2. Adds piezoelectric patch (QDA60-20-0.7, 20×60 mm).
 3. Computes cutting force coefficients (3-tooth end-mill).
-4. Builds **one shared LQG feedback** (grid-searched weights) used by both the
-   baseline LQG and PALF's internal LQR — a **symmetric** comparison.
-5. Builds **PALF-LQG** = the shared LQG + a phase-locked learned feedforward, and
+4. Builds a **full-order 5-mode plant**; the controllers are designed on the **first 3
+   modes** (spillover — no inverse crime). One eigensolve feeds both.
+5. Builds **one shared LQG feedback** (grid-searched weights) used by both the baseline
+   LQG and PALF's internal LQR — a **symmetric** comparison — with 10 nm measurement
+   noise and identical ±150 V clipping.
+6. Builds **PALF-LQG** = the shared LQG + a phase-locked learned feedforward, and
    **pre-trains the feedforward ONCE on the nominal scenario (S1), then freezes it**.
-6. Runs **4 scenarios**, evaluating the *frozen* controllers (S2/S3/S4 are held-out):
+7. Runs **4 scenarios**, evaluating the *frozen* controllers (S2/S3/S4 are held-out):
    - **S1 Nominal**: a_p = 0.3 mm, K_T nominal, ω nominal
    - **S2 Aggressive**: a_p = 0.6 mm
-   - **S3 Uncertainty**: ω − 15 % (frequency mismatch)
+   - **S3 Uncertainty**: ω − 8 % (mismatch; ~−9 % is the controlled stability margin)
    - **S4 High K_T**: K_T + 30 %
-7. Computes metrics (RMS, peak, peak-to-peak, voltage) and prints the summary.
+8. Computes metrics (RMS, peak, peak-to-peak, voltage) and prints the summary.
 
 ### Run
 
@@ -34,23 +37,23 @@ The **primary script**. Comparison protocol (see `docs/AUDIT_FINDINGS.md`):
 python main_simulation.py
 ```
 
-### Verified output (committed code, ~38 s)
+### Verified output (committed code, ~41 s)
 
 ```
 ========================================================================
  RÉSUMÉ FINAL : LQG vs PALF-LQG
 ========================================================================
   Scénario                    LQG y_RMS     PALF y_RMS    Gain
-  S1 - Nominal article        0.5319        0.5073         +4.62%
-  S2 - Aggressive ap=0.6mm    1.0577        1.0207         +3.49%
-  S3 - Uncertainty ω-15%      0.6059        0.4866        +19.69%   <- model mismatch
-  S4 - High K_T +30%          0.6924        0.6643         +4.06%
-  MOYENNE                     0.7220        0.6697         +7.23%
+  S1 - Nominal article        0.7437        0.7060         +5.07%
+  S2 - Aggressive ap=0.6mm    1.4914        1.4331         +3.91%
+  S3 - Uncertainty ω-8%       0.8530        0.7443        +12.74%   <- model mismatch
+  S4 - High K_T +30%          0.9698        0.9265         +4.46%
+  MOYENNE                     1.0145        0.9525         +6.11%
 
   STABILITÉ (SLD) - à RPM = 4900 :
      a_p crit OPEN-LOOP : 0.100 mm   (matches Du et al. 2024 experiment)
-     a_p crit LQG       : 2.538 mm   (25.4x OL)
-     a_p crit PALF-LQG  : 2.538 mm   (= LQG; feedforward does not shift the boundary)
+     a_p crit LQG       : 2.050 mm   (20.5x OL)
+     a_p crit PALF-LQG  : 2.050 mm   (= LQG; feedforward does not shift the boundary)
 ```
 
 The learned feedforward helps most under **model mismatch** (S3), because it is indexed
@@ -76,8 +79,8 @@ LQG_SHARED.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
 ## main_realistic_piezo.py
 
 LQG with a realistic piezo model (saturation, slew rate, amplifier bandwidth,
-hysteresis, sensor noise/delay). Note: this script still uses the current k1/k2
-convention (P1 item) and does not include PALF.
+hysteresis, sensor noise/delay). Uses the corrected Eq. (3) constants via
+`cutting_constants`; it is an LQG-only actuator study (no PALF, no 5-mode spillover).
 
 ```bash
 python main_realistic_piezo.py

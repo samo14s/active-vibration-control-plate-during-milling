@@ -8,6 +8,8 @@ Construction de la plaque mince encastrée :
    - couplage piézoélectrique
    - pré-calcul Dp(x) pour outil mobile
 """
+import copy as _copy
+from types import SimpleNamespace
 import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix
 from scipy.sparse.linalg import eigsh
@@ -204,3 +206,49 @@ class PlateModel:
     def get_Dp_at(self, kp: int):
         """Renvoie (Dp, DpT_Dp) à l'indice de position kp."""
         return self.Dp_array[:, kp], self.DpT_Dp_array[:, :, kp]
+
+    # ---------------------------------------------------------------
+    def truncated_view(self, n_keep: int):
+        """
+        Lightweight modal view of the FIRST n_keep modes, for controller design.
+
+        Because it reuses this plate's own eigenvectors (D_obs, H_Pe_modal share the
+        same mode signs), a controller designed on the view is sign-consistent with
+        any full-order plant derived from the SAME eigensolve (see perturbed_copy).
+        This is what lets us design a 3-mode controller and simulate a 5-mode plant
+        WITHOUT an inverse crime and without a feedback-sign mismatch.
+        """
+        n = int(min(n_keep, self.n_modes))
+        return SimpleNamespace(
+            n_modes=n,
+            Mp=np.eye(n),
+            Kp=np.diag(self.omega_n[:n]**2),
+            Cp=np.diag(2.0 * self.zeta_modes[:n] * self.omega_n[:n]),
+            omega_n=self.omega_n[:n].copy(),
+            freq_n=self.freq_n[:n].copy(),
+            D_obs=self.D_obs[:n].copy(),
+            H_Pe_modal=self.H_Pe_modal[:n].copy(),
+        )
+
+    # ---------------------------------------------------------------
+    def perturbed_copy(self, freq_perturb: float = 0.0):
+        """
+        Return a copy with modal frequencies (and damping) rescaled by
+        (1 + freq_perturb). Mode SHAPES (V, D_obs, H_Pe_modal, Dp_array) are SHARED
+        and unchanged — the article models material-removal drift as a stiffness
+        perturbation, not a mode reshaping. Using a copy instead of a fresh eigensolve
+        keeps mode signs identical to this plate (and hence to any truncated_view of
+        it), which is essential for feedback-sign consistency.
+
+        The returned copy still points at THIS plate's Dp_array; call precompute_Dp on
+        it afterwards if a different tool height (zp_pos) is needed — that rebinds the
+        copy's Dp_array only, using the shared (sign-consistent) eigenvectors.
+        """
+        new = _copy.copy(self)
+        if abs(freq_perturb) > 1e-12:
+            fac = 1.0 + freq_perturb
+            new.omega_n = self.omega_n * fac
+            new.freq_n = new.omega_n / (2 * np.pi)
+            new.Kp = np.diag(new.omega_n**2)
+            new.Cp = np.diag(2.0 * self.zeta_modes * new.omega_n)
+        return new

@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 from plate_model import PlateModel
-from milling_force import precompute_alpha_periodic
+from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
 from palf_lqg_controller import PALF_LQG_Controller
 from newmark_solver import NewmarkSimulator
@@ -175,8 +175,7 @@ def run_scenario(name, ap, KT_actual, freq_perturb, dt, T_end, sim_purpose="shor
     Omega = 2*np.pi*RPM/60
     RT = DT_TOOL/2
     tau = 60/(NT*RPM)
-    k1 = KN*np.cos(ETA_H)
-    k2 = 1 + MU_C*np.tan(ETA_H)*np.cos(GAMMA_N) - KN*np.sin(ETA_H)
+    k1, k2 = cutting_constants(KN, MU_C, ETA_H, GAMMA_N)
     f_t = NT * RPM / 60
     v_feed = FT * NT * RPM / 60
     
@@ -798,8 +797,7 @@ plate_n = build_plate(zp_pos=HP - 0.3e-3/2, freq_perturb=0.0)
 RT = DT_TOOL/2
 phi_st = np.pi - np.arccos(1 - AE/RT)
 phi_ex = np.pi
-k1_sld = KN*np.cos(ETA_H)
-k2_sld = 1 + MU_C*np.tan(ETA_H)*np.cos(GAMMA_N) - KN*np.sin(ETA_H)
+k1_sld, k2_sld = cutting_constants(KN, MU_C, ETA_H, GAMMA_N)
 
 Dp_sample = []
 for kp in range(0, 2001, 50):

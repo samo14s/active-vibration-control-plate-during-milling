@@ -10,12 +10,15 @@ critical/major finding (44 findings, see `AUDIT_FINDINGS.md`), (iii) verificatio
 runs of the committed code (see `REPRODUCED_RESULTS.md`), and (iv) a 28-work
 literature-positioning search across 2005–2026.
 
-> **P0 integrity fixes are now applied** (2026-07-14). The fabricated ×1.30 stability
+> **P0 + P1 fixes are now applied** (2026-07-14). P0: the fabricated ×1.30 stability
 > lobe is removed; the feedforward is trained once on the nominal scenario and frozen
-> (held-out evaluation); the baseline is symmetric (identical LQG weights for both);
-> the dead "adaptive/RLS" path and the unused anti-disturbance pretrainer are deleted;
-> and the controller is renamed **DARC-MPC → PALF-LQG**. The honest, held-out numbers
-> are in §4 and `REPRODUCED_RESULTS.md`. P1/P2 items in §6.3–6.4 remain open.
+> (held-out); the baseline is symmetric; dead "adaptive/RLS" code and the unused
+> anti-disturbance pretrainer are deleted; the controller is renamed
+> **DARC-MPC → PALF-LQG**. P1: the k1/k2 cutting constants are corrected to Eq. (3)
+> and deduplicated; the inverse crime is removed (5-mode plant vs 3-mode controller —
+> spillover); 10 nm measurement noise is injected; both controllers clip identically.
+> The honest, held-out numbers are in §4 and `REPRODUCED_RESULTS.md`. §6.3 P2 items
+> remain open.
 
 ---
 
@@ -87,25 +90,28 @@ on this plant is meaningful.
    move the boundary. A genuine periodic-gain Floquet closed-loop SLD — a real
    methodological increment over Zhang et al. 2019's LTI-averaged CLSLD — remains P2.)*
 
-## 4. The honest numbers (committed code, train-once / held-out, symmetric baseline)
+## 4. The honest numbers (committed code, P0 + P1: held-out, symmetric, spillover + noise, corrected forces)
 
 | Quantity | Reproduced value | Old README claim | Verdict |
 |---|---:|---:|---|
-| RMS gain vs LQG, nominal (S1) | **+4.6 %** | +19.2 % | old claim not reproducible |
-| RMS gain, aggressive ap (S2) | +3.5 % | +19.5 % | old claim not reproducible |
-| RMS gain, model mismatch ω−15 % (S3) | **+19.7 %** | +19.2 % | ✅ survives held-out protocol |
-| RMS gain, KT+30 % (S4) | +4.1 % | +19.2 % | old claim not reproducible |
-| Average RMS gain | **+7.2 %** | +19.3 % | old claim not reproducible |
-| SLD critical depth, open loop | 0.100 mm | 0.14 mm | recomputed; matches article experiment |
-| SLD critical depth, LQG | 2.54 mm | 2.17 mm | recomputed |
-| SLD critical depth, PALF-LQG | 2.54 mm (= LQG) | 3.05 mm | fabrication removed ✓ |
+| RMS gain vs LQG, nominal (S1) | **+5.1 %** | +19.2 % | old claim not reproducible |
+| RMS gain, aggressive ap (S2) | +3.9 % | +19.5 % | old claim not reproducible |
+| RMS gain, model mismatch ω−8 % (S3) | **+12.7 %** | +19.2 % | ✅ robustness gain, held-out |
+| RMS gain, KT+30 % (S4) | +4.5 % | +19.2 % | old claim not reproducible |
+| Average RMS gain | **+6.1 %** | +19.3 % | old claim not reproducible |
+| SLD critical depth, open loop | 0.100 mm | 0.14 mm | matches article experiment |
+| SLD critical depth, LQG | 2.05 mm | 2.17 mm | recomputed (corrected forces) |
+| SLD critical depth, PALF-LQG | 2.05 mm (= LQG) | 3.05 mm | fabrication removed ✓ |
 
 **The honest story is better than the inflated one.** A phase-locked feedforward
-cannot beat a well-tuned feedback loop by much on the *nominal* plant (+4.6 %), but it
-holds its gain when the feedback design model is wrong (+19.7 % under −15 % frequency
+cannot beat a well-tuned feedback loop by much on the *nominal* plant (+5.1 %), but it
+holds its gain when the feedback design model is wrong (+12.7 % under −8 % frequency
 mismatch) because the learned compensation is indexed to the tooth-passing phase, not
-to the model. This survives the train-once/held-out protocol (S3 is the only scenario
-with a large gain, and the feedforward never saw it during training).
+to the model. This survives the train-once/held-out protocol with spillover (5-mode
+plant, 3-mode controller), measurement noise, a symmetric baseline, and the corrected
+Eq. (3) forces. The corrected (stronger) forces also revealed a genuine robustness
+limit: the controlled stability margin at 0.3 mm is ~−9 % frequency mismatch, so S3
+uses −8 % rather than the earlier −15 % (which is past the boundary at this depth).
 "Learned feedforward buys robustness to model mismatch, not nominal
 performance" is a defensible, interesting, reviewer-proof claim — and it is exactly
 what the data shows.
@@ -166,39 +172,37 @@ NN is documented as a one-hidden-layer (16 tanh, ~161-param) network — **not**
 and **not** "MPC". The state channel is fed zeros consistently at train and deploy time,
 so the feedforward is honestly a learned periodic map `u_FF(φ)`.
 
-### 6.3 Methodology (🟠 — P1, still open)
+### 6.3 Methodology — P1 ✅ DONE, P2 still open
 
-- **Inverse crime:** the simulation plant still equals the controller design model
-  (same 3 modes, near-noiseless Kalman with V=1e-12). Add ≥2 extra plant modes not
-  given to the controller (spillover test) and realistic sensor noise.
-- ✅ **NN state inputs / "state-aware" claim — RESOLVED (P0).** The deployment now feeds
-  zeros to the state channel (matching training), so the method is honestly `u_FF(φ)`.
-- ✅ **Baseline symmetry — RESOLVED (P0).** The standalone LQG and PALF's internal LQR
-  now use identical grid-searched weights, so the delta is attributable to the
-  feedforward alone. *(Identical hard clipping of both controllers remains a minor P1.)*
-- **Cutting-constant formulas (still open, P1):** `k2` drops the parentheses of Eq. (3)
-  and uses the
-  helix angle where the rake angle belongs (−12.4 %); `k1` uses kn·cos η where the
-  article has kn/cos η (−33 %). One-line fixes in `main_simulation.py:142-143` (and
-  4 copies in other scripts — deduplicate into one module). All absolute force
-  levels, and hence all SLD depths, shift when fixed.
-- **SLD machinery:** per-mode decoupled lobes with path-averaged mode shapes (the
+- ✅ **Inverse crime — RESOLVED (P1).** The simulated plant now carries 5 modes; the
+  controllers are designed on the first 3 (control + observation spillover). One
+  eigensolve feeds both (via `truncated_view` / `perturbed_copy`) so mode signs stay
+  consistent. Realistic 10 nm measurement noise is injected; a diagnostic sweep
+  confirmed the noise is negligible for stability and that an over-aggressive Kalman V
+  hurts robustness (so a conservative V=1e-12 is kept). The corrected forces also
+  surfaced a genuine ~−9 % frequency-mismatch stability margin at 0.3 mm.
+- ✅ **Cutting-constant formulas — RESOLVED (P1).** k1 = kn/cos η and
+  k2 = 1 + µc·tan η·(cos γn − kn·sin γn) (Eq. 3) now come from the single source
+  `milling_force.cutting_constants`; all inline copies are removed. Forces are ~15–20 %
+  stronger; the controlled SLD critical depth dropped from 2.54 mm to 2.05 mm.
+- ✅ **Identical clipping / baseline symmetry — RESOLVED (P0/P1).** Both controllers
+  clip to ±150 V and share identical grid-searched LQG weights.
+- ✅ **NN state inputs / "state-aware" claim — RESOLVED (P0).** Deployment feeds zeros
+  to the state channel, so the method is honestly `u_FF(φ)`.
+- **SLD machinery (P2):** per-mode decoupled lobes with path-averaged mode shapes (the
   article couples modes and resolves position); the method is zeroth-order
-  semi-discretization, not FDM as labeled; delay is rounded to integer steps
-  (effective 4878 rpm at the 4900 rpm operating point).
-- **Piezo coupling:** code implements a simplified induced-moment constant while the
-  docstring claims the article's Eq. (15); implement Eq. (15) or justify the model
-  used and re-derive the gain.
-- **Monte Carlo module is dead code** — wire `uncertainty_analysis.py` into the main
-  pipeline (train-once/evaluate-perturbed protocol) and report honest confidence
-  intervals; fix the survivorship bias in the envelopes.
+  semi-discretization, not FDM as labeled; delay is rounded to integer steps.
+- **Piezo coupling (P2):** code implements a simplified induced-moment constant while
+  the docstring claims the article's Eq. (15); implement Eq. (15) or justify + re-derive.
+- **Monte Carlo module (P2)** — wire `uncertainty_analysis.py` into the pipeline with
+  the train-once/held-out protocol; fix the survivorship bias in the envelopes.
 
 ### 6.4 Priorities
 
 | Priority | Items | Status |
 |---|---|---|
 | P0 (integrity) | 6.1.1–6.1.3, rename (6.2), baseline symmetry, honest u_FF(φ) | ✅ **DONE (2026-07-14)** |
-| P1 (survives review) | k1/k2 fix + dedup, spillover + noise (inverse crime), identical clipping | open, 1–2 weeks |
+| P1 (survives review) | k1/k2 fix + dedup, spillover + noise (inverse crime), identical clipping | ✅ **DONE (2026-07-14)** |
 | P2 (strengthens) | periodic-gain closed-loop SLD, coupled multi-mode SLD, Eq. (15) piezo, Monte Carlo rewire, mesh convergence note | open, 2–4 weeks |
 | P3 (transforms) | experimental validation on a physical plate (the article's rig is fully specified — Tables 1–3 + Fig. 17 list every instrument) | open, months |
 

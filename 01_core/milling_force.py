@@ -12,6 +12,28 @@ engagée [phi_st, phi_ex] et sur la profondeur axiale [za_low, za_high].
 import numpy as np
 
 
+def cutting_constants(kn: float, mu_c: float, eta: float, gamma_n: float):
+    """
+    Cutting-force constants k1, k2 of Du et al. (2024), Eq. (3) — SINGLE source of
+    truth for the whole package (imported by every script; do NOT re-inline these).
+
+        k1 = kn / cos(eta)                                        (helix chip-flow)
+        k2 = 1 + mu_c * tan(eta) * (cos(gamma_n) - kn * sin(gamma_n))
+
+    where eta = helix angle, gamma_n = normal rake angle, kn = proportionality
+    constant, mu_c = friction coefficient.
+
+    NOTE (P1 fix): the earlier package convention used k1 = kn*cos(eta) and
+    k2 = 1 + mu_c*tan(eta)*cos(gamma_n) - kn*sin(eta), which deviated from Eq. (3)
+    (k1 off by 1/cos^2(eta) ~= -33 %, k2 mis-grouped and using the helix angle where
+    the rake angle belongs ~= -12 %). Both are corrected here. With the article's
+    values (kn=0.26, mu_c=0.2, eta=35 deg, gamma_n=15 deg): k1=0.3174, k2=1.1258.
+    """
+    k1 = kn / np.cos(eta)
+    k2 = 1.0 + mu_c * np.tan(eta) * (np.cos(gamma_n) - kn * np.sin(gamma_n))
+    return k1, k2
+
+
 def milling_force_coeffs(t: float,
                          Omega: float, NT: int, RT: float, eta: float,
                          phi_st: float, phi_ex: float,

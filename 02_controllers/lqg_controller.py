@@ -18,18 +18,23 @@ class LQGController:
         y = C x + v
     """
 
-    def __init__(self, plate, dt: float, verbose: bool = True):
+    def __init__(self, plate, dt: float, verbose: bool = True,
+                 kalman_V: float = 1e-12, u_max: float = None):
         """
-        plate : instance de PlateModel (avec D_obs et H_Pe_modal calculés).
+        plate    : instance de PlateModel (ou vue tronquée) avec D_obs et H_Pe_modal.
+        kalman_V : variance du bruit de mesure supposée par le filtre de Kalman (m²).
+        u_max    : saturation de commande (V). Si non-None, u est écrêté à ±u_max
+                   (pour une comparaison symétrique avec PALF-LQG).
         """
         self.plate = plate
         self.dt = dt
         self.verbose = verbose
         self.n_modes = plate.n_modes
         self.n_x = 2 * plate.n_modes
+        self.u_max = u_max
 
         self._build_state_space()
-        self._design_kalman()
+        self._design_kalman(V_kal=kalman_V)
 
     # ---------------------------------------------------------------
     def _build_state_space(self):
@@ -173,4 +178,6 @@ class LQGController:
         x_hat = self.A_obs_d @ x_hat_prev + self.G_u.flatten() * u_prev \
               + self.G_y.flatten() * y_meas
         u = float(np.squeeze(-self.K_lqr @ x_hat))
+        if self.u_max is not None:
+            u = float(np.clip(u, -self.u_max, self.u_max))
         return x_hat, u

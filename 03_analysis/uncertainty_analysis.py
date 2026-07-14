@@ -13,7 +13,7 @@ import numpy as np
 import time
 import copy
 
-from milling_force import precompute_alpha_periodic
+from milling_force import precompute_alpha_periodic, cutting_constants
 from newmark_solver import NewmarkSimulator
 
 
@@ -97,11 +97,10 @@ def run_monte_carlo(plate_nominal, ctrl, sim_template,
         # 1. Échantillonner paramètres incertains
         p = sample_uncertain_params(rng, nominal_params)
 
-        # 2. Mettre à jour les coefficients de force (k1, k2)
-        k1 = p['kn']*np.cos(nominal_params['eta_h'])
-        k2 = (1 + p['mu_c']*np.tan(nominal_params['eta_h'])
-                              *np.cos(nominal_params['gamma_n'])
-                - p['kn']*np.sin(nominal_params['eta_h']))
+        # 2. Mettre à jour les coefficients de force (k1, k2) — Eq. (3) corrigée
+        k1, k2 = cutting_constants(p['kn'], p['mu_c'],
+                                   nominal_params['eta_h'],
+                                   nominal_params['gamma_n'])
 
         # 3. Pré-calculer alpha3, alpha4 perturbés
         n_per = int(np.round(nominal_params['tau']/dt))

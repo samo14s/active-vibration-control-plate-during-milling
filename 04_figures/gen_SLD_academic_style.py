@@ -23,6 +23,7 @@ from matplotlib.patches import Patch
 import time
 
 from plate_model import PlateModel
+from milling_force import cutting_constants
 from lqg_controller import LQGController
 from fdm_stability import compute_SLD
 
@@ -108,8 +109,7 @@ plate_n = build_plate(zp_pos=HP - 0.3e-3/2)
 RT = DT_TOOL/2
 phi_st = np.pi - np.arccos(1 - AE/RT)
 phi_ex = np.pi
-k1_sld = KN*np.cos(ETA_H)
-k2_sld = 1 + MU_C*np.tan(ETA_H)*np.cos(GAMMA_N) - KN*np.sin(ETA_H)
+k1_sld, k2_sld = cutting_constants(KN, MU_C, ETA_H, GAMMA_N)
 
 Dp_sample = []
 for kp in range(0, 2001, 50):

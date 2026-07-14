@@ -38,6 +38,7 @@ class NewmarkSimulator:
     def simulate(self, alpha3_t, alpha4_t,
                  kp_idx, controller=None,
                  piezo=None, rng=None,
+                 meas_noise_std: float = 0.0,
                  stop_threshold: float = 5e-3,
                  stop_at_time: float = None,
                  progress: bool = True):
@@ -51,11 +52,18 @@ class NewmarkSimulator:
         controller : LQGController ou None (pas de contrôle)
         piezo : PiezoActuator ou None (modèle idéal)
         rng : np.random.Generator pour bruit reproductible
+        meas_noise_std : écart-type du bruit de mesure (m) ajouté à y (0 = idéal).
+            Le PLAN peut avoir plus de modes que le contrôleur (spillover) : l'état
+            estimé x_hat est dimensionné sur le contrôleur, pas sur le plan.
         stop_threshold : interrompt si |y_p| > ce seuil (sécurité)
         stop_at_time : interrompt à ce temps (utilisé pour Sim 1 sans contrôle)
         """
-        n = self.n_modes
-        n_x = 2 * n
+        n = self.n_modes                      # plant modes (may exceed controller's)
+        # Controller state dimension may be SMALLER than the plant (spillover test).
+        if controller is not None and hasattr(controller, 'n_x'):
+            n_x = int(controller.n_x)
+        else:
+            n_x = 2 * n
         nstep = self.nstep
         dt = self.dt
 
@@ -91,10 +99,12 @@ class NewmarkSimulator:
             a3 = alpha3_t[k]
             a4 = alpha4_t[k]
 
-            # Mesure : idéale ou réaliste (bruit + retard)
+            # Mesure : idéale, réaliste (piezo), ou avec bruit gaussien
             y_true = D_obs @ qm[:, k-1]
             if piezo is not None:
                 y_obs_now = piezo.measure(y_true, rng=rng)
+            elif meas_noise_std > 0.0:
+                y_obs_now = y_true + meas_noise_std * rng.standard_normal()
             else:
                 y_obs_now = y_true
             y_meas[k] = y_obs_now

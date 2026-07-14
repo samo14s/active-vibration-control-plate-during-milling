@@ -83,14 +83,17 @@ palf.pretrain_iterative_simulation(
 x_hat, u = palf.step(x_hat_prev, u_prev, y_meas, k_step)
 ```
 
-## Verified comparison (committed code, train-once / held-out — see docs/REPRODUCED_RESULTS.md)
+## Verified comparison (committed code, P0+P1: held-out, spillover + noise — see docs/REPRODUCED_RESULTS.md)
 
 | Metric | LQG | PALF-LQG | Gain |
 |---|---:|---:|---:|
-| RMS vibration, nominal (S1) | 0.532 µm | 0.507 µm | +4.6 % |
-| RMS vibration, model mismatch ω−15 % (S3) | 0.606 µm | 0.487 µm | **+19.7 %** |
+| RMS vibration, nominal (S1) | 0.744 µm | 0.706 µm | +5.1 % |
+| RMS vibration, model mismatch ω−8 % (S3) | 0.853 µm | 0.744 µm | **+12.7 %** |
 | Modal damping (Mode 1) | LQG closed-loop | **identical** | feedforward does not move poles |
-| Stability domain (a_p crit @4900 RPM) | 2.54 mm | **2.54 mm** | feedforward does not shift the boundary |
+| Stability domain (a_p crit @4900 RPM) | 2.05 mm | **2.05 mm** | feedforward does not shift the boundary |
+
+(Plant carries 5 modes, controller sees 3 — spillover; 10 nm measurement noise;
+corrected Eq. 3 forces. Kalman `kalman_V` and clipping `u_max` are constructor args.)
 
 The feedforward buys little on the nominal plant but preserves its gain under model
 mismatch — that robustness asymmetry is the result worth reporting. It does **not**

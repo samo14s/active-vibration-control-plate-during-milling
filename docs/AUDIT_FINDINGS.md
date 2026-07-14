@@ -25,9 +25,26 @@ Legend: 🔴 critical (blocks submission) · 🟠 major (reviewers will catch it
 >   phase-only `u_FF(φ)` map (state channel zeroed at train and deploy).
 > - **Irreproducible numbers** — regenerated from the committed code.
 >
-> **Still open (P1/P2):** k1/k2 cutting-constant formulas (findings #1–2), inverse
-> crime / no spillover / no measurement noise, per-mode decoupled SLD, Monte Carlo
-> rewiring, Eq. (15) piezo coefficient. These are NOT yet fixed.
+> ## ✅ P1 resolution status (2026-07-14)
+>
+> The **methodology (P1)** findings are also fixed now:
+> - **k1/k2 cutting constants (findings #1–2)** — corrected to Eq. (3)
+>   (k1 = kn/cos η = 0.3174, k2 = 1.1258) and deduplicated into the single source
+>   `milling_force.cutting_constants`; all inline copies removed.
+> - **Inverse crime / spillover / measurement noise** — the simulated plant now carries
+>   5 modes while the controllers are designed on 3 (spillover), and 10 nm measurement
+>   noise is injected. One eigensolve feeds both via `PlateModel.truncated_view` /
+>   `perturbed_copy` (sign-consistent). A conservative Kalman V=1e-12 is kept for
+>   robustness.
+> - **Identical actuator clipping** — LQG now clips to ±150 V like PALF (`u_max` param).
+>
+> Consequences (see `docs/REPRODUCED_RESULTS.md`): forces are ~15–20 % stronger, the
+> controlled SLD critical depth is 2.05 mm (was 2.54 mm with wrong forces), and the
+> honest held-out gains are S1 +5.1 %, S2 +3.9 %, S3 (ω−8 %) +12.7 %, S4 +4.5 %.
+>
+> **Still open (P2):** periodic-gain closed-loop SLD, coupled/position-resolved SLD
+> (findings on the SLD machinery), Monte Carlo rewiring, Eq. (15) piezo coefficient,
+> FEM mesh-convergence note (finding #3). These are NOT yet fixed.
 
 
 ## Physical model fidelity (01_core)

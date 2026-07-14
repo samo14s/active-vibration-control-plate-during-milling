@@ -158,6 +158,8 @@ class PALF_LQG_Controller:
                  n_per=82,
                  # heuristic safety governor
                  safety_alpha=5.0,
+                 # Kalman measurement-noise variance assumption (m^2)
+                 kalman_V=1e-12,
                  # actuator limit
                  u_max=150.0,
                  verbose=True):
@@ -172,7 +174,7 @@ class PALF_LQG_Controller:
         self.n_per = n_per
 
         # Build LQG base (feedback gain + Kalman observer)
-        self._build_base(base_w_q, base_w_qd, base_w_r)
+        self._build_base(base_w_q, base_w_qd, base_w_r, kalman_V)
 
         # Phase feedforward network
         self.ff_nn = PhaseFeedforwardNN(self.n_x, n_hidden=16,
@@ -200,7 +202,7 @@ class PALF_LQG_Controller:
         if verbose:
             self._print_summary()
 
-    def _build_base(self, w_q, w_qd, w_r):
+    def _build_base(self, w_q, w_qd, w_r, kalman_V=1e-12):
         n = self.n_modes
         A = np.zeros((self.n_x, self.n_x))
         A[:n, n:] = np.eye(n)
@@ -226,7 +228,7 @@ class PALF_LQG_Controller:
 
         # Kalman observer
         W_kal = 1e-6 * np.eye(self.n_x)
-        V_kal = np.array([[1e-12]])
+        V_kal = np.array([[kalman_V]])
         P_kal = solve_continuous_are(A.T, C.T, W_kal, V_kal)
         self.L_kal = P_kal @ C.T @ np.linalg.inv(V_kal)
 

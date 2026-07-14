@@ -24,9 +24,14 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > the anti-disturbance pretrainer) are removed; and the controller is renamed from the
 > over-claiming "DARC-MPC" to **PALF-LQG** (Phase-Aware Learned Feedforward + LQG).
 >
-> **Still open (P1, not yet done):** two cutting-constant formulas (k1, k2) deviate
-> from the article's Eq. (3); the simulation plant equals the controller design model
-> (inverse crime); no measurement noise/spillover.
+> **P1 fixes now applied too:** the cutting constants k1, k2 are corrected to the
+> article's Eq. (3) and deduplicated into `milling_force.cutting_constants`; the
+> inverse crime is removed (the simulated plant carries **5 modes**, the controllers
+> are designed on the **first 3** — spillover); **10 nm measurement noise** is injected;
+> and both controllers clip identically to ±150 V.
+>
+> **Still open (P2):** periodic-gain closed-loop SLD, coupled/position-resolved SLD,
+> Eq. (15) piezo coefficient, Monte-Carlo wiring, FEM mesh-convergence note.
 
 ---
 
@@ -148,26 +153,32 @@ u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
 
 ## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS vibration vs LQG baseline (T = 0.5 s) — train-once / held-out, symmetric baseline
+### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric baseline, spillover + noise
 
 | Scenario | LQG y_RMS | PALF y_RMS | Gain |
 |---|---:|---:|---:|
-| S1 Nominal | 0.532 µm | 0.507 µm | +4.6 % |
-| S2 Aggressive (a_p = 0.6 mm) | 1.058 µm | 1.021 µm | +3.5 % |
-| S3 Model mismatch (ω −15 %) | 0.606 µm | 0.487 µm | **+19.7 %** |
-| S4 High K_T (+30 %) | 0.692 µm | 0.664 µm | +4.1 % |
+| S1 Nominal | 0.744 µm | 0.706 µm | +5.1 % |
+| S2 Aggressive (a_p = 0.6 mm) | 1.491 µm | 1.433 µm | +3.9 % |
+| S3 Model mismatch (ω −8 %) | 0.853 µm | 0.744 µm | **+12.7 %** |
+| S4 High K_T (+30 %) | 0.970 µm | 0.927 µm | +4.5 % |
 
-The learned feedforward buys little on the nominal plant and a lot under model
-mismatch — that robustness asymmetry is the interesting, honest result. The
-feedforward is trained once on the nominal scenario and frozen; S2/S3/S4 are held-out.
+The learned feedforward buys little on the nominal plant and most under model
+mismatch — that robustness asymmetry is the honest result. Trained once on the nominal
+scenario and frozen; S2/S3/S4 are held-out. The plant carries 5 modes, the controller
+sees 3 (spillover), and the measurement has 10 nm noise. With the corrected (stronger)
+forces the controlled stability margin at 0.3 mm is ~−9 % frequency mismatch, so S3
+uses −8 % (see `docs/REPRODUCED_RESULTS.md`).
 
 ### Stability lobes at 4900 RPM (Floquet)
 
 | Configuration | a_p critical |
 |---|---:|
 | Open-Loop | 0.100 mm — **matches the article's experimental limit** |
-| LQG closed loop | 2.54 mm (25.4× OL) |
-| PALF-LQG | 2.54 mm — **= LQG** (a phase-locked feedforward does not shift the boundary) |
+| LQG closed loop | 2.05 mm (20.5× OL) |
+| PALF-LQG | 2.05 mm — **= LQG** (a phase-locked feedforward does not shift the boundary) |
+
+(The controlled critical depth is lower than the earlier 2.54 mm because the corrected
+k1/k2 give ~15–20 % stronger cutting forces.)
 
 ---
 

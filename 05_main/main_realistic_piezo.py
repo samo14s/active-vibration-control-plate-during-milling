@@ -21,7 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from plate_model import PlateModel
-from milling_force import precompute_alpha_periodic
+from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
 from newmark_solver import NewmarkSimulator
 from piezo_actuator import PiezoActuator
@@ -108,8 +108,7 @@ za_high = HP
 Omega = 2*np.pi*RPM/60
 RT = DT_TOOL/2
 tau = 60/(NT*RPM)
-k1 = KN*np.cos(ETA_H)
-k2 = 1 + MU_C*np.tan(ETA_H)*np.cos(GAMMA_N) - KN*np.sin(ETA_H)
+k1, k2 = cutting_constants(KN, MU_C, ETA_H, GAMMA_N)
 
 sim = NewmarkSimulator(plate, dt=DT, T_end=T_END_DEMO, ft=FT, tau=tau)
 

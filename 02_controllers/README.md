@@ -98,9 +98,7 @@ x_hat, u = palf.step(x_hat_prev, u_prev, y_meas, k_step)
 (Plant carries 5 modes, controller sees 3 — spillover; 10 nm measurement noise;
 corrected Eq. 3 forces; Eq. 15 piezo coupling; rigorous closed-loop monodromy SLD at
 the worst of 3 tool positions. Kalman `kalman_V` and clipping `u_max` are constructor
-args. A third baseline — the article's Eq. 30 delayed PD, `delayed_pd_controller.py` —
-cannot stabilize these conditions even after a gain grid search, reproducing the
-article's own Fig. 14 finding; see `main_delayed_pd_baseline.py`.)
+args.)
 
 The feedforward buys little on the nominal plant but preserves its gain under model
 mismatch — that robustness asymmetry is the result worth reporting. It does **not**

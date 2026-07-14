@@ -36,9 +36,7 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 >
 > **P2.5 applied (improvement pass):** the ILC is upgraded to a **frequency-domain
 > model-inverse harmonic update** (gains jump to double digits, still held-out); the
-> SLD is evaluated at the **worst of 3 tool positions** (article Fig. 6 treatment);
-> and the article's **Eq. (30) delayed PD** is added as a third baseline — it cannot
-> stabilize these conditions, reproducing the article's own Fig. 14 finding.
+> SLD is evaluated at the **worst of 3 tool positions** (article Fig. 6 treatment).
 >
 > **Remaining (P3):** experimental validation on a physical plate — everything here is
 > simulation.
@@ -189,10 +187,6 @@ on the nominal scenario; S2/S3/S4 held-out; 5-mode plant / 3-mode controllers
 **Monte-Carlo robustness** (`main_robustness_mc.py`, 50 samples, ±15 % cutting / ±3 %
 freq / ±20 % damping): 50/50 converged for both controllers; **PALF beats LQG in 100 %**
 of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %].
-
-**Four-way benchmark** (`main_delayed_pd_baseline.py`): the article's Eq. (30) delayed
-PD — even grid-tuned — cannot stabilize these conditions (hundreds of µm or divergence),
-reproducing the article's own Fig. 14 finding; OL ✗ → PD ✗ → LQG 0.78 µm → PALF 0.62 µm.
 
 ### Stability lobes at 4900 RPM — closed-loop coupled monodromy, worst of 3 tool positions
 

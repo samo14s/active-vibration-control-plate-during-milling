@@ -57,25 +57,6 @@ damping):
   [p05 +15.78 %, p95 +19.53 %].
 - **PALF beats LQG in 100 %** of samples. (`figs_lqg_vs_palf/fig_robustness_mc.*`)
 
-### Four-way benchmark incl. the article's delayed PD (Eq. 30)
-
-`python main_delayed_pd_baseline.py` grid-tunes the article's delayed PD
-(u = K_Pp·y(t−τ) + K_Pd·ẏ(t−τ)) on the nominal scenario and evaluates all four
-controllers held-out:
-
-| Scenario | Open-Loop | Delayed PD (best grid) | LQG | PALF-LQG |
-|---|---:|---:|---:|---:|
-| S1 Nominal | 735 µm ✗ | 532 µm ✗ | 0.776 µm | **0.616 µm** |
-| S2 Aggressive | 603 µm ✗ | 819 µm ✗ | 1.558 µm | **1.381 µm** |
-| S3 ω−8 % | 17.7 µm | 427 µm | 0.900 µm | **0.760 µm** |
-| S4 K_T+30 % | 978 µm ✗ | 869 µm ✗ | 1.013 µm | **0.844 µm** |
-
-(✗ = diverged/stopped early.) **Even the best grid-tuned delayed PD cannot stabilize
-these conditions — reproducing the article's own finding** (Du et al. 2024, Fig. 14:
-single active time-delay control is insufficient for this flexible-workpiece
-condition); model-based feedback (LQG) is required, and the learned feedforward then
-adds its double-digit improvement on top.
-
 ### A genuine robustness limit (surfaced by the corrected forces)
 
 The **controlled** stability margin at a_p = 0.3 mm / 4900 RPM is ~**−9 % frequency
@@ -117,7 +98,7 @@ below) but within **0.2–0.6 % of the MEASURED** modes 2, 4, 5 (Table 4).
 - All RNGs seeded (ILC/NN `42`; measurement noise `1234`, identical for both
   controllers). Bit-reproducible across runs.
 - Runtime ≈ 62 s (`main_simulation.py`, incl. the 6 worst-position monodromy grids);
-  ≈ 1 min Monte-Carlo; ≈ 1.5 min delayed-PD benchmark. No GPU.
+  ≈ 1 min Monte-Carlo. No GPU.
 
 ## 5. Remaining items (P3)
 

@@ -16,7 +16,6 @@ the source of truth is the scripts.
 | `07_SLD_3panels.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
 | `08_SLD_overlay.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
 | `09_robustness_montecarlo.pdf` | `05_main/main_robustness_mc.py` | **authoritative** |
-| `10_delayed_pd_benchmark.pdf` | `05_main/main_delayed_pd_baseline.py` | **authoritative** (4-way, log scale) |
 | `11_feedforward_decomposition.pdf` | `04_figures/gen_article_complete_figures.py` | illustrative (qualitative) |
 | `15_control_architecture.pdf` | `04_figures/gen_control_strategy_diagram.py` | schematic |
 
@@ -31,15 +30,14 @@ python gen_article_complete_figures.py   # -> figs_article_publication/*.pdf (14
 
 ## Numbers
 
-**Authoritative** figures (from `main_simulation.py` / `main_robustness_mc.py` /
-`main_delayed_pd_baseline.py`) use the final model: 5-mode plant with 3-mode
+**Authoritative** figures (from `main_simulation.py` / `main_robustness_mc.py`)
+use the final model: 5-mode plant with 3-mode
 controllers (spillover), 10 nm measurement noise, corrected Eq. (3) forces, Eq. (15)
 piezo coupling, frequency-domain model-inverse ILC (train-once/held-out), rigorous
 closed-loop monodromy SLD at the worst of 3 tool positions. Headline numbers:
 
 - RMS gain vs LQG: S1 +19.5 %, S2 +11.0 %, S3 (ω−8 %) +14.6 %, S4 +15.8 % (avg +14.4 %).
 - Monte-Carlo (50 samples): PALF beats LQG 100 %, median +17.8 % [p05 +15.8, p95 +19.5].
-- Delayed PD (article Eq. 30): cannot stabilize these conditions (= article Fig. 14).
 - SLD @4900 RPM: OL 0.10 mm (= article experiment), LQG = PALF 1.08 mm (∂u_FF/∂x̂=0).
 
 The two **illustrative/qualitative** figures (`11_...`, `15_...`) and the **setup**

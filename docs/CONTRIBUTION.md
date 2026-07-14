@@ -22,9 +22,7 @@ literature-positioning search across 2005–2026.
 > **P2.5 (improvement pass):** the ILC upgraded to a **frequency-domain model-inverse
 > harmonic update** — held-out gains jump to double digits (avg **+14.4 %**, MC median
 > **+17.8 %**, PALF better in 100 % of draws); the SLD is evaluated at the **worst of
-> 3 tool positions** (article Fig. 6 treatment); and the article's **Eq. (30) delayed
-> PD baseline** is added and shown — like in the article's own Fig. 14 — to be
-> insufficient alone at these conditions. The honest numbers are in §4 and
+> 3 tool positions** (article Fig. 6 treatment). The honest numbers are in §4 and
 > `REPRODUCED_RESULTS.md`. Only P3 (experimental validation) remains.
 
 ---
@@ -108,7 +106,6 @@ on this plant is meaningful.
 | RMS gain, KT+30 % (S4) | **+15.8 %** | +19.2 % | held-out |
 | Average RMS gain | **+14.4 %** | +19.3 % | held-out |
 | Monte-Carlo median gain (50 samples) | **+17.8 %** [+15.8, +19.5] | — | PALF better 100 %, all converged |
-| Delayed PD (article Eq. 30), best grid | diverges/chatters | — | reproduces article Fig. 14 finding |
 | SLD critical depth, open loop | 0.100 mm | 0.14 mm | matches article experiment |
 | SLD critical depth, LQG (worst of 3 positions) | 1.08 mm | 2.17 mm | rigorous closed-loop monodromy |
 | SLD critical depth, PALF-LQG | 1.08 mm (= LQG) | 3.05 mm | rigorous (∂u_FF/∂x̂=0), not fabricated |
@@ -121,11 +118,10 @@ harmonic update, the nominal held-out gain is +19.5 % and the frozen feedforward
 double-digit gains on every held-out perturbation (+11 to +15.8 %), with a Monte-Carlo
 median of +17.8 % and PALF better in 100 % of 50 random draws. The feedforward is
 phase-indexed, not model-indexed, so its compensation degrades gracefully under
-mismatch. Two structural facts remain and must be stated plainly in any manuscript:
-(i) the feedforward does not move the stability boundary (SLD PALF = LQG, rigorously);
-(ii) the article's delayed PD alone cannot stabilize these conditions (consistent with
-the article's own Fig. 14) — model-based feedback is the enabler, the learned
-feedforward is the performance layer on top.
+mismatch. One structural fact remains and must be stated plainly in any manuscript:
+the feedforward does not move the stability boundary (SLD PALF = LQG, rigorously) —
+model-based feedback is the enabler, the learned feedforward is the performance
+layer on top.
 
 ## 5. Literature positioning (28 works surveyed; closest seven)
 
@@ -238,10 +234,9 @@ so the feedforward is honestly a learned periodic map `u_FF(φ)`.
   its gain under model mismatch where feedback degrades; (3) the open-source
   article-anchored benchmark (FEM + piezo + controllers + Floquet SLD), with the
   open-loop stability limit validated against Du et al.'s experiments.
-- **Benchmark baselines to include:** open loop, delayed PD (article Eq. 30 — cheap
-  to add), LQG, LQG+PALF; discuss µ-synthesis as future work rather than
-  implementing it (it is the article's own method and hard to reproduce without
-  their weights).
+- **Benchmark baselines to include:** open loop, LQG, LQG+PALF, and the adaptive
+  A-PALF-LQG variant; discuss µ-synthesis as future work rather than implementing it
+  (it is the article's own method and hard to reproduce without their weights).
 - **Target venues** (in order of fit): *Mechanical Systems and Signal Processing*
   (Nasiri 2025 precedent for simulation-only controller benchmarks on this exact
   plant class), *Mechatronics*, *Journal of Sound and Vibration*, *ISA Transactions*;

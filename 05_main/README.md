@@ -9,7 +9,6 @@ Main entry points for running the simulation. **Authoritative numbers** come fro
 |---|---|---|
 | `main_simulation.py` | LQG vs PALF-LQG comparison (train-once / held-out) + SLD | Console + figs |
 | `main_robustness_mc.py` | Monte-Carlo robustness (50 samples, divergence reported) | Console + fig |
-| `main_delayed_pd_baseline.py` | Four-way benchmark incl. article Eq. (30) delayed PD | Console + fig |
 | `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py
@@ -60,8 +59,6 @@ python main_simulation.py
 
 Monte-Carlo robustness (`main_robustness_mc.py`, 50 samples): PALF beats LQG in 100 %
 of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %], all converged.
-Four-way benchmark (`main_delayed_pd_baseline.py`): the article's Eq. (30) delayed PD
-cannot stabilize these conditions even grid-tuned (reproduces article Fig. 14).
 
 The learned feedforward helps most under **model mismatch** (S3), because it is indexed
 to the tooth-passing phase rather than to the (wrong) feedback model. It does not extend

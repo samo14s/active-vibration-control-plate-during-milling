@@ -7,8 +7,9 @@ and Monte Carlo robustness tests.
 
 | File | Analysis | Method |
 |---|---|---|
-| `fdm_stability.py` | Stability Lobe Diagram | Floquet multipliers (FDM) |
-| `uncertainty_analysis.py` | Robustness | Monte Carlo sampling |
+| `fdm_stability.py` | Stability Lobe Diagram | Per-mode SLD (`compute_SLD`) **and** rigorous closed-loop coupled monodromy (`compute_closed_loop_SLD`) |
+| `uncertainty_analysis.py` | Robustness | Monte-Carlo LQG-vs-PALF (`run_mc_lqg_vs_palf`) |
+| `mesh_convergence.py` | FEM verification | Natural-frequency convergence vs article Table 4 |
 
 ## Stability Lobe Diagram (FDM/Floquet)
 
@@ -48,31 +49,48 @@ rho_grid, _ = compute_SLD(
 # Stability boundary: contour where rho_grid == 1.0
 ```
 
-## Monte Carlo Robustness
+## Closed-loop coupled monodromy SLD (rigorous)
+
+`compute_closed_loop_SLD` builds the semi-discretization monodromy of the FULL,
+coupled, time-periodic delayed system with the LQG controller (state feedback +
+Kalman observer) embedded — no "equivalent damping" surrogate, no per-mode
+decoupling. Pass `A_ctrl=None` for the coupled open-loop system. Run it from
+`main_simulation.py` (all three SLD panels use it). The PALF-LQG boundary equals the
+LQG boundary rigorously, because the phase-only feedforward has `∂u_FF/∂x̂ = 0` and so
+does not enter the closed-loop Jacobian.
+
+## Monte-Carlo robustness (LQG vs PALF-LQG)
 
 ```python
-from uncertainty_analysis import run_uncertainty_analysis
-
-results = run_uncertainty_analysis(
-    plate_nominal, controller_factory,
-    n_samples=100,
-    omega_perturb=0.15,    # ±15% on natural frequencies
-    zeta_perturb=0.30,     # ±30% on damping
-    KT_perturb=0.30,       # ±30% on cutting coefficient
-)
-# Returns: mean, std, percentiles for each metric
+from uncertainty_analysis import run_mc_lqg_vs_palf
+st = run_mc_lqg_vs_palf(plant_nominal, lqg, palf, nominal_params, kp_idx,
+                        dt, T_end, ft, tau, n_per,
+                        unc=dict(kt_pct=0.15, omega_pct=0.03, zeta_pct=0.20),
+                        n_samples=50, meas_noise_std=1e-8)
+# st['n_conv_lqg'], st['n_conv_palf']  -> convergence counts (divergence NOT hidden)
+# st['gain_median'], st['gain_p05/p95'], st['pct_palf_better'] over both-converged
 ```
+Driver: `python 05_main/main_robustness_mc.py` (frozen held-out controllers; both run
+with the same measurement-noise realisation; diverged samples are reported, not
+dropped silently).
+
+## FEM mesh convergence
+
+`python 03_analysis/mesh_convergence.py` — shows the FEM frequencies are converged to
+<0.1 % by a 30×24 mesh and reconciles the ~2.6 % offset vs the article's Chebyshev-Ritz
+theory (a discretisation-model difference; the FEM is within 0.2–0.6 % of the *measured*
+modes 2, 4, 5).
 
 ## Reference
 
-- **FDM**: T. Insperger, G. Stépán, "Updated semi-discretization method for
-  periodic delay-differential equations with discrete delay",
+- **FDM / semi-discretization**: T. Insperger, G. Stépán, "Updated semi-discretization
+  method for periodic delay-differential equations with discrete delay",
   *Int. J. Numer. Meth. Eng.* 61 (2004) 117–141.
 
 ## Performance
 
 | Operation | Time |
 |---|---:|
-| Single (RPM, a_p) point with FDM | ~25 ms |
-| Full SLD (60 × 50 grid, 3 modes) | ~80 s |
-| Monte Carlo (100 samples, 0.5 s each) | ~50 s |
+| Closed-loop monodromy SLD (30×25 grid, 3 modes, m_div=20) | ~8 s |
+| Monte-Carlo (50 samples, 0.25 s each, ×2 controllers) | ~1 min |
+| Mesh-convergence study | ~10 s |

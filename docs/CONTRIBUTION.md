@@ -39,6 +39,18 @@ committed code (see `REPRODUCED_RESULTS.md`), and (iv) the ESO-ADRC design study
 > recovery is bounded but slow (~5–15 µm over the 0.5 s pass vs LQG's 0.90 µm) —
 > the certified rung's sensitivity hole; documented, not hidden. Verified numbers:
 > `REPRODUCED_RESULTS.md`.
+> **P6 (2026-07-15, "real-time ID along the tool path"):** the phenomenological
+> drift is replaced by a **physically accurate material-removal FEM** (per-element
+> thickness field; MAC mode tracking) driving a **multi-pass finishing sequence**
+> that thins the wall non-uniformly to −15 % (article 9–17 %). An **active piezo
+> probe** identifies the drifting modal frequencies UNBIASED (≤1.1 %; a passive
+> estimate is biased — returns the tooth harmonics, per the documented
+> persistent-excitation obstruction), and an **ID-scheduled controller** re-tunes
+> per pass. Result: fixed LQG loses control on 7 of 24 passes (worst 10.9 µm);
+> ID-scheduled LQG stays ≤0.072 µm (151× better, matches the true-frequency
+> oracle); the robust ESO-ADRC survives WITHOUT ID — identification and
+> disturbance-observer robustness are shown to be complementary. Verified numbers:
+> `REPRODUCED_RESULTS.md`.
 
 ---
 

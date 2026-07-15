@@ -10,6 +10,7 @@ and Monte Carlo robustness tests.
 | `fdm_stability.py` | Stability Lobe Diagram | Per-mode SLD (`compute_SLD`) **and** rigorous closed-loop coupled monodromy — LQG adapter (`compute_closed_loop_SLD`) + **generic controller realization** (`compute_closed_loop_SLD_generic`) |
 | `uncertainty_analysis.py` | Robustness | Monte-Carlo over an arbitrary controller set (`run_mc_controllers`) |
 | `mesh_convergence.py` | FEM verification | Natural-frequency convergence vs article Table 4 |
+| `realtime_id.py` | **P6**: real-time modal-frequency identification | `transit_probe_identify` (active probe), `passive_frequency_estimate` (biased baseline) |
 
 ## Stability Lobe Diagram (FDM/Floquet)
 
@@ -103,3 +104,17 @@ modes 2, 4, 5).
 | Certification grid (18 designs × 12 ball points, 5-mode plant) | ~2 min |
 | Monte-Carlo (50 samples, 0.5 s each, ×3 controllers) | ~3 min |
 | Mesh-convergence study | ~10 s |
+
+
+## Real-time identification (P6) — `realtime_id.py`
+
+Active-probe modal-frequency identification for the finishing sequence.
+`transit_probe_identify` injects a band-limited chirp through the piezo during the
+non-cutting transit at each pass boundary (controller idle → open-loop plant FRF
+directly, no controller inversion) and peak-picks Y(f)/U(f) → recovers the modal
+frequencies to **≤ 1.1 %** across a −15 % drift. `passive_frequency_estimate`
+identifies from the cutting spectrum alone and is BIASED — it returns the
+tooth-passing harmonics, not the modes (the documented persistent-excitation
+finding), and is provided so the driver can show the contrast honestly.
+`design_probe_lines` builds anti-leakage cutting-line probe frequencies (on DFT
+bins of an integer number of tooth periods, off the tooth harmonics).

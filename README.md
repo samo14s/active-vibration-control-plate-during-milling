@@ -24,9 +24,15 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > **P5 adds the harmonic resonant cancellation (HRC) layer and the 4-rung
 > supervised ladder — A-ESO-ADRC now beats LQG by ~50 % on the nominal plant and
 > by a +48 % Monte-Carlo median (better in 94 % of samples) while remaining the
-> only controller that never diverges.** All protocol/integrity fixes carry over
-> unchanged. Remaining: P3 (experimental validation) — everything here is
-> simulation.
+> only controller that never diverges.**
+> **P6 adds real-time system identification over a physically accurate
+> material-removal finishing sequence** (`main_realtime_id.py`): a per-element
+> thickness-field FEM thins the wall non-uniformly to −15 % (the article's 9–17 %
+> regime), an active piezo probe identifies the drifting modal frequencies to
+> ≤1.1 % at each pass, and the ID-scheduled LQG stays ≤0.072 µm where the fixed
+> LQG loses control on 7 of 24 passes (worst 10.9 µm — 151× better). All
+> protocol/integrity fixes carry over unchanged. Remaining: P3 (experimental
+> validation) — everything here is simulation.
 
 ---
 
@@ -61,18 +67,20 @@ which is why the adaptive layer is identification-free.
 │   ├── plate_model.py            # Plate assembly + modal reduction
 │   ├── piezo_actuator.py         # Piezo patch model (QDA60-20-0.7), modal force only
 │   ├── milling_force.py          # Helical-engagement force kernels (article Eq. 4)
-│   └── newmark_solver.py         # Newmark-β integration with regenerative delay
+│   ├── newmark_solver.py         # Newmark-β integration with regenerative delay
+│   └── material_removal.py       # P6: material-removal FEM (thickness field, finishing seq)
 │
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py         # LQG baseline (grid-searched weights)
-│   └── adrc_controller.py        # ESO-ADRC + A-ESO-ADRC (+ canonical LADRC
-│                                 #   kept only for the negative result)
+│   ├── adrc_controller.py        # ESO-ADRC + A-ESO-ADRC (+ canonical LADRC)
+│   └── adaptive_id.py            # P6: real-time-ID-scheduled controller
 │
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled
 │   │                             #   monodromy (LQG adapter + GENERIC realization)
 │   ├── uncertainty_analysis.py   # Monte-Carlo over any controller set
-│   └── mesh_convergence.py       # FEM natural-frequency convergence vs Table 4
+│   ├── mesh_convergence.py       # FEM natural-frequency convergence vs Table 4
+│   └── realtime_id.py            # P6: active-probe modal-frequency identification
 │
 ├── 04_figures/            ← Geometry + academic-style SLD generators
 ├── 05_main/               ← Main simulation scripts
@@ -80,6 +88,7 @@ which is why the adaptive layer is identification-free.
 │   │                             #   + worst-position closed-loop SLD
 │   ├── main_robustness_mc.py     # Monte-Carlo robustness driver
 │   ├── main_adaptive_removal.py  # Drift / stress benchmark (fixed vs adaptive)
+│   ├── main_realtime_id.py       # P6: real-time ID over the finishing sequence
 │   └── main_realistic_piezo.py   # LQG with realistic piezo non-linearities
 │
 ├── figures/               ← Curated publication figures (vector PDF, 300 DPI)
@@ -205,6 +214,34 @@ All panels come from the monodromy of the full coupled, time-periodic delayed lo
 with the controller embedded (generic realization — works for any LTI output
 feedback controller), evaluated at x = 0, L/4, L/2 (worst case). Both controlled
 depths are the same order as the article's experimentally achieved 0.6–0.8 mm.
+
+---
+
+## 🔬 Real-time identification over an accurate finishing sequence (P6)
+
+Replaces the phenomenological drift with **physically accurate material removal**:
+a per-element thickness-field FEM thins the wall pass-by-pass (`MillingWorkpiece`).
+Honest physics found along the way: one pass at a_p = 0.3 mm removes only 0.0094 %
+of the volume (→ ~0 drift; the plant is *constant within a pass*), uniform thinning
+gives ω ∝ h *exactly*, and only **non-uniform** removal reshapes the modes — which
+is what makes online ID necessary. The finishing sequence (6 layers) drifts the
+modes −15 %, squarely in the article's measured 9–17 % band.
+
+An **active piezo probe** at each (non-cutting) pass boundary identifies the modal
+frequencies **unbiased** (≤1.1 % error); a passive cutting-spectrum estimate is
+biased (returns the tooth harmonics — the documented persistent-excitation
+finding). The ID-scheduled controller re-tunes per pass:
+
+| across the sequence (wall 4.0 → 3.4 mm, −15 %) | control lost (RMS>1µm) | worst-pass RMS |
+|---|---:|---:|
+| LQG fixed (pristine) | **7 of 24 passes** | 10.9 µm |
+| LQG ID-scheduled | **0** | 0.072 µm (**151× better**) |
+| ESO-ADRC fixed (robust) | **0** | ~0.1 µm |
+
+Real-time ID **rescues the high-performance-but-fragile regulator** (LQG matches a
+true-frequency oracle once scheduled), while the architecturally robust ESO-ADRC
+survives the whole sequence *without* ID — identification and disturbance-observer
+robustness are complementary. Driver: `python main_realtime_id.py` (~65 s).
 
 ---
 

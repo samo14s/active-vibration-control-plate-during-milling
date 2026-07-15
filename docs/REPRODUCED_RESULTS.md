@@ -1,5 +1,44 @@
 # Reproduced Results — Verification Log
 
+## P6 UPDATE (2026-07-15): real-time identification over an accurate finishing sequence
+
+New physical model `01_core/material_removal.MillingWorkpiece` — per-element
+thickness-field FEM (K_e = h³·K_unit, M_e = h·M_unit; MAC mode tracking, 0 sign
+flips / 24 snapshots). Honest physics (`phys_check`): one a_p = 0.3 mm pass removes
+0.0094 % of the volume → ~0.000 %/mode drift, MAC = 1.0 (plant constant within a
+pass); uniform full-face thinning gives ω ∝ h exactly (−2.5 %/layer); only
+NON-UNIFORM removal reshapes the modes (top-band cut: per-mode drift
++0.87/+0.15/−0.57 %, MAC 0.9998). The 6-layer finishing sequence (24 passes, wall
+4.0 → 3.4 mm) drifts the modes **−15.0 %** — the article's 9–17 % band.
+
+Active-probe identifier `03_analysis/realtime_id.transit_probe_identify` (chirp
+during the non-cutting transit, open-loop FRF, peak-pick): modal-frequency error
+**≤ 1.09 % (mean 0.82 %)** across the whole −15 % sweep. Passive baseline
+(`passive_frequency_estimate`, cutting spectrum): **biased — returns a tooth
+harmonic** (mid-sequence 488 Hz near 2·f_tooth, not the true modes), confirming the
+persistent-excitation finding.
+
+Closed loop over the sequence (`main_realtime_id.py`, each pass = a cutting run on
+that pass's true snapshot plant; T = 0.4 s):
+
+| controller | passes with RMS > 1 µm (control lost) / 24 | worst-pass RMS | final-pass (−15 %) |
+|---|---:|---:|---:|
+| LQG fixed (pristine) | **7** | 10.9 µm | 10.9 µm |
+| LQG ID-scheduled | **0** | 0.072 µm | 0.042 µm |
+| LQG oracle (true freq) | 0 | ~0.07 µm | 0.042 µm |
+| ESO-ADRC fixed (robust) | **0** | ~0.1 µm | 0.037 µm |
+
+ID-scheduled LQG is **151× better than fixed at the worst pass** and matches the
+true-frequency oracle to 3 decimals (frequency-only ID; shape reshaping is second
+order). The robust ESO-ADRC survives WITHOUT ID (0 control-loss passes) and naive
+ID-retuning can even hurt it — identification and disturbance-observer robustness
+are complementary. New negative-result finding: an HRC resonator on a mode that has
+drifted onto a tooth harmonic is hazardous regardless of phase; the `'hrc'`-kind
+IDScheduledController drops that line (per-line `harmonics=` support added to
+`ESO_ADRC_HRC_Controller`). Runtime ≈ 65 s. Figure: `figs_realtime_id/`.
+
+---
+
 ## P5 UPDATE (2026-07-15, evening): HRC layer + 4-rung A-ESO-ADRC
 
 New controller stage: **ESO-ADRC+HRC** (per-tooth-harmonic LTI resonant

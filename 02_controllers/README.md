@@ -14,6 +14,7 @@ request; `docs/AUDIT_FINDINGS.md` keeps the historical audit record.
 | `adrc_controller.py` | Modal ESO-ADRC (fixed) | `ESO_ADRC_Controller` |
 | `adrc_controller.py` | Adaptive ESO-ADRC (supervised ladder) | `AdaptiveESO_ADRC_Controller` |
 | `adrc_controller.py` | Canonical output LADRC — **negative result**, kept reproducible | `CanonicalLADRC_Controller` |
+| `adaptive_id.py` | **P6**: real-time-ID-scheduled controller (re-tunes to identified frequencies per finishing pass) | `IDScheduledController` |
 
 ## LQG Controller (baseline)
 
@@ -128,3 +129,31 @@ controller that never diverges** across all scenarios tested.
 (Plant carries 5 modes, controllers see 3 — spillover; 10 nm measurement noise;
 corrected Eq. 3 forces; Eq. 15 piezo coupling; identical ±150 V clipping;
 bit-reproducible seeds.)
+
+
+## IDScheduledController (P6 — real-time identification)
+
+Re-tunes the controller's internal model to the modal frequencies IDENTIFIED by
+the active piezo probe at each finishing-pass boundary (see
+`03_analysis/realtime_id.py` and `01_core/material_removal.py`). Frequency-only ID
+(mode shapes are held at their pristine values — reshaping is second order,
+MAC > 0.999), which matches a true-frequency oracle to 3 decimals.
+
+```python
+from adaptive_id import IDScheduledController
+ctrl = IDScheduledController('lqg', dt, D_obs3, H_Pe3, zeta3, f_nominal3,
+                             w_tooth=w_tooth)
+for pass in sequence:
+    f_hat = transit_probe_identify(pass.plant, ...)   # unbiased, per pass
+    ctrl.retune(f_hat)                                 # rebuild gains
+    cut(pass.plant, ctrl)
+```
+
+Verified finding (`main_realtime_id.py`): fixed pristine LQG **loses control on 7
+of 24 passes** as the wall thins to −15 % (worst-pass RMS 10.9 µm), while the
+ID-scheduled LQG stays ≤ 0.072 µm (**151× better at the worst pass**) and matches
+the oracle. The robust ESO-ADRC survives the whole sequence WITHOUT ID (0
+control-loss passes) — identification and disturbance-observer robustness are
+complementary, and `'hrc'`-kind scheduling additionally drops a tooth-harmonic
+resonator when an identified mode crosses it (a resonant compensator on a
+resonance is hazardous regardless of phase).

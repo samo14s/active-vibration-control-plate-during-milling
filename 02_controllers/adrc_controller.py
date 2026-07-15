@@ -255,13 +255,22 @@ class ESO_ADRC_HRC_Controller(ESO_ADRC_Controller):
 
     def __init__(self, design, dt, w_q, w_qd, sigma_d, n_harm, g_base, lam=5.0,
                  w_tooth=None, gamma=0.0, w_r=1.0, kalman_V=1e-12, beta_d=10.0,
-                 u_max=150.0, verbose=True):
+                 u_max=150.0, harmonics=None, verbose=True):
         super().__init__(design, dt, w_q, w_qd, sigma_d, gamma=gamma, w_r=w_r,
                          kalman_V=kalman_V, beta_d=beta_d, u_max=u_max,
                          verbose=False)
         if w_tooth is None:
             raise ValueError("w_tooth (tooth-passing angular frequency) required")
-        self.n_harm = int(n_harm)
+        # `harmonics` = explicit list of tooth-harmonic ORDERS to compensate
+        # (default 1..n_harm). Allowing an arbitrary subset lets the online
+        # identifier DROP the specific line a drifting mode is crossing — a
+        # resonant compensator sitting on a lightly-damped structural resonance
+        # is hazardous regardless of phase accuracy (see P6 finding), so the ID
+        # loop removes that line rather than re-phasing it.
+        if harmonics is None:
+            harmonics = list(range(1, int(n_harm) + 1))
+        self.harmonics = [int(h) for h in harmonics]
+        self.n_harm = len(self.harmonics)
         self.g_base = float(g_base)
         self.lam = float(lam)
         self.w_tooth = float(w_tooth)
@@ -272,13 +281,13 @@ class ESO_ADRC_HRC_Controller(ESO_ADRC_Controller):
         A_r = np.zeros((mr, mr))
         B_r = np.zeros(mr)
         K_r = np.zeros(mr)
-        for h in range(self.n_harm):
-            wh = (h + 1) * self.w_tooth
+        for j, h in enumerate(self.harmonics):
+            wh = h * self.w_tooth
             G = complex(C_cl @ np.linalg.solve(
                 1j * wh * np.eye(A_cl.shape[0]) - A_cl, B_cl))
             psi = np.pi - np.angle(G)          # C(jwh)*G_cl(jwh) negative-real
             gh = self.g_base / abs(G)
-            i0 = 2 * h
+            i0 = 2 * j
             A_r[i0, i0 + 1] = 1.0
             A_r[i0 + 1, i0] = -wh**2
             A_r[i0 + 1, i0 + 1] = -2.0 * self.lam
@@ -299,7 +308,7 @@ class ESO_ADRC_HRC_Controller(ESO_ADRC_Controller):
         self.G_u, self.G_y = G2[:, 0], G2[:, 1]
         if verbose:
             print(f"[ESO-ADRC+HRC] base (w_q={w_q:.0e}, w_qd={w_qd:.0e}, "
-                  f"sigma_d={sigma_d:.0e}), H={self.n_harm} tooth harmonics, "
+                  f"sigma_d={sigma_d:.0e}), harmonics={self.harmonics}, "
                   f"g_base={g_base:g}, lam={lam:g} rad/s")
 
     def _design_closed_loop(self):

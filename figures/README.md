@@ -18,6 +18,7 @@ committed snapshot for convenience; the source of truth is the scripts.
 | `08_SLD_overlay.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
 | `09_robustness_montecarlo.pdf` | `05_main/main_robustness_mc.py` | **authoritative** |
 | `12_adaptive_removal.pdf` | `05_main/main_adaptive_removal.py` | **authoritative** (drift benchmark + rung supervision) |
+| `13_realtime_id.pdf` | `05_main/main_realtime_id.py` | **authoritative** (P6: ID tracking + finishing-sequence RMS) |
 
 ```bash
 # From a flat working dir (copy all package .py into one folder, see top-level README):

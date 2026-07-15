@@ -30,9 +30,17 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > thickness-field FEM thins the wall non-uniformly to −15 % (the article's 9–17 %
 > regime), an active piezo probe identifies the drifting modal frequencies to
 > ≤1.1 % at each pass, and the ID-scheduled LQG stays ≤0.072 µm where the fixed
-> LQG loses control on 7 of 24 passes (worst 10.9 µm — 151× better). All
-> protocol/integrity fixes carry over unchanged. Remaining: P3 (experimental
-> validation) — everything here is simulation.
+> LQG loses control on 7 of 24 passes (worst 10.9 µm — 151× better).
+> **P7 rigorously investigates the requested per-step material-removal-aware
+> PREDICTIVE controller and reports an honest boundary result** (`main_predictive_removal.py`):
+> on this plant it is not physically justified (the tool takes ~13,605 steps to cross
+> one mesh column — per-step update over-engineered ~10⁴×) and not beneficial (deep
+> cuts where removal matters are open-loop uncontrollable, ρ up to ~10¹⁷; the
+> controllable regime has ~0 removal). The delivered preview-predictive controller is
+> stable and modestly beats LQG but is dominated ~2× by the HRC layer. Artifacts: the
+> x-resolved moving-front removal model + the preview controller + the two-walls
+> analysis. All protocol/integrity fixes carry over unchanged. Remaining: P3
+> (experimental validation) — everything here is simulation.
 
 ---
 
@@ -73,7 +81,8 @@ which is why the adaptive layer is identification-free.
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py         # LQG baseline (grid-searched weights)
 │   ├── adrc_controller.py        # ESO-ADRC + A-ESO-ADRC (+ canonical LADRC)
-│   └── adaptive_id.py            # P6: real-time-ID-scheduled controller
+│   ├── adaptive_id.py            # P6: real-time-ID-scheduled controller
+│   └── predictive_removal.py     # P7: material-removal-aware preview-predictive control
 │
 ├── 03_analysis/           ← Stability & robustness analysis
 │   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled
@@ -89,6 +98,7 @@ which is why the adaptive layer is identification-free.
 │   ├── main_robustness_mc.py     # Monte-Carlo robustness driver
 │   ├── main_adaptive_removal.py  # Drift / stress benchmark (fixed vs adaptive)
 │   ├── main_realtime_id.py       # P6: real-time ID over the finishing sequence
+│   ├── main_predictive_removal.py # P7: predictive-control feasibility study
 │   └── main_realistic_piezo.py   # LQG with realistic piezo non-linearities
 │
 ├── figures/               ← Curated publication figures (vector PDF, 300 DPI)

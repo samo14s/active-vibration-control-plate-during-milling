@@ -77,6 +77,19 @@ matrix is precomputed and each snapshot only rescales per element (0.06 s/eigens
 Mode tracking: each snapshot is MAC-matched and sign-aligned to a reference basis
 so mode k stays mode k with consistent sign (0 sign flips over 24 snapshots).
 
+P7 adds `remove_moving_front(x_tool, a_p, a_e)` — the physically accurate X-RESOLVED
+within-pass thinning front (thins only the top band of height a_p, and only the
+element-columns BEHIND the feeding tool), replacing the end-of-pass all-x
+`remove_layer_band`. Call `begin_pass()` once at the start of a pass to snapshot the
+baseline: the front then SETS `h = max(baseline − a_e, 1e-4)` behind the tool, so a_e
+bites exactly ONCE per pass however many times the front is stepped (idempotent — a
+column already behind the tool is not re-thinned on each crossing). Documented caveats:
+(1) peripheral milling removes from ONE face, offsetting the neutral surface by ~a_e/2
+(membrane-bending coupling that symmetric h³/h scaling ignores — negligible at
+a_e = 0.1 mm, ~12 % at a rough 0.5 mm); (2) the band `ez ≥ hp − a_p` resolves no
+element centroid until a_p ≈ 1.67 mm on the 24-row height mesh, so sub-mm depths report
+exactly 0 % within-pass drift as a mesh-resolution floor (true drift there is ≲0.2 %).
+
 ```python
 wp = MillingWorkpiece(LP, HP, BP, RHO, E, NU, N1=30, N2=24, n_modes=5)
 wp.set_observation(x_obs=LP, z_obs=HP); wp.add_piezo_patch(...)

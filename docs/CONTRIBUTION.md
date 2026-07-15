@@ -51,6 +51,20 @@ committed code (see `REPRODUCED_RESULTS.md`), and (iv) the ESO-ADRC design study
 > oracle); the robust ESO-ADRC survives WITHOUT ID — identification and
 > disturbance-observer robustness are shown to be complementary. Verified numbers:
 > `REPRODUCED_RESULTS.md`.
+> **P7 (2026-07-15, "material removal during the cut"):** a rigorous feasibility
+> study of the requested per-step material-removal-aware PREDICTIVE controller
+> (precise cutting model -> plate properties per step -> predicted vibration ->
+> suppression). Finding: NOT physically justified on this plant — (1) timescale: the
+> tool takes ~13,605 steps (0.68 s) to cross one FEM mesh column, so per-step property
+> update is over-engineering by ~1e4 (correct cadence = event-driven mesh-crossing);
+> (2) regime conflict: within-pass removal grows with depth (≳0.5 % drift by a_p=10 mm,
+> >1 % only at a_p=40 mm) but those deep cuts are open-loop uncontrollable (ρ up to
+> ~1e17 ≫ piezo authority), while the controllable regime (a_p≲2 mm) has ≲0.2 % removal.
+> Delivered artifacts: the x-resolved moving-front
+> removal model, the preview-predictive controller (regenerative+feed preview, no
+> inverse crime — stable, modestly beats LQG, dominated ~2× by HRC), and the two-walls
+> boundary result. An honest negative/boundary contribution: predict-from-physics is
+> weaker than P6's probe wherever the cutting model is uncertain.
 
 ---
 

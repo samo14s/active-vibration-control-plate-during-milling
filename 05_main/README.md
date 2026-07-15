@@ -11,6 +11,7 @@ these drivers and are logged in `docs/REPRODUCED_RESULTS.md`.
 | `main_robustness_mc.py` | Monte-Carlo robustness (50 samples × 3 controllers, divergence reported) | Console + fig |
 | `main_adaptive_removal.py` | Drift / stress benchmark: material-removal drift, static mismatch, actuator-effectiveness loss | Console + fig |
 | `main_realtime_id.py` | **P6**: real-time identification over an accurate material-removal finishing sequence | Console + fig |
+| `main_predictive_removal.py` | **P7**: material-removal-aware predictive control — honest feasibility study (two walls + controller comparison) | Console + fig |
 | `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py

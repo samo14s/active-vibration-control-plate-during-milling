@@ -1,5 +1,72 @@
 # Reproduced Results — Verification Log
 
+## P7 UPDATE (2026-07-15): material-removal-aware predictive control — feasibility study
+
+The user requested a controller that accounts for the material removed DURING the cut
+(precise cutting model -> plate properties per step -> predicted vibration ->
+suppression). A rigorous investigation (4 parallel numerical studies + adversarial
+review) established that a genuine PER-STEP material-removal-aware controller is not
+physically realizable/beneficial on this plant, for two independent reasons, and the
+honest deliverable is a feasibility study plus the concrete artifacts.
+
+**WALL 1 — timescale.** At the article feed the tool advances 0.245 µm per 50-µs step
+and takes **13,605 steps (167 tooth-periods, 0.68 s) to cross one FEM mesh column**, so
+(M, K, C) is piecewise-constant at mesh resolution and cannot change between steps. A
+per-step property update captures ~1e-5 %/step — over-engineering by ~1e4. Correct
+cadence = event-driven (mesh-crossing).
+
+**WALL 2 — regime conflict.** Open-loop chatter radius ρ(a_p) at 4900 RPM vs within-pass
+modal drift (x-resolved moving front, idempotent single-bite per crossing):
+
+| a_p (mm) | ρ open-loop | within-pass drift | regime |
+|---:|---:|---:|---|
+| 0.3 | 1.19 | ~0 %* | controllable |
+| 1.0 | 1.64 | ~0 %* | controllable |
+| 2.0 | 3.5 | 0.20 % | controllable (boundary) |
+| 5.0 | 178 | 0.37 % | uncontrollable |
+| 10 | 1.1e5 | 0.53 % | uncontrollable |
+| 20 | 6.0e9 | 0.87 % | uncontrollable |
+| 40 | 7.9e16 | 1.37 % | uncontrollable |
+
+Within-pass drift first exceeds 1 % only at **a_p = 40 mm** (ρ ~ 8e16, utterly
+uncontrollable); even at the controllable boundary (a_p = 2 mm, ρ ~ 3.5) it is just
+0.20 %. \*The ~0 % for a_p ≤ 1 mm is a **mesh-resolution floor**: on the 24-row height
+mesh (row ≈ 3.33 mm) the thinning band `ez ≥ hp − a_p` captures no element centroid
+until a_p ≈ 1.67 mm, so sub-mm depths quantise to exactly zero removed elements; the
+true drift there is bounded above by the 0.20 % resolved at 2 mm and is physically
+negligible. Removal is significant only where ρ ≫ 1 (uncontrollable, beyond ±150 V
+piezo authority); the controllable regime has ≲0.2 % removal. The two requirements are
+mutually exclusive on this plant. (These magnitudes correct an earlier over-thinning
+bug — repeated `remove_moving_front` calls re-subtracted a_e each crossing, inflating
+drift ~10×; the fix baselines each pass with `begin_pass()` so a_e bites once.)
+
+**Controller (a_p = 0.3 mm, T = 0.4 s).** The PreviewPredictiveController exploits that
+the regenerative force uses the already-known q(k−n_tau) and the feed force is periodic
+(previewable one tooth period ahead); a receding-horizon QP (H = 41 steps, r = 1e-14)
+pre-empts the disturbance. Anti-inverse-crime: controller cutting model mismatched
+(+15 % KT, +15 % kn, −15 % µc):
+
+| controller | y_RMS (µm) |
+|---|---:|
+| LQG | 0.779 |
+| ESO-ADRC | 0.829 |
+| Preview (exact-model reference) | 0.720 |
+| **Preview (mismatched — honest)** | **0.682** |
+| ESO-ADRC+HRC | **0.390 (best)** |
+
+The preview law is stable and modestly beats LQG (~10 % at a tuned horizon; the
+mismatched model happening to edge the exact one is a horizon-dependent coincidence,
+NOT a robustness claim), but is **dominated ~2× by the existing HRC** and, being
+model-based, is inherently limited by cutting-model accuracy — weaker than P6's probe,
+which measures the truth. Documented caveats: the a_p = 0.3 mm band is below the N2=24
+mesh row height (moving-front is mesh-valid only for deep cuts); one-face removal
+offsets the neutral surface by ~a_e/2 (symmetric h³/h scaling ignores it — negligible
+at a_e = 0.1 mm). Artifacts: `01_core/material_removal.remove_moving_front`,
+`02_controllers/predictive_removal.py`, `05_main/main_predictive_removal.py`
+(~30 s runtime). Figure: `figs_predictive_removal/`.
+
+---
+
 ## P6 UPDATE (2026-07-15): real-time identification over an accurate finishing sequence
 
 New physical model `01_core/material_removal.MillingWorkpiece` — per-element

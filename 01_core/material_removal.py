@@ -93,6 +93,7 @@ class MillingWorkpiece:
 
         # element centroid heights (for pass geometry) and column index
         self.ez = (np.repeat(np.arange(N2), N1) + 0.5) * self.ley   # (nelem,)
+        self.ex = (np.tile(np.arange(N1), N2) + 0.5) * self.lex     # (nelem,) col x
         self.h_field = np.full(N2 * N1, bp, float)                  # thickness/elem
 
         self._patch = None
@@ -116,9 +117,43 @@ class MillingWorkpiece:
     def remove_layer_band(self, z_lo, z_hi, a_e):
         """Remove a radial bite a_e from the wall thickness over the height band
         [z_lo, z_hi] (elements whose centroid falls in the band), clamped >= 0.
-        Models one finishing pass engaging that band."""
+        Models one finishing pass engaging that band (end-of-pass, all-x snapshot)."""
         sel = (self.ez >= z_lo) & (self.ez < z_hi)
         self.h_field[sel] = np.maximum(self.h_field[sel] - a_e, 1e-4)
+
+    def begin_pass(self):
+        """Snapshot the current thickness field as the PRE-PASS baseline for the
+        x-resolved moving front (so repeated remove_moving_front calls during a pass
+        are idempotent and each column is thinned by exactly a_e once per pass)."""
+        self._front_baseline = self.h_field.copy()
+
+    def remove_moving_front(self, x_tool, a_p, a_e):
+        """Physically accurate X-RESOLVED moving thinning front (P7): the tool,
+        currently at feed position x_tool, has thinned by the radial bite a_e the
+        material it has already passed (columns with centroid x < x_tool) in the
+        engaged top band [HP - a_p, HP]. Material ahead of the tool is still virgin
+        (full thickness), the channel behind is thinned by exactly a_e. This replaces
+        the end-of-pass all-x `remove_layer_band` with the correct within-pass
+        geometry.
+
+        IDEMPOTENT within a pass: the thickness of a behind-tool column is set to
+        (pre-pass baseline - a_e), NOT decremented, so calling this repeatedly as
+        x_tool advances (the intended event-driven usage) thins each column exactly
+        once. Call begin_pass() at the start of each pass (auto-snapshotted on first
+        use if omitted). Across passes, begin_pass() re-baselines, so a_e accumulates
+        pass-to-pass correctly.
+
+        NOTE (one-face removal): peripheral milling removes material from ONE face,
+        offsetting the neutral surface by ~a_e/2 and inducing membrane-bending
+        coupling that symmetric thickness-scaling (h^3 stiffness, h mass) ignores.
+        This is ~2.5% eccentricity at a_e = 0.1 mm (negligible) but ~12.5% for a
+        rough a_e = 0.5 mm — a documented modelling caveat, not implemented here.
+        """
+        if not hasattr(self, '_front_baseline'):
+            self._front_baseline = self.h_field.copy()
+        band = self.ez >= (self.hp - a_p)
+        behind = band & (self.ex < x_tool)
+        self.h_field[behind] = np.maximum(self._front_baseline[behind] - a_e, 1e-4)
 
     def thickness_stats(self):
         return dict(min=float(self.h_field.min()), max=float(self.h_field.max()),

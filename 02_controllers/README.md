@@ -15,6 +15,7 @@ request; `docs/AUDIT_FINDINGS.md` keeps the historical audit record.
 | `adrc_controller.py` | Adaptive ESO-ADRC (supervised ladder) | `AdaptiveESO_ADRC_Controller` |
 | `adrc_controller.py` | Canonical output LADRC — **negative result**, kept reproducible | `CanonicalLADRC_Controller` |
 | `adaptive_id.py` | **P6**: real-time-ID-scheduled controller (re-tunes to identified frequencies per finishing pass) | `IDScheduledController` |
+| `predictive_removal.py` | **P7**: material-removal-aware preview-predictive controller (feasibility study) | `PreviewPredictiveController`, `PhysicsCuttingModel` |
 
 ## LQG Controller (baseline)
 
@@ -157,3 +158,28 @@ control-loss passes) — identification and disturbance-observer robustness are
 complementary, and `'hrc'`-kind scheduling additionally drops a tooth-harmonic
 resonator when an identified mode crosses it (a resonant compensator on a
 resonance is hazardous regardless of phase).
+
+
+## PreviewPredictiveController (P7 — material-removal-aware predictive control)
+
+The requested chain: precise cutting/material-removal model -> plate properties per
+step -> predicted vibration -> suppression. The investigation established two physical
+walls that make a genuine *per-step* material-removal-aware controller unjustified on
+this plant (see the module docstring and `docs/REPRODUCED_RESULTS.md` P7):
+1. **Timescale** — the tool takes ~13,605 steps (0.68 s) to cross one FEM mesh column,
+   so the plant is constant between crossings; per-step update is over-engineering by
+   ~10⁴ (correct cadence = event-driven mesh-crossing).
+2. **Regime conflict** — within-pass removal grows with depth (≳0.5 % drift by
+   a_p=10 mm, >1 % only at a_p=40 mm), but those deep cuts are open-loop uncontrollable
+   (ρ up to ~10¹⁷ ≫ piezo authority); the controllable regime (a_p≲2 mm) has ≲0.2 %
+   within-pass removal. Mutually exclusive.
+
+The concrete artifact is the **preview-predictive controller**: the regenerative force
+uses the already-known delayed state q(k−n_tau) and the feed force is periodic-known,
+so the incoming modal disturbance is *previewable* one tooth period ahead; a
+receding-horizon quadratic program pre-empts it. Honest result at a_p = 0.3 mm:
+stable, modestly beats LQG (0.68–0.72 vs 0.78 µm) but **dominated ~2× by the existing
+HRC (0.39 µm)**, and — being model-based — inherently limited by cutting-model accuracy
+(weaker than P6's probe, which measures the truth). Anti-inverse-crime: the
+controller's `PhysicsCuttingModel` is mismatched (+15 % KT, +15 % kn, −15 % µc) from
+the plant. Driver: `python main_predictive_removal.py`.

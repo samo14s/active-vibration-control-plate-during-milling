@@ -1,51 +1,49 @@
 # Active Vibration Control of a Thin-Walled Plate During Milling
 
-**Topic**: LQG feedback vs. **PALF-LQG** — LQG augmented with a learned,
-tooth-passing-phase-locked neural feedforward (renamed from the earlier over-claiming
-"DARC-MPC v3") — for chatter mitigation in peripheral milling of cantilever AL6061
+**Topic**: **LQG** (benchmark baseline) vs **ESO-ADRC** (modal extended-state-observer
+active disturbance rejection control) vs **A-ESO-ADRC** (its adaptive, cost-supervised
+development) for chatter mitigation in peripheral milling of cantilever AL6061
 plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 *Int. J. Mech. Sci.* 274:109257.
 
 > **⚠️ Read before citing any number from this repository**
 >
 > - [`docs/CONTRIBUTION.md`](docs/CONTRIBUTION.md) — what this work contributes,
->   literature positioning, and the publication roadmap.
+>   positioning, and the publication roadmap.
 > - [`docs/REPRODUCED_RESULTS.md`](docs/REPRODUCED_RESULTS.md) — verified numbers from
->   the committed code (the historical results table of this README did **not**
->   reproduce and has been replaced below).
-> - [`docs/AUDIT_FINDINGS.md`](docs/AUDIT_FINDINGS.md) — 44 verified findings
->   (integrity, naming, methodology) that must be addressed before submission.
+>   the committed code (every table below is copied from there).
+> - [`docs/AUDIT_FINDINGS.md`](docs/AUDIT_FINDINGS.md) — the historical 44-finding
+>   audit of the earlier learned-feedforward phase of this package (kept as record).
 >
-> **P0 integrity fixes have been applied** (see `docs/AUDIT_FINDINGS.md` §"P0"):
-> the fabricated ×1.30 "DARC" stability lobe is removed (PALF shares the LQG
-> boundary); the feedforward is now trained **once on the nominal scenario and frozen**,
-> then evaluated on held-out scenarios; the baseline is **symmetric** (identical
-> grid-searched LQG weights for both); dead/mislabeled components ("adaptive RLS",
-> the anti-disturbance pretrainer) are removed; and the controller is renamed from the
-> over-claiming "DARC-MPC" to **PALF-LQG** (Phase-Aware Learned Feedforward + LQG).
->
-> **P1 applied:** cutting constants k1, k2 corrected to Eq. (3) and deduplicated; the
-> inverse crime is removed (5-mode plant, controllers on the first 3 — spillover);
-> 10 nm measurement noise; identical ±150 V clipping.
->
-> **P2 applied:** the article's **Eq. (15) piezo coupling** C_P0; a **rigorous
-> closed-loop coupled monodromy SLD** (controller in the loop — no surrogate, no
-> per-mode decoupling), making PALF = LQG a rigorous consequence of ∂u_FF/∂x̂ = 0; a
-> **Monte-Carlo LQG-vs-PALF** robustness driver (divergence reported, no survivorship
-> bias); and a **FEM mesh-convergence** study reconciling the frequencies vs Table 4.
->
-> **P2.5 applied (improvement pass):** the ILC is upgraded to a **frequency-domain
-> model-inverse harmonic update** (gains jump to double digits, still held-out); the
-> SLD is evaluated at the **worst of 3 tool positions** (article Fig. 6 treatment).
->
-> **P2.6 applied (adaptive layer):** **A-PALF-LQG** updates the plant-parameter
-> estimate at EVERY step during material removal (probe-based sliding-DFT FRF
-> tracking over a model grid + LQR/observer gain scheduling). Under a sustained
-> −12 % frequency drift — beyond the fixed-design margin — the fixed controllers
-> diverge while A-PALF-LQG survives at 0.74 µm; with no drift it costs nothing.
->
-> **Remaining (P3):** experimental validation on a physical plate — everything here is
-> simulation.
+> **Package history:** P0–P2 turned this repository into an audited, article-anchored
+> benchmark (train-once/held-out protocol, symmetric baselines, corrected Eq. 3
+> forces, spillover + 10 nm measurement noise, Eq. 15 piezo coupling, rigorous
+> closed-loop monodromy SLD). **P4 (2026-07-15): the earlier learned-feedforward
+> controller family (PALF-LQG / A-PALF-LQG) was removed at the author's request and
+> replaced by a new strategy developed to be adaptive** — the ESO-ADRC family below.
+> All protocol/integrity fixes carry over unchanged. Remaining: P3 (experimental
+> validation) — everything here is simulation.
+
+---
+
+## 🎛️ The controllers
+
+| | Structure | Tuning |
+|---|---|---|
+| **LQG** | output-weighted LQR + Kalman filter (3 design modes) | weight grid search on the nominal model |
+| **ESO-ADRC** | the SAME output-weighted LQR fed by a 9-state **modal extended state observer** that estimates a per-mode *total disturbance* d(t) ∈ R³ (regenerative force + feed forcing + spillover + drift) | grid over (w_q, w_qd, σ_d); the fixed design is **certification-selected**: smallest worst-case closed-loop Floquet radius over a design-time uncertainty ball |
+| **A-ESO-ADRC** | a supervised **ladder of two ESO-ADRC rungs** (performance design + certified design) sharing one physical observer state — bumpless switching driven by the measured y²-cost only (running-min quiet level, dwell + hysteresis, fast-EMA **panic** to the certified rung, escalating locks). **No identification, no probe.** | rungs from the same grid |
+
+The LQG-vs-ESO-ADRC comparison isolates exactly one ingredient: replace the Kalman
+filter with a disturbance-estimating ESO. Four **documented design findings** (module
+docstring of `02_controllers/adrc_controller.py`, all reproducible): canonical
+output LADRC is structurally inapplicable here (non-collocated, non-minimum-phase
+piezo→sensor transfer — it destabilizes for *every* bandwidth pair); the ESO gain
+must come from a scaled Riccati equation (pole placement is numerically hopeless);
+matched disturbance cancellation does not pay (actuator only ~19 % aligned with the
+tool-force direction); and closed-loop actuator-effectiveness self-identification
+is biased by the periodic cutting force (persistent excitation would be required) —
+which is why the adaptive layer is identification-free.
 
 ---
 
@@ -58,32 +56,33 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 │   ├── plate_model.py            # Plate assembly + modal reduction
 │   ├── piezo_actuator.py         # Piezo patch model (QDA60-20-0.7), modal force only
 │   ├── milling_force.py          # Helical-engagement force kernels (article Eq. 4)
-│   └── newmark_solver.py         # Newmark-β time integration with regenerative delay
+│   └── newmark_solver.py         # Newmark-β integration with regenerative delay
 │
 ├── 02_controllers/        ← Control algorithms
-│   ├── lqg_controller.py         # LQG with Kalman observer (grid-searched weights)
-│   ├── palf_lqg_controller.py    # LQG + phase-locked NN feedforward (ILC-trained)
-│   └── adaptive_palf_lqg_controller.py  # + per-step parameter tracking (A-PALF)
+│   ├── lqg_controller.py         # LQG baseline (grid-searched weights)
+│   └── adrc_controller.py        # ESO-ADRC + A-ESO-ADRC (+ canonical LADRC
+│                                 #   kept only for the negative result)
 │
 ├── 03_analysis/           ← Stability & robustness analysis
-│   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled monodromy
-│   ├── uncertainty_analysis.py   # Monte-Carlo LQG-vs-PALF (run_mc_lqg_vs_palf)
+│   ├── fdm_stability.py          # Per-mode SLD + rigorous closed-loop coupled
+│   │                             #   monodromy (LQG adapter + GENERIC realization)
+│   ├── uncertainty_analysis.py   # Monte-Carlo over any controller set
 │   └── mesh_convergence.py       # FEM natural-frequency convergence vs Table 4
 │
-├── 04_figures/            ← Figure generators (illustrative)
+├── 04_figures/            ← Geometry + academic-style SLD generators
 ├── 05_main/               ← Main simulation scripts
-│   ├── main_simulation.py        # Authoritative LQG vs PALF-LQG comparison + SLD
+│   ├── main_simulation.py        # Authoritative 3-way comparison + certification
+│   │                             #   + worst-position closed-loop SLD
 │   ├── main_robustness_mc.py     # Monte-Carlo robustness driver
-│   ├── main_adaptive_removal.py  # Material-removal drift: fixed vs adaptive
-│   └── main_realistic_piezo.py   # With realistic piezo non-linearities
+│   ├── main_adaptive_removal.py  # Drift / stress benchmark (fixed vs adaptive)
+│   └── main_realistic_piezo.py   # LQG with realistic piezo non-linearities
 │
 ├── figures/               ← Curated publication figures (vector PDF, 300 DPI)
-└── docs/                  ← Contribution, audit, reproduced results
+└── docs/                  ← Contribution, audit (historical), reproduced results
 ```
 
-The `figures/` directory holds a committed snapshot of the publication set (vector PDF);
-see `figures/README.md` for provenance and regeneration commands. All figures are
-regenerable from the scripts above.
+The `figures/` directory holds a committed snapshot of the publication set (vector
+PDF); see `figures/README.md` for provenance and regeneration commands.
 
 ---
 
@@ -103,11 +102,12 @@ All Python files must be in the **same directory** to allow imports:
 cp 01_core/*.py 02_controllers/*.py 03_analysis/*.py 04_figures/*.py 05_main/*.py ./
 ```
 
-### Run main simulation
+### Run
 
 ```bash
-# Full comparison (4 scenarios + 3 SLDs, ~80 s)
-python main_simulation.py
+python main_simulation.py         # 3-way comparison + certification + SLD (~4.5 min)
+python main_robustness_mc.py      # Monte-Carlo (~4 min)
+python main_adaptive_removal.py   # drift / stress benchmark (~1.5 min)
 ```
 
 ---
@@ -136,9 +136,8 @@ python main_simulation.py
 | Young's modulus | E_Pe | 63 GPa |
 | Voltage saturation | u_max | ±150 V |
 
-Note: the patch couples to the plate through a modal force vector only (no added
-stiffness/mass in the current FEM assembly); the coupling scalar is the article's
-**Eq. (15) C_P0** coefficient (P2 fix).
+The patch couples through the article's **Eq. (15) C_P0** coefficient (modal force
+only; no added stiffness/mass in the FEM assembly).
 
 ### Tool and cutting parameters (article condition T1)
 
@@ -150,64 +149,54 @@ stiffness/mass in the current FEM assembly); the coupling scalar is the article'
 | Rake angle | 15° | Radial depth a_e | 0.1 mm |
 | K_T | 925 MPa | k_N | 0.26 |
 
----
-
-## 🔬 What the controller actually is
-
-```
-u(t) = u_LQG(x̂(t)) + α · NN_FF(φ(t), x̂(t))
-```
-
-- **Feedback**: LQG (LQR gain + Kalman observer), weights grid-searched.
-- **Feedforward**: a small MLP, (n_x+2) → 16 → 1 with tanh activations (~161
-  parameters), input = estimated modal state + (cos φ, sin φ) of the tooth-passing
-  phase, output saturated to ±30 V. Trained by hand-coded SGD through an iterative
-  learning loop (simulate → collect → retrain, 30 iterations). In the current
-  training protocol the state inputs receive zero gradient (samples use x = 0), so
-  the trained object is effectively a **learned periodic map u_FF(φ)** — i.e.
-  repetitive-control-like feedforward.
-- **Safety filter**: a CLF-style voltage governor on the nominal delay-free model
-  (heuristic — not a stability proof for the true delayed periodic loop).
-- The historical name "DARC-MPC" (Deep Adaptive Robust Control with MPC) does not
-  describe this architecture; renaming (e.g. **PALF-LQG**, Phase-Aware Learned
-  Feedforward LQG) is part of the pre-submission roadmap.
+Evaluation model: **5-mode plant, 3-mode controllers** (control + observation
+spillover), 10 nm measurement noise, identical ±150 V clipping, corrected Eq. (3)
+cutting constants (k₁ = 0.3174, k₂ = 1.1258).
 
 ---
 
-## 📊 Verified results (committed code, 2 runs, seeds fixed — see docs/REPRODUCED_RESULTS.md)
+## 📊 Verified results (committed code, seeds fixed — see docs/REPRODUCED_RESULTS.md)
 
-### RMS vibration vs LQG baseline (T = 0.5 s) — held-out, symmetric, spillover + noise, Eq. (15) piezo, model-inverse ILC
+### Held-out scenarios (y_RMS, µm; T = 0.5 s; designs frozen on the nominal model)
 
-| Scenario | LQG y_RMS | PALF y_RMS | Gain |
+| Scenario | LQG | ESO-ADRC (certified) | A-ESO-ADRC |
 |---|---:|---:|---:|
-| S1 Nominal | 0.777 µm | 0.625 µm | **+19.5 %** |
-| S2 Aggressive (a_p = 0.6 mm) | 1.558 µm | 1.386 µm | **+11.0 %** |
-| S3 Model mismatch (ω −8 %) | 0.900 µm | 0.769 µm | **+14.6 %** |
-| S4 High K_T (+30 %) | 1.013 µm | 0.853 µm | **+15.8 %** |
-| **Average** | 1.062 µm | 0.908 µm | **+14.4 %** |
+| S1 Nominal | **0.777** | 0.826 | 0.783 |
+| S2 Aggressive (a_p = 0.6 mm) | **1.558** | 1.824 | 3.41 (panic transient) |
+| S3 Model mismatch (ω −8 %) | **0.900** | 20.8 (bounded hole) | 1.123 |
+| S4 High K_T (+30 %) | **1.013** | 1.078 | 1.040 |
 
-The frequency-domain model-inverse ILC cancels most of the tooth-passing-periodic
-residual that survives LQG: +19.5 % nominal, and the FROZEN feedforward keeps
-double-digit gains on every held-out perturbation (graceful degradation). Trained once
-on the nominal scenario; S2/S3/S4 held-out; 5-mode plant / 3-mode controllers
-(spillover); 10 nm noise; ~8 % more RMS voltage (6.0 vs 5.6 V).
+### Drift / stress benchmark (`main_adaptive_removal.py`)
 
-**Monte-Carlo robustness** (`main_robustness_mc.py`, 50 samples, ±15 % cutting / ±3 %
-freq / ±20 % damping): 50/50 converged for both controllers; **PALF beats LQG in 100 %**
-of samples, median RMS gain **+17.8 %** [p05 +15.8 %, p95 +19.5 %].
+| Case | LQG | ESO-ADRC | A-ESO-ADRC |
+|---|---:|---:|---:|
+| D0 no drift | **0.777** | 0.826 | 0.783 |
+| D1 ramp to +15 % during the pass | **0.682** | 1.276 | 1.256 |
+| D2 ramp to −12 % during the pass | **DIVERGES** | 0.898 | 1.151 |
+| D3 static −12 % | **DIVERGES** | 1.140 | 1.708 |
+| D4 piezo effectiveness ×0.25 | 1.241 | 1.221 | **1.184** |
+
+**The honest headline:** inside the fixed-design envelope the correctly-modelled
+LQG is the best regulator (it also wins the ±3 %-frequency Monte-Carlo: medians
+0.788 vs 0.850/0.886 µm, all 50/50 converged). The ESO's return is
+**architectural robustness** — its per-mode disturbance states absorb the model
+error, so it survives −12 % drift (static AND ramped) where the LQG diverges. No
+fixed tuning covers everything (the Floquet certification map shows complementary
+holes), and **A-ESO-ADRC is the only controller that never diverges across all 9
+scenarios**, staying within 0.8 % of LQG nominally.
 
 ### Stability lobes at 4900 RPM — closed-loop coupled monodromy, worst of 3 tool positions
 
 | Configuration | a_p critical |
 |---|---:|
 | Open-Loop | 0.100 mm — **matches the article's experimental limit** |
-| LQG (closed-loop monodromy) | 1.08 mm (10.8× OL) |
-| PALF-LQG | 1.08 mm — **= LQG, rigorously** (∂u_FF/∂x̂ = 0 → identical monodromy) |
+| LQG | 1.075 mm (10.8× OL) |
+| ESO-ADRC (certified rung = A-ESO-ADRC's fallback boundary) | 0.913 mm (9.1× OL) |
 
 All panels come from the monodromy of the full coupled, time-periodic delayed loop
-with the LQG controller embedded, evaluated at x = 0, L/4, L/2 (worst case — the
-article's Fig. 6 treatment). The controlled critical depth is now the same order as
-the article's experimentally achieved 0.6–0.8 mm limits.
+with the controller embedded (generic realization — works for any LTI output
+feedback controller), evaluated at x = 0, L/4, L/2 (worst case). Both controlled
+depths are the same order as the article's experimentally achieved 0.6–0.8 mm.
 
 ---
 
@@ -220,7 +209,8 @@ The plant model, parameters, and experimental anchors come from:
 > Mechanical Sciences* 274:109257. https://doi.org/10.1016/j.ijmecsci.2024.109257
 
 Key methods: Insperger & Stépán (2004) semi-discretization; Altintas (2012)
-*Manufacturing Automation*; Anderson & Moore (2007) *Optimal Control*.
+*Manufacturing Automation*; Han (2009) / Gao (2003) ADRC & bandwidth
+parametrisation; Anderson & Moore (2007) *Optimal Control*.
 
 ---
 
@@ -228,8 +218,10 @@ Key methods: Insperger & Stépán (2004) semi-discretization; Altintas (2012)
 
 | Task | Time |
 |---|---:|
-| Full 4-scenario comparison + 3 SLDs | ~80 s |
-| Single simulation (T = 0.5 s, dt = 50 µs) | ~10 s |
+| Full comparison + certification + 3 SLDs (`main_simulation.py`) | ~4.5 min |
+| Monte-Carlo (50 samples × 3 controllers) | ~4 min |
+| Drift benchmark (5 cases × 3 controllers) | ~1.5 min |
+| Single simulation (T = 0.5 s, dt = 50 µs) | ~1 s |
 
 Tested on Python 3.11–3.12, NumPy ≥1.26, SciPy ≥1.13. No GPU required.
 

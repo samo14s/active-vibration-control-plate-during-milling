@@ -83,7 +83,7 @@ def main():
         'milling_force',
         'newmark_solver',
         'lqg_controller',
-        'palf_lqg_controller',
+        'adrc_controller',
         'fdm_stability',
     ]
     
@@ -106,9 +106,10 @@ def main():
     
     print(f"\nNext steps:")
     print(f"  cd {WORK_DIR}")
-    print(f"  python main_simulation.py              # Run main simulation")
-    print(f"  python gen_article_complete_figures.py # Generate 14 figures")
-    print(f"  python gen_geometry_figure.py          # Generate geometry")
+    print(f"  python main_simulation.py         # LQG vs ESO-ADRC vs A-ESO-ADRC + SLD")
+    print(f"  python main_robustness_mc.py      # Monte-Carlo robustness")
+    print(f"  python main_adaptive_removal.py   # drift / stress benchmark")
+    print(f"  python gen_geometry_figure.py     # geometry figure")
 
 
 if __name__ == '__main__':

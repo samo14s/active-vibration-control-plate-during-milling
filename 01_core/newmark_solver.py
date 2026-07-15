@@ -114,35 +114,13 @@ class NewmarkSimulator:
                 y_obs_now = y_true
             y_meas[k] = y_obs_now
 
-            # Observateur + commande LQR
+            # Observateur + commande
+            # Interface commune : step(x_prev, u_prev, y_meas) -> (x, u).
+            # x est l'état interne du contrôleur (Kalman 2n pour LQG, ESO 3n
+            # pour ESO-ADRC / A-ESO-ADRC), dimensionné par controller.n_x.
             if controller is not None:
-                # APP-LQG accepte position outil pour gain scheduling
-                if hasattr(controller, 'enable_gs'):
-                    x_p_now_phys = self.plate.xp_array[kp]
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                x_p_now=x_p_now_phys)
-                # CALOR-FF nécessite k_step pour le feedforward périodique
-                elif controller.__class__.__name__ == 'CALOR_FF_Controller':
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                # PALF-LQG (and legacy NRACC/DARC names) need k_step for the
-                # phase-locked feedforward
-                elif controller.__class__.__name__ in ('PALF_LQG_Controller', 'AdaptivePALF_LQG_Controller', 'NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                # NRACC-RU nécessite aussi k_step
-                elif controller.__class__.__name__ == 'NRACC_RU_Controller':
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                else:
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now)
-                # SMCController retourne (x_hat, u, s) ; LQG retourne (x_hat, u)
-                if len(step_out) == 3:
+                step_out = controller.step(x_hat[:, k-1], u_real_prev, y_obs_now)
+                if len(step_out) == 3:      # contrôleurs retournant un extra
                     x_hat[:, k], u, _ = step_out
                 else:
                     x_hat[:, k], u = step_out

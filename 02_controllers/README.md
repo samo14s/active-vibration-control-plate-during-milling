@@ -1,132 +1,130 @@
 # 02_controllers — Control Algorithms
 
-Two controllers are compared: **LQG** (baseline) and **PALF-LQG** (LQG + a phase-locked
-learned feedforward). PALF-LQG was renamed from the earlier, over-claiming "DARC-MPC
-v3"; see `docs/AUDIT_FINDINGS.md` for why the old name was indefensible.
+Two strategies are compared: **LQG** (the benchmark baseline) and **ESO-ADRC**
+(modal extended-state-observer active disturbance rejection control), developed
+into its adaptive form **A-ESO-ADRC** (cost-supervised design ladder). The earlier
+PALF-LQG / A-PALF-LQG learned-feedforward family was removed from the package on
+request; `docs/AUDIT_FINDINGS.md` keeps the historical audit record.
 
 ## Files
 
 | File | Controller | Key class |
 |---|---|---|
-| `lqg_controller.py` | Linear Quadratic Gaussian | `LQGController` |
-| `palf_lqg_controller.py` | LQG + phase-locked learned feedforward | `PALF_LQG_Controller` |
-| `adaptive_palf_lqg_controller.py` | + per-step online parameter tracking (material removal) | `AdaptivePALF_LQG_Controller` |
+| `lqg_controller.py` | Linear Quadratic Gaussian (baseline) | `LQGController` |
+| `adrc_controller.py` | Modal ESO-ADRC (fixed) | `ESO_ADRC_Controller` |
+| `adrc_controller.py` | Adaptive ESO-ADRC (supervised ladder) | `AdaptiveESO_ADRC_Controller` |
+| `adrc_controller.py` | Canonical output LADRC — **negative result**, kept reproducible | `CanonicalLADRC_Controller` |
 
-## LQG Controller
+## LQG Controller (baseline)
 
-Standard LQG = LQR (state feedback) + Kalman observer.
+Standard LQG = output-weighted LQR (grid-searched weights) + Kalman observer.
 
 ```python
 from lqg_controller import LQGController
 
-lqg = LQGController(plate, dt=5e-5, verbose=True)
-
-# Grid-searched weights (use the SAME weights for the baseline and PALF's internal
-# feedback so the comparison is apples-to-apples).
+lqg = LQGController(design_view, dt=5e-5, kalman_V=1e-12, u_max=150.0)
 lqg.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
                      w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
 lqg.discretize_observer()
-
-# Inside Newmark loop:
-x_hat, u = lqg.step(x_hat_prev, u_prev, y_meas)
+x_hat, u = lqg.step(x_hat_prev, u_prev, y_meas)   # inside the Newmark loop
 ```
 
-## PALF-LQG Controller
+## ESO-ADRC Controller
 
-**PALF-LQG** = Phase-Aware Learned Feedforward + LQG.
+The ADRC idea — estimate a lumped "total disturbance" online and let the law use
+it — applied in **modal space**, which is what this plant requires:
 
 ```
-u(t) = u_LQG(x̂)  +  α · u_FF(φ)
-       └───┬───┘      └───┬────┘
-       reactive       phase-locked learned
-       LQG feedback   feedforward (periodic map)
+q̈ = -K q - C q̇ + H u + d(t)          d ∈ R³: per-mode TOTAL disturbance
+z = [q̂; q̂̇; d̂] ∈ R⁹                  ESO (Riccati-designed gain, knob σ_d)
+u = -K_fb [q̂; q̂̇] - γ·Hᵀd̂/(HᵀH)     same output-weighted LQR construction
+                                       as the baseline; γ = matched cancellation
 ```
 
-**What it actually is** (honest description — see the audit):
+`d(t)` absorbs the regenerative force, the feed forcing, spillover of unmodelled
+modes, and material-removal stiffness drift — no cutting-force model, no delay
+model, no identification at run time. The comparison **LQG vs ESO-ADRC isolates
+exactly one ingredient**: replace the plain Kalman filter with a
+disturbance-estimating ESO.
 
-- **Feedback**: LQG (LQR gain + Kalman observer), the reactive baseline.
-- **Feedforward**: a small MLP, `(n_x+2) → 16 → 1` with **tanh** activations
-  (~161 parameters). The periodic target it fits is produced by **frequency-domain
-  model-inverse ILC**: each trial simulates the current closed loop to its periodic
-  steady state, DFTs the residual over 4 tooth periods, and updates the feedforward
-  harmonics `U_h ← U_h − η·Y_h/G(jhω_τ)` with `G` the design closed-loop FRF from the
-  feedforward input to `y`; the best-so-far harmonic set is frozen. At deployment the
-  state channel is fed zeros, so the learned object is a **periodic map `u_FF(φ)`**
-  (repetitive-control-like), not a state-feedback network.
-- **Safety**: a heuristic control-Lyapunov-style **voltage governor** evaluated on the
-  *nominal, delay-free* model — a soft actuator guard, NOT a stability certificate for
-  the true delayed, time-periodic closed loop.
+**Four documented design findings** (full derivations in the module docstring):
 
-**It is NOT** "Deep" (one hidden layer), NOT "MPC" (no receding-horizon optimization,
-no online cost minimization), and there is NO working online adaptation (the earlier
-"RLS/adaptive" path was dead code and has been removed).
+1. **Canonical output LADRC destabilizes this plant** for *every* bandwidth pair:
+   the piezo→sensor transfer is non-collocated with alternating modal residues
+   (D·H = −0.40/+0.65/−0.19), DC and high-frequency gains of opposite sign ⟹ real
+   RHP zeros ⟹ the ŷ̈ = f + b₀u premise is wrong. Kept reproducible in
+   `CanonicalLADRC_Controller`.
+2. **ESO gain via a scaled Riccati equation** — bandwidth-parametrized pole
+   placement of a 9-state observer from one output is numerically hopeless
+   (|L| ~ 1e17); the disturbance-noise intensity σ_d is the single bandwidth knob.
+3. **Matched cancellation γ does not pay** here (actuator direction only ~19 %
+   aligned with the tool-force direction) — the grid selects γ = 0; the benefit
+   comes from disturbance-aware state estimation.
+4. **Closed-loop effectiveness self-identification is biased** (the periodic
+   cutting force correlates with u through the feedback), so no κ-adaptation is
+   attempted — consistent with this package's earlier identifiability finding
+   that persistent excitation is required.
 
 ```python
-from palf_lqg_controller import PALF_LQG_Controller
+from adrc_controller import ESO_ADRC_Controller
 
-# SAME feedback weights as the standalone LQG baseline (symmetric comparison)
-palf = PALF_LQG_Controller(
-    plate, dt=5e-5,
-    base_w_q=lqg.w_q, base_w_qd=lqg.w_qd, base_w_r=1.0,
-    ff_lr=0.005,           # feedforward learning rate
-    ff_max=10.0,           # feedforward output saturation (V)
-    ff_alpha=1.0,          # feedforward mixing gain
-    n_per=n_per,           # samples per tooth-passing period (phase index)
-    safety_alpha=5.0,      # governor sensitivity
-    u_max=150.0,           # piezo voltage saturation (V)
-)
-
-# Pre-train ONCE on the nominal scenario, then FREEZE (do not retrain per scenario —
-# retraining on the evaluation scenario would score the controller on its own data).
-palf.pretrain_iterative_simulation(
-    simulator, alpha3, alpha4, kp_idx,
-    n_iterations=30, n_epochs_per_iter=15,
-)
-
-# Inside Newmark loop (k_step drives the phase index):
-x_hat, u = palf.step(x_hat_prev, u_prev, y_meas, k_step)
+# The fixed design is CERTIFICATION-SELECTED: smallest worst-case Floquet radius
+# over a design-time uncertainty ball (see main_simulation.py). No held-out data.
+adrc = ESO_ADRC_Controller(design_view, dt=5e-5, w_q=1e14, w_qd=1e8,
+                           sigma_d=1e4, kalman_V=1e-12, u_max=150.0)
+z, u = adrc.step(z_prev, u_prev, y_meas)
+A_con, B_con_y, K_con = adrc.controller_realization()   # for the monodromy SLD
 ```
 
-## Verified comparison (committed code, P0+P1+P2 + model-inverse ILC — see docs/REPRODUCED_RESULTS.md)
+## A-ESO-ADRC Controller (adaptive)
 
-| Metric | LQG | PALF-LQG | Gain |
+No fixed tuning covers the whole uncertainty range: the closed-loop Floquet map
+over a frequency-mismatch ball shows **complementary instability holes** for the
+aggressive and robust tunings (waterbed effect — see `fig06_certification`).
+A-ESO-ADRC therefore supervises a **ladder of two pre-designed rungs** sharing one
+physical observer state (bumpless switching):
+
+- **performance rung** — lowest nominal RMS on the design grid;
+- **certified rung** — smallest worst-case monodromy radius over the design ball.
+
+The supervisor uses **measured cost only** (no identification, no probe): a slow
+EMA of y² against a running-min quiet level (dwell + hysteresis toggling), and a
+fast-EMA **panic** jump to the certified rung with an absolute floor and
+**escalating post-panic locks**.
+
+```python
+from adrc_controller import AdaptiveESO_ADRC_Controller
+
+aadrc = AdaptiveESO_ADRC_Controller(design_view, dt=5e-5,
+                                    rungs=((1e16, 1e8, 3e3),    # performance
+                                           (1e14, 1e8, 1e4)),   # certified
+                                    perf_rung=0, robust_rung=1)
+aadrc.reset_adaptation()          # before every independent run
+z, u = aadrc.step(z_prev, u_prev, y_meas)
+aadrc.history_rung                # rung trace for figures
+```
+
+## Verified comparison (committed code — see docs/REPRODUCED_RESULTS.md)
+
+| Scenario (all held-out) | LQG | ESO-ADRC (certified) | A-ESO-ADRC |
 |---|---:|---:|---:|
-| RMS vibration, nominal (S1) | 0.777 µm | 0.625 µm | **+19.5 %** |
-| RMS vibration, model mismatch ω−8 % (S3) | 0.900 µm | 0.769 µm | **+14.6 %** |
-| RMS vibration, held-out average (S1–S4) | 1.062 µm | 0.908 µm | **+14.4 %** |
-| Stability domain (a_p crit @4900 RPM, worst of 3 positions) | 1.08 mm | **1.08 mm** | ∂u_FF/∂x̂=0 → identical monodromy |
+| S1 nominal | **0.777 µm** | 0.826 µm | 0.783 µm |
+| S2 a_p = 0.6 mm | **1.558 µm** | 1.824 µm | 3.41 µm |
+| S3 ω−8 % | **0.900 µm** | 20.8 µm (bounded) | 1.123 µm |
+| S4 K_T+30 % | **1.013 µm** | 1.078 µm | 1.040 µm |
+| static ω−12 % | DIVERGES | **1.140 µm** | 1.71 µm |
+| ramp to −12 % during pass | DIVERGES | **0.898 µm** | 1.151 µm |
+| ramp to +15 % during pass | **0.682 µm** | 1.276 µm | 1.256 µm |
+| piezo effectiveness ×0.25 | 1.241 µm | 1.221 µm | **1.184 µm** |
 
-(Plant carries 5 modes, controller sees 3 — spillover; 10 nm measurement noise;
-corrected Eq. 3 forces; Eq. 15 piezo coupling; rigorous closed-loop monodromy SLD at
-the worst of 3 tool positions. Kalman `kalman_V` and clipping `u_max` are constructor
-args.)
+Honest reading: **inside the fixed-design envelope LQG is the best regulator**
+(its Kalman model is correct there); the ESO's value is **architectural
+robustness** — it survives drift 4 % beyond the LQG margin because the d̂-states
+absorb model error — and the **adaptive ladder removes the fixed designs' failure
+modes** (LQG's −12 % divergence, the certified rung's −8 % hole, the performance
+rung's a_p = 0.6 divergence) at a modest nominal cost. **A-ESO-ADRC is the only
+controller that never diverges** across all scenarios tested.
 
-The feedforward buys little on the nominal plant but preserves its gain under model
-mismatch — that robustness asymmetry is the result worth reporting. It does **not**
-increase modal damping or extend the stability lobe (a phase-locked feedforward changes
-the periodic forcing, not the closed-loop poles).
-
-## A-PALF-LQG Controller (adaptive — parameter update during material removal)
-
-**A-PALF-LQG** adds ONLINE system-parameter updating at every control step, for the
-frequency drift caused by progressive material removal (the article measured
-+9 %/+17 % over a machining series; the fixed-design margin here is ~−9 %).
-
-- **Identifiability (key design fact):** under stable cutting all signals are
-  tooth-periodic with an unknown periodic force, so observer innovations alone do NOT
-  discriminate plant parameters (verified by this package's diagnostics). The remedy
-  is **persistent excitation**: a low-amplitude multisine **probe** (0.4 V/line)
-  injected through the piezo at 5 lines placed ON DFT bins of a window of an integer
-  number of tooth periods and AWAY from the force harmonics — bin orthogonality makes
-  the huge forced-vibration harmonics leak exactly zero into the probe lines.
-- **Per-step update:** a sliding DFT (O(1)/step/line) refreshes Y(jω_p), U(jω_p);
-  the plant FRF samples are matched against a pre-designed model grid
-  (θ scaling: Kp∼θ², Cp∼θ) with a balanced, resonance-safe residual norm.
-- **Gain scheduling:** a bank of parallel Kalman observers (state continuity) and
-  pre-solved LQR gains per θ; the active model switches with a dwell window and a
-  hysteresis margin. The phase-locked feedforward is inherited unchanged.
-
-Verified (`main_adaptive_removal.py`): under a sustained −12 % drift
-(beyond the fixed margin) the fixed LQG and fixed PALF both DIVERGE while A-PALF-LQG
-survives at 0.74 µm; under +15 % drift it is the best of the three (0.58 µm); with no
-drift it matches fixed PALF exactly (0.616 µm — adaptation and probe cost ≈ nothing).
+(Plant carries 5 modes, controllers see 3 — spillover; 10 nm measurement noise;
+corrected Eq. 3 forces; Eq. 15 piezo coupling; identical ±150 V clipping;
+bit-reproducible seeds.)

@@ -24,7 +24,7 @@ class LQGController:
         plate    : instance de PlateModel (ou vue tronquée) avec D_obs et H_Pe_modal.
         kalman_V : variance du bruit de mesure supposée par le filtre de Kalman (m²).
         u_max    : saturation de commande (V). Si non-None, u est écrêté à ±u_max
-                   (pour une comparaison symétrique avec PALF-LQG).
+                   (identique pour tous les contrôleurs comparés).
         """
         self.plate = plate
         self.dt = dt

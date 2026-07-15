@@ -1,8 +1,8 @@
 # Publication figure set
 
-Curated, publication-quality (**vector PDF, 300 DPI**) figures for the LQG vs PALF-LQG
-study. All are **regenerable** — this folder holds a committed snapshot for convenience;
-the source of truth is the scripts.
+Curated, publication-quality (**vector PDF, 300 DPI**) figures for the
+LQG vs ESO-ADRC vs A-ESO-ADRC study. All are **regenerable** — this folder holds a
+committed snapshot for convenience; the source of truth is the scripts.
 
 ## Provenance & how to regenerate
 
@@ -12,38 +12,39 @@ the source of truth is the scripts.
 | `01_summary_bar.pdf` | `05_main/main_simulation.py` | **authoritative** |
 | `02_temporal_y.pdf` | `05_main/main_simulation.py` | **authoritative** |
 | `04_fft_y.pdf` | `05_main/main_simulation.py` | **authoritative** |
-| `06_modal_damping_poles.pdf` | `05_main/main_simulation.py` | **authoritative** |
-| `07_SLD_3panels.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
+| `05_rung_supervision.pdf` | `05_main/main_simulation.py` | **authoritative** (A-ESO-ADRC rung traces, 4 scenarios) |
+| `06_certification.pdf` | `05_main/main_simulation.py` | **authoritative** (design-time Floquet map — the case for the ladder) |
+| `07_SLD_3panels.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy, worst of 3 positions) |
 | `08_SLD_overlay.pdf` | `05_main/main_simulation.py` | **authoritative** (closed-loop monodromy) |
 | `09_robustness_montecarlo.pdf` | `05_main/main_robustness_mc.py` | **authoritative** |
-| `11_feedforward_decomposition.pdf` | `04_figures/gen_article_complete_figures.py` | illustrative (qualitative) |
-| `12_adaptive_removal.pdf` | `05_main/main_adaptive_removal.py` | **authoritative** (drift benchmark + θ̂ tracking) |
-| `15_control_architecture.pdf` | `04_figures/gen_control_strategy_diagram.py` | schematic |
+| `12_adaptive_removal.pdf` | `05_main/main_adaptive_removal.py` | **authoritative** (drift benchmark + rung supervision) |
 
 ```bash
 # From a flat working dir (copy all package .py into one folder, see top-level README):
-python main_simulation.py          # -> figs_lqg_vs_palf/*.pdf  (authoritative)
-python main_robustness_mc.py       # -> figs_lqg_vs_palf/fig_robustness_mc.pdf
+python main_simulation.py          # -> figs_lqg_vs_adrc/*.pdf  (authoritative)
+python main_robustness_mc.py       # -> figs_lqg_vs_adrc/fig_robustness_mc.pdf
+python main_adaptive_removal.py    # -> figs_lqg_vs_adrc/fig_adaptive_removal.pdf
 python gen_geometry_figure.py      # -> figs_article_publication/fig00*_geometry*.pdf
-python gen_control_strategy_diagram.py
-python gen_article_complete_figures.py   # -> figs_article_publication/*.pdf (14 illustrative)
+python gen_SLD_academic_style.py   # styled SLD variants (same rigorous monodromy)
 ```
 
 ## Numbers
 
-**Authoritative** figures (from `main_simulation.py` / `main_robustness_mc.py`)
-use the final model: 5-mode plant with 3-mode
-controllers (spillover), 10 nm measurement noise, corrected Eq. (3) forces, Eq. (15)
-piezo coupling, frequency-domain model-inverse ILC (train-once/held-out), rigorous
-closed-loop monodromy SLD at the worst of 3 tool positions. Headline numbers:
+All **authoritative** figures use the final model: 5-mode plant with 3-mode
+controllers (spillover), 10 nm measurement noise, corrected Eq. (3) forces,
+Eq. (15) piezo coupling, rigorous closed-loop monodromy SLD at the worst of 3 tool
+positions, design-grid + Floquet-certification selection of the ESO-ADRC designs.
+Headline numbers (full log: `docs/REPRODUCED_RESULTS.md`):
 
-- RMS gain vs LQG: S1 +19.5 %, S2 +11.0 %, S3 (ω−8 %) +14.6 %, S4 +15.8 % (avg +14.4 %).
-- Monte-Carlo (50 samples): PALF beats LQG 100 %, median +17.8 % [p05 +15.8, p95 +19.5].
-- SLD @4900 RPM: OL 0.10 mm (= article experiment), LQG = PALF 1.08 mm (∂u_FF/∂x̂=0).
-- Material-removal drift: at sustained −12 % the fixed controllers diverge while
-  A-PALF-LQG (per-step probe-FRF parameter update) survives at 0.74 µm.
-
-The two **illustrative/qualitative** figures (`11_...`, `15_...`) and the **setup**
-figure (`00_...`) carry no conflicting headline numbers; `11_...` shows the u_LQG+u_FF
-decomposition and the learned phase signature u_FF(φ) (from the 3-mode illustrative
-script — see its header). Full verification log: `docs/REPRODUCED_RESULTS.md`.
+- Held-out scenarios: LQG best inside its envelope (S1 0.777 µm vs ESO-ADRC 0.826 /
+  A-ESO-ADRC 0.783); fixed designs each have one failure mode (LQG diverges beyond
+  −10 % drift; certified ESO rings bounded at −8 %; performance ESO diverges at
+  a_p = 0.6 mm).
+- Drift benchmark: at −12 % drift (static or ramped during the pass) the fixed LQG
+  DIVERGES while ESO-ADRC rides through at ~0.9–1.1 µm; **A-ESO-ADRC never
+  diverges in any of the 9 scenarios**.
+- Monte-Carlo (±3 % freq, ±15 % cutting, 50 samples): all controllers 50/50
+  converged; LQG median 0.788 µm best — the ESO family's advantage lives beyond
+  the LQG envelope, not inside it.
+- SLD @4900 RPM: OL 0.100 mm (= article experiment), LQG 1.075 mm, ESO-ADRC
+  certified 0.913 mm (also A-ESO-ADRC's panic-fallback boundary).

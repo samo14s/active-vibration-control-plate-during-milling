@@ -175,40 +175,48 @@ def run_monte_carlo(plate_nominal, ctrl, sim_template,
     )
 
 
-def run_mc_lqg_vs_palf(plant_nominal, lqg, palf, nominal_params, kp_idx,
+def run_mc_controllers(plant_nominal, controllers, nominal_params, kp_idx,
                        dt, T_end, ft, tau, n_per,
                        unc=None, n_samples=60, meas_noise_std=1e-8,
                        stop_threshold=5e-3, seed=42, verbose=True):
     """
-    Monte-Carlo robustness comparison of the FROZEN LQG and PALF-LQG controllers
-    (both designed once on the nominal model — held-out) over parametric uncertainty.
+    Monte-Carlo robustness comparison of an ARBITRARY set of FROZEN controllers
+    (all designed once on the nominal model — held-out) over parametric uncertainty.
+
+    Parameters
+    ----------
+    controllers : dict {name: controller}. The FIRST entry is the baseline for
+        the pairwise gain statistics. Controllers exposing `reset_adaptation()`
+        (e.g. A-ADRC) have it called before every sample, so each run starts from
+        the same nominal design — the ADAPTATION runs, but never carries state
+        across samples.
 
     For each sample the plant is perturbed (per-mode omega, zeta, and the cutting
-    parameters kt/kn/mu_c), the controllers are UNCHANGED, and both run with the same
+    parameters kt/kn/mu_c), the controllers are UNCHANGED, and all run with the same
     measurement-noise realisation. Divergence is recorded EXPLICITLY (no survivorship
     bias): a sample counts as "converged" only if it did not hit the stop threshold
-    and its RMS stayed bounded. Statistics are reported over samples where BOTH
-    controllers converged, and the diverged counts are returned separately.
+    and its RMS stayed bounded. Pairwise gain statistics vs the baseline are reported
+    over samples where BOTH converged; diverged counts are returned separately.
     """
     from milling_force import precompute_alpha_periodic, cutting_constants
     from newmark_solver import NewmarkSimulator
     rng = np.random.default_rng(seed)
 
-    rms_lqg = np.full(n_samples, np.nan)
-    rms_palf = np.full(n_samples, np.nan)
-    conv_lqg = np.zeros(n_samples, dtype=bool)
-    conv_palf = np.zeros(n_samples, dtype=bool)
+    names = list(controllers.keys())
+    base = names[0]
+    rms = {nm: np.full(n_samples, np.nan) for nm in names}
+    conv = {nm: np.zeros(n_samples, dtype=bool) for nm in names}
 
     if verbose:
-        print(f"\n=== Monte-Carlo LQG vs PALF-LQG : {n_samples} samples ===")
+        print(f"\n=== Monte-Carlo {' vs '.join(names)} : {n_samples} samples ===")
         t0 = time.time()
 
     def _rms_conv(res, nstep):
         i = res['stop_idx']
         y = res['y'][:i+1]
-        rms = np.sqrt(np.mean(y**2)) * 1e6 if len(y) else np.inf
-        converged = (i >= nstep - 2) and (rms < 50.0)   # 50 um sanity ceiling
-        return rms, converged
+        r = np.sqrt(np.mean(y**2)) * 1e6 if len(y) else np.inf
+        converged = (i >= nstep - 2) and (r < 50.0)   # 50 um sanity ceiling
+        return r, converged
 
     for s in range(n_samples):
         p = sample_uncertain_params(rng, nominal_params, unc)
@@ -229,47 +237,45 @@ def run_mc_lqg_vs_palf(plant_nominal, lqg, palf, nominal_params, kp_idx,
             nominal_params['phi_ex'], nominal_params['za_low'],
             nominal_params['za_high'], k1, k2, p['kt'])
 
-        r_lqg = sim.simulate(a3, a4, kp_idx, controller=lqg,
+        for nm in names:
+            ctrl = controllers[nm]
+            if hasattr(ctrl, 'reset_adaptation'):
+                ctrl.reset_adaptation()
+            r = sim.simulate(a3, a4, kp_idx, controller=ctrl,
                              meas_noise_std=meas_noise_std,
                              rng=np.random.default_rng(1234),
                              stop_threshold=stop_threshold, progress=False)
-        for h in ('history_u_lqg', 'history_u_ff', 'history_u_total',
-                  'history_phase', 'history_safety'):
-            if hasattr(palf, h):
-                setattr(palf, h, [])
-        r_palf = sim.simulate(a3, a4, kp_idx, controller=palf,
-                              meas_noise_std=meas_noise_std,
-                              rng=np.random.default_rng(1234),
-                              stop_threshold=stop_threshold, progress=False)
-
-        rms_lqg[s], conv_lqg[s] = _rms_conv(r_lqg, sim.nstep)
-        rms_palf[s], conv_palf[s] = _rms_conv(r_palf, sim.nstep)
+            rms[nm][s], conv[nm][s] = _rms_conv(r, sim.nstep)
 
         if verbose and ((s + 1) % max(1, n_samples // 6) == 0):
-            print(f"   {s+1:3d}/{n_samples}  "
-                  f"LQG {rms_lqg[s]:6.3f}um  PALF {rms_palf[s]:6.3f}um  "
-                  f"({time.time()-t0:5.1f}s)")
+            msg = "  ".join(f"{nm} {rms[nm][s]:6.3f}um" for nm in names)
+            print(f"   {s+1:3d}/{n_samples}  {msg}  ({time.time()-t0:5.1f}s)")
 
-    both = conv_lqg & conv_palf
-    gains = np.full(n_samples, np.nan)
-    gains[both] = (1 - rms_palf[both] / rms_lqg[both]) * 100
+    # Pairwise gains vs the baseline (first controller)
+    gains = {}
+    gain_stats = {}
+    for nm in names[1:]:
+        both = conv[base] & conv[nm]
+        g = np.full(n_samples, np.nan)
+        g[both] = (1 - rms[nm][both] / rms[base][both]) * 100
+        gains[nm] = g
+        gain_stats[nm] = dict(
+            n_both=int(both.sum()),
+            mean=float(np.nanmean(g)) if both.any() else float('nan'),
+            median=float(np.nanmedian(g)) if both.any() else float('nan'),
+            p05=float(np.nanpercentile(g, 5)) if both.any() else float('nan'),
+            p95=float(np.nanpercentile(g, 95)) if both.any() else float('nan'),
+            pct_better=float(np.mean(g[both] > 0) * 100) if both.any() else float('nan'),
+        )
 
     stats = dict(
-        rms_lqg=rms_lqg, rms_palf=rms_palf,
-        conv_lqg=conv_lqg, conv_palf=conv_palf, both_converged=both,
-        gains=gains, n_samples=n_samples,
-        n_conv_lqg=int(conv_lqg.sum()), n_conv_palf=int(conv_palf.sum()),
-        n_both=int(both.sum()),
-        gain_mean=float(np.nanmean(gains)) if both.any() else float('nan'),
-        gain_median=float(np.nanmedian(gains)) if both.any() else float('nan'),
-        gain_p05=float(np.nanpercentile(gains, 5)) if both.any() else float('nan'),
-        gain_p95=float(np.nanpercentile(gains, 95)) if both.any() else float('nan'),
-        pct_palf_better=float(np.mean(gains[both] > 0) * 100) if both.any() else float('nan'),
+        names=names, baseline=base, rms=rms, conv=conv,
+        gains=gains, gain_stats=gain_stats, n_samples=n_samples,
+        n_conv={nm: int(conv[nm].sum()) for nm in names},
     )
     if verbose:
-        print(f"   done in {time.time()-t0:.1f}s | converged: "
-              f"LQG {stats['n_conv_lqg']}/{n_samples}, "
-              f"PALF {stats['n_conv_palf']}/{n_samples}, both {stats['n_both']}")
+        conv_msg = ", ".join(f"{nm} {stats['n_conv'][nm]}/{n_samples}" for nm in names)
+        print(f"   done in {time.time()-t0:.1f}s | converged: {conv_msg}")
     return stats
 
 

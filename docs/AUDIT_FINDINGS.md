@@ -1,5 +1,12 @@
 # Audit Findings — Verified Defect Register
 
+> **Historical record.** This register audits the earlier learned-feedforward phase
+> of the package (DARC-MPC → PALF-LQG → A-PALF-LQG). In **P4 (2026-07-15)** that
+> entire controller family was removed at the author's request and replaced by the
+> ESO-ADRC family (see `CONTRIBUTION.md`). The protocol fixes documented below
+> (P0–P2) remain in force in the current package; the PALF-specific findings refer
+> to code that no longer exists and are kept only as the audit record.
+
 Every *critical* and *major* finding below was independently re-verified by an adversarial
 review pass against the exact code and the article text (Du et al. 2024, IJMS 274:109257).
 All were **CONFIRMED**. Minor findings were not adversarially re-verified.

@@ -7,8 +7,8 @@ and Monte Carlo robustness tests.
 
 | File | Analysis | Method |
 |---|---|---|
-| `fdm_stability.py` | Stability Lobe Diagram | Per-mode SLD (`compute_SLD`) **and** rigorous closed-loop coupled monodromy (`compute_closed_loop_SLD`) |
-| `uncertainty_analysis.py` | Robustness | Monte-Carlo LQG-vs-PALF (`run_mc_lqg_vs_palf`) |
+| `fdm_stability.py` | Stability Lobe Diagram | Per-mode SLD (`compute_SLD`) **and** rigorous closed-loop coupled monodromy — LQG adapter (`compute_closed_loop_SLD`) + **generic controller realization** (`compute_closed_loop_SLD_generic`) |
+| `uncertainty_analysis.py` | Robustness | Monte-Carlo over an arbitrary controller set (`run_mc_controllers`) |
 | `mesh_convergence.py` | FEM verification | Natural-frequency convergence vs article Table 4 |
 
 ## Stability Lobe Diagram (FDM/Floquet)
@@ -29,50 +29,58 @@ mapping state from t to t+τ:
 - Stable if max|eig(Φ)| < 1
 - Chatter if max|eig(Φ)| ≥ 1
 
-**FDM (Insperger-Stépán 2004)**:
-1. Discretize period τ into m_div subintervals (m_div = 40)
-2. Build augmented state vector to handle delay
-3. Compute Φ as product of m_div elementary transition matrices
-4. Evaluate eigenvalues
+**FDM (Insperger-Stépán 2004)**: discretize τ into m_div subintervals, build the
+augmented (delay-buffered) transition matrix product, evaluate eigenvalues.
 
-```python
-from fdm_stability import compute_SLD
+## Closed-loop coupled monodromy SLD (rigorous, generic)
 
-rho_grid, _ = compute_SLD(
-    RPM_array, ap_array,
-    omega_n_list, zeta_list, Dp_list, m_list,
-    NT, RT, eta_h, phi_st, phi_ex,
-    k1, k2, kt, hp,
-    m_div=40
-)
-# rho_grid.shape = (n_ap, n_RPM)
-# Stability boundary: contour where rho_grid == 1.0
+`closed_loop_rho_generic` / `compute_closed_loop_SLD_generic` embed an ARBITRARY
+LTI output-feedback controller in realization form
+
+```
+ż = A_con z + B_con_y · y ,   u = -K_con z ,   y = D_obs · q      (z ∈ R^m)
 ```
 
-## Closed-loop coupled monodromy SLD (rigorous)
-
-`compute_closed_loop_SLD` builds the semi-discretization monodromy of the FULL,
-coupled, time-periodic delayed system with the LQG controller (state feedback +
-Kalman observer) embedded — no "equivalent damping" surrogate, no per-mode
-decoupling. Pass `A_ctrl=None` for the coupled open-loop system. Run it from
-`main_simulation.py` (all three SLD panels use it). The PALF-LQG boundary equals the
-LQG boundary rigorously, because the phase-only feedforward has `∂u_FF/∂x̂ = 0` and so
-does not enter the closed-loop Jacobian.
-
-## Monte-Carlo robustness (LQG vs PALF-LQG)
+in the FULL coupled, time-periodic delayed system — no "equivalent damping"
+surrogate, no per-mode decoupling. LQG (m = 2n) goes through the
+`closed_loop_rho` adapter; ESO-ADRC (m = 3n) supplies
+`controller_realization()` directly:
 
 ```python
-from uncertainty_analysis import run_mc_lqg_vs_palf
-st = run_mc_lqg_vs_palf(plant_nominal, lqg, palf, nominal_params, kp_idx,
-                        dt, T_end, ft, tau, n_per,
-                        unc=dict(kt_pct=0.15, omega_pct=0.03, zeta_pct=0.20),
+from fdm_stability import compute_closed_loop_SLD_generic
+A_con, B_con_y, K_con = adrc.controller_realization()
+rho = compute_closed_loop_SLD_generic(RPM_arr, ap_arr,
+                                      omega_n, zeta, Dp_vec, H_Pe, D_obs,
+                                      A_con, B_con_y, K_con,
+                                      NT, RT, eta_h, phi_st, phi_ex,
+                                      k1, k2, kt, hp, m_div=20)
+```
+
+`A_con=None` gives the coupled open-loop grid. The same function powers the
+**design-time certification** of A-ESO-ADRC's robust rung in
+`main_simulation.py` (worst-case ρ over a frequency-mismatch × depth × tool-
+position ball). Note: ρ values near 1 are marginal and m_div-sensitive — the
+certification is a comparative selection criterion, always cross-checked by
+time simulation, not a formal stability proof.
+
+## Monte-Carlo robustness (generic controller set)
+
+```python
+from uncertainty_analysis import run_mc_controllers
+st = run_mc_controllers(plant_nominal,
+                        {"LQG": lqg, "ESO-ADRC": adrc, "A-ESO-ADRC": aadrc},
+                        nominal_params, kp_idx, dt, T_end, ft, tau, n_per,
+                        unc=dict(kt_pct=0.15, kn_pct=0.15, mu_c_pct=0.15,
+                                 omega_pct=0.03, zeta_pct=0.20, E_pct=0.0),
                         n_samples=50, meas_noise_std=1e-8)
-# st['n_conv_lqg'], st['n_conv_palf']  -> convergence counts (divergence NOT hidden)
-# st['gain_median'], st['gain_p05/p95'], st['pct_palf_better'] over both-converged
+# st['n_conv'][name]        -> convergence counts (divergence NOT hidden)
+# st['gain_stats'][name]    -> median/p05/p95 gain vs the FIRST (baseline) entry
 ```
-Driver: `python 05_main/main_robustness_mc.py` (frozen held-out controllers; both run
-with the same measurement-noise realisation; diverged samples are reported, not
-dropped silently).
+
+The first dict entry is the baseline for pairwise gains. Controllers exposing
+`reset_adaptation()` (A-ESO-ADRC) are reset before every sample, so adaptation
+runs but never carries state across samples. All controllers see the same
+measurement-noise realisation. Driver: `python 05_main/main_robustness_mc.py`.
 
 ## FEM mesh convergence
 
@@ -91,6 +99,7 @@ modes 2, 4, 5).
 
 | Operation | Time |
 |---|---:|
-| Closed-loop monodromy SLD (30×25 grid, 3 modes, m_div=20) | ~8 s |
-| Monte-Carlo (50 samples, 0.25 s each, ×2 controllers) | ~1 min |
+| Closed-loop monodromy SLD (30×25 grid, 3 modes, m_div=20, 3 positions × 3 configs) | ~35 s |
+| Certification grid (18 designs × 12 ball points, 5-mode plant) | ~2 min |
+| Monte-Carlo (50 samples, 0.5 s each, ×3 controllers) | ~3 min |
 | Mesh-convergence study | ~10 s |

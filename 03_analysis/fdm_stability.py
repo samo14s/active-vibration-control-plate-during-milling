@@ -33,25 +33,32 @@ from milling_force import milling_force_coeffs
 # ====================================================================
 # Rigorous CLOSED-LOOP, COUPLED, multi-mode monodromy SLD (P2)
 # ====================================================================
-def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
-                    A_ctrl, B_ctrl, K_lqr, L_kal,
-                    RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
-                    k1, k2, kt, m_div=25):
+def closed_loop_rho_generic(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                            A_con, B_con_y, K_con,
+                            RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
+                            k1, k2, kt, m_div=25):
     """
     Spectral radius of the monodromy matrix of the FULL closed-loop, COUPLED,
     time-periodic delayed system over one tooth-passing period, via semi-
-    discretization (Insperger–Stépán). Unlike the per-mode `fdm_stability_one_mode`,
-    this keeps the rank-1 inter-modal regenerative coupling α4(t)·Dp·Dpᵀ AND embeds
-    the actual LQG controller (state feedback + Kalman observer) in the loop, instead
-    of feeding a closed-loop "equivalent damping" into an open-loop formula.
+    discretization (Insperger–Stépán), for a GENERIC LTI output-feedback
+    controller in realization form:
 
-    Continuous augmented state ξ = [q; q̇; x̂]  (dim 4n if a controller is given,
-    else 2n for the open loop). The regenerative term couples q(t) to q(t-τ):
+        ż = A_con z + B_con_y · y ,      u = -K_con z ,      y = D_obs · q
 
-        q̈ = -(K + α4·DpDpᵀ) q - C q̇ - H_Pe·(K_lqr x̂) + α4·DpDpᵀ q(t-τ)
-        x̂̇ = (A_ctrl - B_ctrl K_lqr - L C_ctrl) x̂ + L·D_obs·q         (C_ctrl=[D_obs 0])
+    with z of ARBITRARY dimension m (LQG: m = 2n, A_con = A - B K - L C,
+    B_con_y = L_kal; ADRC/LESO: m = 3, A_con = A - B K_con - L C, B_con_y = L).
+    Unlike the per-mode `fdm_stability_one_mode`, this keeps the rank-1
+    inter-modal regenerative coupling α4(t)·Dp·Dpᵀ AND embeds the actual
+    controller in the loop, instead of feeding a closed-loop "equivalent
+    damping" into an open-loop formula.
 
-    Pass A_ctrl=None to get the open-loop coupled system (no control) — used for
+    Continuous augmented state ξ = [q; q̇; z]  (dim 2n+m if a controller is
+    given, else 2n). The regenerative term couples q(t) to q(t-τ):
+
+        q̈ = -(K + α4·DpDpᵀ) q - C q̇ - H_Pe·(K_con z) + α4·DpDpᵀ q(t-τ)
+        ż = A_con z + B_con_y · D_obs · q
+
+    Pass A_con=None to get the open-loop coupled system (no control) — used for
     verification against the per-mode open-loop SLD.
     """
     n = len(omega_n)
@@ -59,8 +66,19 @@ def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
     Cdamp = np.diag(2.0 * np.asarray(zeta_n, float) * np.asarray(omega_n, float))
     DpDpT = np.outer(Dp_vec, Dp_vec)
 
-    closed = A_ctrl is not None
-    nx = 4 * n if closed else 2 * n           # continuous state dimension
+    closed = A_con is not None
+    if closed:
+        A_con = np.asarray(A_con, float)
+        m = A_con.shape[0]                    # controller state dimension
+        H_Pe = np.asarray(H_Pe, float).reshape(n)
+        D_obs = np.asarray(D_obs, float).reshape(n)
+        K_con = np.asarray(K_con, float).reshape(m)
+        B_con_y = np.asarray(B_con_y, float).reshape(m)
+        BD = np.outer(B_con_y, D_obs)                              # (m × n)
+        HK = np.outer(H_Pe, K_con)                                 # (n × m)
+    else:
+        m = 0
+    nx = 2 * n + m                            # continuous state dimension
 
     tau = 60.0 / (NT * RPM)
     dt = tau / m_div
@@ -74,17 +92,6 @@ def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
                                       phi_st, phi_ex, za_low, za_high, k1, k2, kt)
         a4[k] = a4k
 
-    # Constant (α4-independent) blocks
-    if closed:
-        H_Pe = np.asarray(H_Pe, float).reshape(n)
-        D_obs = np.asarray(D_obs, float).reshape(n)
-        K_lqr = np.asarray(K_lqr, float).reshape(2 * n)
-        L = np.asarray(L_kal, float).reshape(2 * n)
-        A_xh = A_ctrl - np.outer(B_ctrl.reshape(2 * n), K_lqr) \
-             - np.outer(L, np.concatenate([D_obs, np.zeros(n)]))   # A - B K - L C
-        LD = np.outer(L, D_obs)                                    # (2n × n)
-        HK = np.outer(H_Pe, K_lqr)                                 # (n × 2n)
-
     N = nx + n * m_div                        # augmented (with delay buffer)
     Phi = np.eye(N)
     Iv = slice(n, 2 * n)                       # velocity rows of ξ
@@ -95,9 +102,9 @@ def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
         Ac[n:2*n, 0:n] = -(K + a4[k] * DpDpT)             # v̇ stiffness (self-coupling)
         Ac[n:2*n, n:2*n] = -Cdamp                         # v̇ damping
         if closed:
-            Ac[n:2*n, 2*n:4*n] = -HK                      # v̇ from control
-            Ac[2*n:4*n, 0:n] = LD                         # x̂̇ from measured q
-            Ac[2*n:4*n, 2*n:4*n] = A_xh                   # x̂̇ observer/feedback
+            Ac[n:2*n, 2*n:2*n+m] = -HK                    # v̇ from control u = -K_con z
+            Ac[2*n:2*n+m, 0:n] = BD                       # ż from measured y = D_obs q
+            Ac[2*n:2*n+m, 2*n:2*n+m] = A_con              # ż controller dynamics
 
         Ad = expm(Ac * dt)
         # Ic = ∫₀^dt exp(Ac s) ds  (delayed term held constant over the step)
@@ -119,6 +126,60 @@ def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
         Phi = T @ Phi
 
     return float(np.max(np.abs(np.linalg.eigvals(Phi))))
+
+
+def closed_loop_rho(omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                    A_ctrl, B_ctrl, K_lqr, L_kal,
+                    RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
+                    k1, k2, kt, m_div=25):
+    """
+    LQG adapter for `closed_loop_rho_generic`: builds the controller realization
+    A_con = A_ctrl - B_ctrl·K_lqr - L_kal·C  (C = [D_obs 0]),  B_con_y = L_kal,
+    K_con = K_lqr, then delegates. Pass A_ctrl=None for the open loop.
+    """
+    if A_ctrl is None:
+        return closed_loop_rho_generic(
+            omega_n, zeta_n, Dp_vec, H_Pe, D_obs, None, None, None,
+            RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp, k1, k2, kt, m_div=m_div)
+    n = len(omega_n)
+    D_obs_v = np.asarray(D_obs, float).reshape(n)
+    K_lqr_v = np.asarray(K_lqr, float).reshape(2 * n)
+    L_v = np.asarray(L_kal, float).reshape(2 * n)
+    A_con = A_ctrl - np.outer(B_ctrl.reshape(2 * n), K_lqr_v) \
+          - np.outer(L_v, np.concatenate([D_obs_v, np.zeros(n)]))   # A - B K - L C
+    return closed_loop_rho_generic(
+        omega_n, zeta_n, Dp_vec, H_Pe, D_obs, A_con, L_v, K_lqr_v,
+        RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp, k1, k2, kt, m_div=m_div)
+
+
+def compute_closed_loop_SLD_generic(RPM_array, ap_array,
+                                    omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                                    A_con, B_con_y, K_con,
+                                    NT, RT, eta_h, phi_st, phi_ex,
+                                    k1, k2, kt, hp, m_div=25, verbose=True):
+    """Grid of closed-loop spectral radii for a GENERIC controller realization
+    (A_con, B_con_y, K_con) — e.g. from ADRC_Controller.controller_realization().
+    A_con=None gives the open-loop coupled grid."""
+    import time
+    n_RPM, n_ap = len(RPM_array), len(ap_array)
+    rho = np.zeros((n_ap, n_RPM))
+    if verbose:
+        tag = "closed-loop (generic)" if A_con is not None else "open-loop (coupled)"
+        print(f"[SLD-CL] {tag} monodromy, {n_ap}x{n_RPM} grid, m_div={m_div}")
+        t0 = time.time()
+    for i_rpm, RPM in enumerate(RPM_array):
+        for i_ap, ap in enumerate(ap_array):
+            rho[i_ap, i_rpm] = closed_loop_rho_generic(
+                omega_n, zeta_n, Dp_vec, H_Pe, D_obs,
+                A_con, B_con_y, K_con,
+                RPM, NT, RT, eta_h, phi_st, phi_ex, ap, hp,
+                k1, k2, kt, m_div=m_div)
+        if verbose and (i_rpm + 1) % max(1, n_RPM // 10) == 0:
+            el = time.time() - t0
+            print(f"   {100*(i_rpm+1)/n_RPM:5.1f}%  RPM={RPM:.0f}  ({el:5.1f}s)")
+    if verbose:
+        print(f"[SLD-CL] done in {time.time()-t0:.1f}s")
+    return rho
 
 
 def compute_closed_loop_SLD(RPM_array, ap_array,

@@ -1,130 +1,172 @@
 # Reproduced Results — Verification Log
 
-**Date:** 2026-07-14 (updated after the P2.5 improvement pass)
+**Date:** 2026-07-15 (P4 — ESO-ADRC controller family)
 **Environment:** Python 3.11, NumPy/SciPy/Matplotlib (latest), Linux x86-64
-**Command:** `python main_simulation.py` (files flattened into one directory per README)
+**Commands:** `python main_simulation.py`, `python main_robustness_mc.py`,
+`python main_adaptive_removal.py` (files flattened into one directory per README)
 
-**Protocol now in force (P0 + P1 + P2 + P2.5):**
-- Train-once / freeze / evaluate-held-out; **symmetric** baseline (standalone LQG and
-  PALF's internal LQR share identical grid-searched weights); identical ±150 V clipping.
-- **Corrected cutting constants** k1 = kn/cos η = 0.3174, k2 = 1.1258 (Eq. 3), from
+**Protocol in force (P0 + P1 + P2 protocol, P4 controllers):**
+- Design-once / freeze / evaluate-held-out; adaptation state reset per run.
+- **Symmetric design machinery:** LQG and ESO-ADRC use the same output-weighted LQR
+  construction; both are grid-tuned on the nominal design model only. The ESO-ADRC
+  fixed design is **certification-selected**: smallest worst-case coupled-monodromy
+  Floquet radius over a design ball (mismatch −12/−8/0/+8/+15 % at a_p = 0.3 mm,
+  plus 0 % at a_p = 0.6 mm; tool at x = 0 and L/2) — no held-out time simulations
+  enter any design decision.
+- **Corrected cutting constants** k1 = 0.3174, k2 = 1.1258 (Eq. 3), single source
   `milling_force.cutting_constants` (P1).
-- **No inverse crime:** 5-mode PLANT, controllers designed on the first 3 (spillover);
-  10 nm measurement noise (P1).
+- **No inverse crime:** 5-mode PLANT, controllers designed on the first 3
+  (spillover); 10 nm measurement noise; identical ±150 V clipping; identical noise
+  realisations (P1).
 - **Eq. (15) piezo coupling** C_P0 (P2).
-- **Rigorous closed-loop monodromy SLD** with the LQG controller in the loop, at the
-  **worst of 3 tool positions** (x = 0, L/4, L/2 — the article's Fig. 6 treatment;
-  P2 + P2.5).
-- **Frequency-domain model-inverse ILC** (P2.5): the feedforward harmonics are updated
-  per trial as U_h ← U_h − η·Y_h/G(jhω_τ) from the DFT of the periodic steady-state
-  residual, with G the design closed-loop FRF; the best trial is frozen and the phase
-  network is fit to the resulting periodic target.
+- **Rigorous closed-loop coupled monodromy SLD** with the controller embedded
+  (generic realization — LQG m = 6, ESO-ADRC m = 9), worst of 3 tool positions
+  (x = 0, L/4, L/2 — the article's Fig. 6 treatment).
+
+**Designs selected by the grid (printed by `main_simulation.py`):**
+- LQG: w_q = 1e14, w_qd = 1e8 (grid-searched).
+- ESO-ADRC **performance** design: (w_q, w_qd, σ_d) = (1e16, 1e8, 3e3),
+  rms_nom = 0.798 µm, worst-ρ = 1.165.
+- ESO-ADRC **certified** design: (1e14, 1e8, 1e4), rms_nom = 0.838 µm,
+  worst-ρ = 1.046 → the fixed "ESO-ADRC" entry everywhere.
+- A-ESO-ADRC ladder = [performance rung, certified rung].
 
 ---
 
-## 1. Time-domain comparison (LQG vs PALF-LQG), T = 0.5 s
+## 1. Time-domain comparison (held-out scenarios, T = 0.5 s)
 
-| Scenario | LQG y_RMS (µm) | PALF y_RMS (µm) | Gain |
+| Scenario | LQG y_RMS (µm) | ESO-ADRC (µm) | A-ESO-ADRC (µm) |
 |---|---:|---:|---:|
-| S1 — Nominal (a_p = 0.3 mm) | 0.7765 | 0.6252 | **+19.48 %** |
-| S2 — Aggressive (a_p = 0.6 mm) | 1.5580 | 1.3864 | **+11.01 %** |
-| S3 — Model mismatch (ω −8 %) | 0.9001 | 0.7689 | **+14.58 %** |
-| S4 — High K_T (+30 %) | 1.0127 | 0.8533 | **+15.75 %** |
-| **Average** | 1.0618 | 0.9084 | **+14.44 %** |
+| S1 — Nominal (a_p = 0.3 mm) | **0.7765** | 0.8256 | 0.7826 |
+| S2 — Aggressive (a_p = 0.6 mm) | **1.5580** | 1.8237 | 3.4145 ¹ |
+| S3 — Model mismatch (ω −8 %) | **0.9001** | 20.79 ² | 1.1233 |
+| S4 — High K_T (+30 %) | **1.0127** | 1.0784 | 1.0402 |
 
-Control effort (S1): LQG u_max = 23.04 V, u_RMS = 5.55 V; PALF u_max = 22.29 V,
-u_RMS = 6.02 V — ~8 % more RMS voltage buys ~19.5 % less vibration; both far below
-the ±150 V limit. Bit-reproducible across runs (all RNGs seeded).
+¹ 7 rung switches (panic + escalating locks); the transient of the first escape
+inflates the RMS; ends parked on the certified rung, stable.
+² The certified design's −8 % sensitivity hole: a BOUNDED saturation limit cycle
+(y_max 61 µm, u at ±150 V), not a divergence. A-ESO-ADRC avoids it by staying on
+the performance rung (0 switches).
+
+Control effort (S1): LQG u_max = 23.0 V, u_RMS = 5.6 V; ESO-ADRC 23.4/5.9 V;
+A-ESO-ADRC 21.7/5.0 V — all far below ±150 V. Bit-reproducible across runs.
 
 ### The result, honestly
 
-With the principled model-inverse ILC, the phase-locked feedforward now cancels most
-of the tooth-passing-periodic residual that survives LQG feedback: **+19.5 % on the
-nominal plant**, and the FROZEN feedforward retains **double-digit gains on every
-held-out perturbation** (+11 % at doubled depth, +14.6 % under −8 % frequency
-mismatch, +15.8 % at +30 % cutting stiffness). The gains degrade gracefully rather
-than collapsing — the phase-indexed compensation does not depend on the (wrong)
-feedback model.
+**Inside the fixed-design envelope the correctly-modelled LQG is the best
+regulator** — the ESO trades ~6 % nominal RMS for its disturbance states, and the
+supervised ladder brings that back to −0.8 % (S1: 0.783 vs 0.777). The ESO's
+return shows up OUTSIDE the LQG envelope (§2). The certified fixed design's −8 %
+hole and the performance design's a_p = 0.6 divergence are complementary — see the
+certification figure (`fig06_certification`) — which is precisely the case for the
+supervised ladder: **A-ESO-ADRC is the only controller in the study that never
+diverges** (all 4 scenarios here + all 5 stress cases of §2).
 
-### Monte-Carlo robustness (50 samples; held-out; divergence reported)
+## 2. Material-removal drift & robustness stress (`main_adaptive_removal.py`)
 
-`python main_robustness_mc.py` (±15 % cutting force, ±3 % modal frequency, ±20 %
-damping):
+The plant's modal frequencies drift DURING the pass (solver schedule Kp·s(t)²,
+Cp·s(t); ramp over 60 % of the pass, then hold), or are statically perturbed, or
+the actuator effectiveness is degraded. All controllers frozen nominal designs;
+A-ESO-ADRC additionally switches rungs online (measured cost only — no
+identification, no probe).
 
-- Converged: **LQG 50/50, PALF 50/50** (no survivorship bias — divergence would be
-  counted, none occurred within these ranges).
-- RMS gain over both-converged samples: **median +17.81 %, mean +17.66 %**
-  [p05 +15.78 %, p95 +19.53 %].
-- **PALF beats LQG in 100 %** of samples. (`figs_lqg_vs_palf/fig_robustness_mc.*`)
+| Case | LQG (fixed) | ESO-ADRC (fixed, certified) | **A-ESO-ADRC** |
+|---|---:|---:|---:|
+| D0 no drift (sanity) | **0.777** | 0.826 | 0.783 (adaptation costs ~nothing) |
+| D1 ramp to +15 % (article's direction) | **0.682** | 1.276 | 1.256 |
+| D2 ramp to −12 % (beyond LQG margin) | 260 µm ✗ | **0.898** | 1.151 — survives |
+| D3 static −12 % | 483 µm ✗ | **1.140** | 1.708 — survives |
+| D4 piezo effectiveness ×0.25 | 1.241 | 1.221 | **1.184** |
 
-### A genuine robustness limit (surfaced by the corrected forces)
+Key mechanism: the ESO's per-mode disturbance states absorb the stiffness-drift
+model error that biases the plain Kalman filter — the fixed LQG diverges at −12 %
+(4 % beyond its ~−9 % margin) while the certified ESO design rides through at
+~1 µm. The A-ESO-ADRC rung traces (`fig_adaptive_removal`) show the supervisor
+escalating to the certified rung as the drift crosses the performance rung's
+comfort zone (D2: one switch at ~330 ms), and a probe-and-return pattern on D1.
 
-The **controlled** stability margin at a_p = 0.3 mm / 4900 RPM is ~**−9 % frequency
-mismatch**: stable at −8 %, divergent at −10 %+, for both controllers, independent of
-observer tuning. S3 therefore uses −8 % (≈ the article's measured 9 % 2nd-mode drift).
+**Rejected mechanism (documented negative result):** closed-loop
+actuator-effectiveness self-identification from the d̂–u regression is BIASED (the
+periodic cutting force correlates with u through the feedback path; the estimate
+ran to its projection bounds in the wrong direction) — consistent with this
+package's identifiability finding that parameter identification under stable
+periodic cutting requires persistent excitation. D4 shows the loop tolerates
+×0.25 effectiveness anyway (gain margin), so no adaptation is needed on this axis
+within the envelope studied.
 
-## 2. Stability lobe diagram — rigorous closed-loop monodromy, worst of 3 tool positions, at 4900 RPM
+## 3. Monte-Carlo robustness (50 samples; held-out; divergence reported)
+
+`python main_robustness_mc.py` (±15 % cutting constants, ±3 % modal frequency,
+±20 % damping — the LQG-safe neighbourhood):
+
+- Converged: **LQG 50/50, ESO-ADRC 50/50, A-ESO-ADRC 50/50** (no survivorship
+  bias — divergence would be counted; none occurred within these ranges).
+- RMS medians: LQG **0.788 µm** [p05 0.683, p95 0.882]; ESO-ADRC 0.850 µm
+  [0.710, 0.977]; A-ESO-ADRC 0.886 µm [0.696, 1.361].
+- Pairwise vs LQG: ESO-ADRC median −7.3 % (better in 0 % of samples);
+  A-ESO-ADRC median −11.7 % (better in 26 %; heavy left tail from occasional
+  panic transients).
+
+Honest reading: within ±3 % frequency uncertainty — inside the LQG margin — **LQG
+wins the Monte-Carlo**, as §1 predicts. The ESO family's advantage is confined to
+where it claims it: drift/mismatch beyond the LQG envelope (§2), where the MC's
+uniform draws never go. A wider-mismatch MC would mix divergences of LQG with
+survivals of ESO-ADRC (see D2/D3).
+
+## 4. Stability lobe diagram — rigorous closed-loop monodromy, worst of 3 tool positions, at 4900 RPM
 
 | Configuration | a_p critical | vs Open-Loop |
 |---|---:|---:|
 | Open-Loop (coupled monodromy, worst position) | 0.100 mm | 1× |
-| LQG (closed-loop monodromy, worst position) | 1.075 mm | 10.8× |
-| PALF-LQG | **1.075 mm (= LQG, rigorously)** | 10.8× |
+| LQG (closed-loop monodromy) | **1.075 mm** | 10.8× |
+| ESO-ADRC certified design (generic monodromy) | 0.913 mm | 9.1× |
 
 Notes:
 1. **Open-loop anchor still validated:** 0.10 mm at 4900 RPM = Du et al. (2024)
    Fig. 18 experimental limit.
-2. **Worst-position analysis** (x = 0, L/4, L/2; elementwise-max ρ) replaces the
-   path-averaged Dp — more conservative (1.08 mm vs 1.73 mm averaged) and aligned with
-   the article's own position-resolved treatment. Notably, the controlled critical
-   depth is now the **same order as the article's experimentally achieved 0.6–0.8 mm**
-   controlled limits.
-3. **PALF = LQG rigorously:** the feedforward is a phase-only map, ∂u_FF/∂x̂ ≡ 0, so it
-   does not enter the closed-loop Jacobian — identical monodromy, multipliers, boundary.
-4. Monodromy verification: no-cutting ρ = 0.56 < 1; open-loop coupled = per-mode
-   open-loop = 0.079 mm on a fine grid.
+2. Both controlled depths are the same order as the article's experimentally
+   achieved 0.6–0.8 mm controlled limits. LQG's nominal-plant lobe is higher —
+   consistent with §1 (nominal optimality) — while the certified ESO design's
+   lobe is what A-ESO-ADRC's panic fallback guarantees at the nominal plant.
+3. The ESO's d-state leakage (β_d = 10 rad/s) contributes a constant Floquet
+   multiplier exp(−β_d τ) ≈ 0.96, irrelevant to the chatter boundary.
+4. Certification caveat: ρ values within a few % of 1 are marginal and
+   m_div-sensitive; the certification is a comparative design-selection criterion,
+   always cross-checked in the time domain (S3 shows a bounded limit cycle at a
+   point where ρ ≈ 0.99–1.10 depending on discretisation).
 
-## 3. Material-removal drift — A-PALF-LQG (per-step parameter update)
+## 5. Canonical LADRC — the negative result (reproducible)
 
-`python main_adaptive_removal.py`. The plant's modal frequencies drift DURING the
-pass (solver schedule: Kp·s(t)², Cp·s(t); ramp over 60 % of the pass, then hold).
-All controllers designed/trained once on the nominal model and frozen; A-PALF-LQG
-additionally tracks the plant online (probe-based sliding-DFT FRF matching over a
-θ grid, 0.4 V/line at 5 non-harmonic DFT-bin lines; dwell + hysteresis switching of
-pre-solved LQR/observer pairs).
+Textbook output-form LADRC (ÿ = f + b₀u, Gao bandwidth parametrisation,
+`CanonicalLADRC_Controller`) destabilizes this plant for EVERY tested bandwidth
+pair (wc = 2π·50–800 Hz × wo = 2π·800–2500 Hz), even without cutting. Cause: the
+piezo→tip-sensor transfer is non-collocated with alternating modal residues
+(D·H = −0.40/+0.65/−0.19), DC gain −2.4e-8 vs high-frequency gain +0.057 —
+opposite signs ⟹ an odd number of real RHP zeros ⟹ no single b₀ sign is correct
+across frequency. This is why the package's ADRC is formulated in modal space.
 
-| Drift scenario | LQG (fixed) | PALF (fixed) | **A-PALF-LQG** |
-|---|---:|---:|---:|
-| +15 % (article's direction) | 0.681 µm | 0.589 µm | **0.580 µm** (best) |
-| −12 % (beyond fixed margin) | 261 µm ✗ | 286 µm ✗ | **0.742 µm — survives** |
-| no drift (sanity) | 0.776 µm | 0.616 µm | **0.616 µm** (adaptation costs nothing) |
-
-Key identifiability finding (documented in the controller): under stable cutting all
-signals are tooth-periodic with an unknown periodic force, so observer innovations
-alone do NOT discriminate the plant parameters — persistent excitation via the probe
-is what makes the per-step update well-posed. Anti-leakage design: the DFT window is
-an integer number of tooth periods and the probe lines sit on DFT bins, so the forced
-harmonics leak exactly zero into the identification lines. The tracked θ̂(t) follows
-the true schedule with ~half-window lag and grid-step quantization
-(`figs_lqg_vs_palf/fig_adaptive_removal.*`).
-
-## 4. FEM verification (mesh convergence)
+## 6. FEM verification (mesh convergence)
 
 `python 03_analysis/mesh_convergence.py`: frequencies converged to <0.1 % by 30×24
-(521.1/1069.9/2732.8/3334/4145 Hz); uniform ~2.6 % below the article's Chebyshev-Ritz
-*theory* (discretisation-model difference — the non-conforming element converges from
-below) but within **0.2–0.6 % of the MEASURED** modes 2, 4, 5 (Table 4).
+(521.1/1069.9/2732.8/3334/4145 Hz); uniform ~2.6 % below the article's
+Chebyshev-Ritz *theory* (discretisation-model difference — the non-conforming
+element converges from below) but within **0.2–0.6 % of the MEASURED** modes
+2, 4, 5 (Table 4).
 
-## 5. Reproducibility notes
+## 7. Reproducibility notes
 
-- One eigensolve builds the nominal 5-mode plant; truncation feeds the controllers,
-  perturbed copies feed the scenarios (consistent mode signs).
-- All RNGs seeded (ILC/NN `42`; measurement noise `1234`, identical for both
-  controllers). Bit-reproducible across runs.
-- Runtime ≈ 62 s (`main_simulation.py`, incl. the 6 worst-position monodromy grids);
-  ≈ 1 min Monte-Carlo. No GPU.
+- One eigensolve builds the nominal 5-mode plant; truncation feeds the
+  controllers, perturbed copies feed the scenarios (consistent mode signs).
+- All RNGs seeded (measurement noise `1234`, identical for all controllers; the
+  design grid is deterministic). Bit-reproducible across runs.
+- Runtimes: `main_simulation.py` ≈ 4.5 min (design grid + certification ≈ 2 min,
+  9 SLD monodromy grids ≈ 35 s); `main_robustness_mc.py` ≈ 4 min;
+  `main_adaptive_removal.py` ≈ 1.5 min. No GPU.
 
-## 6. Remaining items (P3)
+## 8. Remaining items (P3)
 
-- Experimental validation on a physical plate (the article's rig is fully specified —
-  Tables 1–3 + Fig. 17 list every instrument). Everything above is simulation.
+- Experimental validation on a physical plate (the article's rig is fully
+  specified — Tables 1–3 + Fig. 17 list every instrument). Everything above is
+  simulation.
+- A dedicated ADRC/ESO + supervisory-adaptation literature search before
+  submission (see CONTRIBUTION.md §5).

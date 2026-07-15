@@ -1,5 +1,42 @@
 # Reproduced Results — Verification Log
 
+## P5 UPDATE (2026-07-15, evening): HRC layer + 4-rung A-ESO-ADRC
+
+New controller stage: **ESO-ADRC+HRC** (per-tooth-harmonic LTI resonant
+compensators, inverse-closed-loop-FRF phase, n_harm = 4 — capped so the lines
+stay clear of mode 2's drift band — g_base = 150, lam = 5, grid-selected on the
+nominal model) and **A-ESO-ADRC v3** = 4-rung supervised ladder
+[HRC / perf-ESO(1e16,1e8,3e3) / quasi-Kalman(1e14,1e8,1e3) / certified(1e14,1e8,1e4)].
+
+Held-out scenarios (y_RMS µm): S1: LQG 0.777, HRC **0.381**, cert-ESO 0.826,
+A- **0.381**; S2: 1.558 / DIV / 1.824 / 2.43; S3: 0.900 / 251 (bounded) / 20.8
+(bounded) / 12.0 (bounded, ends recovering on the quasi-Kalman rung);
+S4: 1.013 / 1.135 / 1.078 / 1.135.
+
+Drift benchmark: D0: 0.777/0.381/0.826/**0.381**; D1(+15 % ramp):
+0.682/0.955/1.276/1.424; D2(−12 % ramp): DIV/33.6/0.898/**1.209**;
+D3(−12 % static): DIV/DIV/1.140/**1.057**; D4(effect. ×0.25):
+1.241/2.096/1.221/**1.200**. **A-ESO-ADRC: zero divergences in all 9 cases.**
+
+Monte-Carlo (50 samples, ±15 % cutting, ±3 % freq, ±20 % damping, all
+controllers 50/50 converged): medians LQG 0.788, HRC 0.410, cert-ESO 0.850,
+**A-ESO-ADRC 0.410 µm — +48.1 % median vs LQG, better in 94 % of samples**
+[p05 −4.0 %, p95 +54.1 %].
+
+Control effort (S1): A-ESO-ADRC u_max 20.3 V (vs LQG 23.0), u_RMS 7.2 V (vs 5.6).
+SLD unchanged (certified rung = the A- fallback boundary, 0.913 mm at 4900 RPM).
+Design finding #5 (negative): harmonic states INSIDE the ESO destabilise the
+5-mode plant via estimator spillover (with or without LQ-optimal disturbance
+feedthrough) — the resonant layer must sit in the controller output path. The
+supervisor v3 mechanics (rising-energy cascade panic, severity-based target,
+recovery-trend holds, per-pass failure flags, probe aborts, desperation probing,
+escalating locks) are documented in `02_controllers/adrc_controller.py`.
+
+The sections below describe the P4 state (pre-HRC); their protocol statements
+remain in force and their numbers remain valid for the LQG / certified-ESO
+columns.
+
+
 **Date:** 2026-07-15 (P4 — ESO-ADRC controller family)
 **Environment:** Python 3.11, NumPy/SciPy/Matplotlib (latest), Linux x86-64
 **Commands:** `python main_simulation.py`, `python main_robustness_mc.py`,

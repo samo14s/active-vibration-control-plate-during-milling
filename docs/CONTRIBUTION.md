@@ -20,6 +20,25 @@ committed code (see `REPRODUCED_RESULTS.md`), and (iv) the ESO-ADRC design study
 > symmetric baselines, corrected Eq. 3 forces, spillover + measurement noise,
 > Eq. 15 piezo, rigorous monodromy SLD) carry over unchanged. Only P3
 > (experimental validation) remains open.
+>
+> **P5 (2026-07-15, "beat LQG inside the envelope too"):** the ESO-ADRC family
+> gains a **harmonic resonant cancellation (HRC) layer** — per-tooth-harmonic LTI
+> resonant compensators with inverse-closed-loop-FRF phase (the online, causal
+> counterpart of the earlier model-inverse ILC; n_harm capped at 4 so the lines
+> stay clear of mode 2's drift band) — and A-ESO-ADRC becomes a **4-rung
+> supervised ladder** [HRC / performance-ESO / quasi-Kalman-ESO / certified-ESO]
+> with supervisor v3 (rising-energy cascade panic with severity-based target,
+> recovery-trend holds, per-pass failure flags, probe aborts, desperation probing
+> from the robust end, escalating locks). Result: **nominal RMS ~50 % BELOW LQG
+> (0.38 vs 0.78 µm), Monte-Carlo median +48 % vs LQG (better in 94 % of samples,
+> all 50/50 converged), still the only controller that never diverges across all
+> 9 stress scenarios** (LQG diverges beyond −10 % drift). New negative result
+> (DESIGN FINDING #5): harmonic states inside the ESO destabilise the true plant
+> via estimator spillover — the resonant layer must live in the controller output
+> path, driven by y. Honest remaining weak spot: at ω−8 % (S3) the adaptive
+> recovery is bounded but slow (~5–15 µm over the 0.5 s pass vs LQG's 0.90 µm) —
+> the certified rung's sensitivity hole; documented, not hidden. Verified numbers:
+> `REPRODUCED_RESULTS.md`.
 
 ---
 

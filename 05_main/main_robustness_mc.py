@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 from plate_model import PlateModel
 from milling_force import cutting_constants
 from lqg_controller import LQGController
-from adrc_controller import ESO_ADRC_Controller, AdaptiveESO_ADRC_Controller
+from adrc_controller import (ESO_ADRC_Controller, ESO_ADRC_HRC_Controller,
+                             AdaptiveESO_ADRC_Controller)
 from newmark_solver import NewmarkSimulator
 from uncertainty_analysis import run_mc_controllers
 
@@ -60,10 +61,22 @@ lqg.discretize_observer()
 # main_simulation.py — regenerate there if the model changes).
 PERF_DESIGN = (1e16, 1e8, 3e3)
 CERT_DESIGN = (1e14, 1e8, 1e4)
+HRC_DESIGN = dict(n_harm=4, g_base=150.0, lam=5.0)
+W_TOOTH = 2*np.pi*NT*RPM/60.0
 adrc = ESO_ADRC_Controller(design, DT, *CERT_DESIGN, kalman_V=KALMAN_V,
                            verbose=False)
-aadrc = AdaptiveESO_ADRC_Controller(design, DT, rungs=(PERF_DESIGN, CERT_DESIGN),
-                                    perf_rung=0, robust_rung=1,
+hrc = ESO_ADRC_HRC_Controller(design, DT, *PERF_DESIGN, w_tooth=W_TOOTH,
+                              kalman_V=KALMAN_V, verbose=False, **HRC_DESIGN)
+RUNGS = [
+    dict(kind='hrc', w_q=PERF_DESIGN[0], w_qd=PERF_DESIGN[1],
+         sigma_d=PERF_DESIGN[2], **HRC_DESIGN),
+    dict(kind='eso', w_q=PERF_DESIGN[0], w_qd=PERF_DESIGN[1],
+         sigma_d=PERF_DESIGN[2]),
+    dict(kind='eso', w_q=CERT_DESIGN[0], w_qd=CERT_DESIGN[1], sigma_d=1e3),
+    dict(kind='eso', w_q=CERT_DESIGN[0], w_qd=CERT_DESIGN[1],
+         sigma_d=CERT_DESIGN[2]),
+]
+aadrc = AdaptiveESO_ADRC_Controller(design, DT, rungs=RUNGS, w_tooth=W_TOOTH,
                                     kalman_V=KALMAN_V, verbose=False)
 
 # ---------------- MC setup ----------------
@@ -90,7 +103,8 @@ UNC = dict(kt_pct=0.15, kn_pct=0.15, mu_c_pct=0.15,
            omega_pct=0.03, zeta_pct=0.20, E_pct=0.0)
 
 stats = run_mc_controllers(
-    plant, {"LQG": lqg, "ESO-ADRC": adrc, "A-ESO-ADRC": aadrc},
+    plant, {"LQG": lqg, "ESO-ADRC+HRC": hrc, "ESO-ADRC": adrc,
+            "A-ESO-ADRC": aadrc},
     nominal_params, kp_idx, DT, T_END, FT, TAU, N_PER,
     unc=UNC, n_samples=N_SAMPLES, meas_noise_std=MEAS_NOISE_STD,
     seed=42, verbose=True)
@@ -110,7 +124,8 @@ for nm, gs in stats['gain_stats'].items():
 
 # ---------------- figure ----------------
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-COL = {"LQG": '#2E8B57', "ESO-ADRC": '#1E5AA8', "A-ESO-ADRC": '#DC143C'}
+COL = {"LQG": '#2E8B57', "ESO-ADRC+HRC": '#8A2BE2',
+       "ESO-ADRC": '#1E5AA8', "A-ESO-ADRC": '#DC143C'}
 
 ax = axes[0]
 data = [stats['rms'][nm][stats['conv'][nm]] for nm in stats['names']]

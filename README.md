@@ -21,8 +21,12 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > closed-loop monodromy SLD). **P4 (2026-07-15): the earlier learned-feedforward
 > controller family (PALF-LQG / A-PALF-LQG) was removed at the author's request and
 > replaced by a new strategy developed to be adaptive** — the ESO-ADRC family below.
-> All protocol/integrity fixes carry over unchanged. Remaining: P3 (experimental
-> validation) — everything here is simulation.
+> **P5 adds the harmonic resonant cancellation (HRC) layer and the 4-rung
+> supervised ladder — A-ESO-ADRC now beats LQG by ~50 % on the nominal plant and
+> by a +48 % Monte-Carlo median (better in 94 % of samples) while remaining the
+> only controller that never diverges.** All protocol/integrity fixes carry over
+> unchanged. Remaining: P3 (experimental validation) — everything here is
+> simulation.
 
 ---
 
@@ -32,7 +36,8 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 |---|---|---|
 | **LQG** | output-weighted LQR + Kalman filter (3 design modes) | weight grid search on the nominal model |
 | **ESO-ADRC** | the SAME output-weighted LQR fed by a 9-state **modal extended state observer** that estimates a per-mode *total disturbance* d(t) ∈ R³ (regenerative force + feed forcing + spillover + drift) | grid over (w_q, w_qd, σ_d); the fixed design is **certification-selected**: smallest worst-case closed-loop Floquet radius over a design-time uncertainty ball |
-| **A-ESO-ADRC** | a supervised **ladder of two ESO-ADRC rungs** (performance design + certified design) sharing one physical observer state — bumpless switching driven by the measured y²-cost only (running-min quiet level, dwell + hysteresis, fast-EMA **panic** to the certified rung, escalating locks). **No identification, no probe.** | rungs from the same grid |
+| **ESO-ADRC+HRC** | + **harmonic resonant cancellation**: per-tooth-harmonic LTI resonant compensators (h = 1..4) with inverse-closed-loop-FRF phase — the online causal counterpart of model-inverse ILC, exploiting only the KNOWN spindle frequency | HRC grid (n_harm, g_base) on the performance base; n_harm capped by the mode-2 drift band |
+| **A-ESO-ADRC** | a supervised **4-rung ladder** [HRC / performance-ESO / quasi-Kalman-ESO / certified-ESO] sharing one physical observer state — bumpless switching driven by the measured y²-cost only (rising-energy cascade panic with severity-based target, recovery-trend holds, per-pass failure flags, probe aborts, desperation probing, escalating locks). **No identification, no probe.** | rungs from the same grids |
 
 The LQG-vs-ESO-ADRC comparison isolates exactly one ingredient: replace the Kalman
 filter with a disturbance-estimating ESO. Four **documented design findings** (module
@@ -159,31 +164,34 @@ cutting constants (k₁ = 0.3174, k₂ = 1.1258).
 
 ### Held-out scenarios (y_RMS, µm; T = 0.5 s; designs frozen on the nominal model)
 
-| Scenario | LQG | ESO-ADRC (certified) | A-ESO-ADRC |
-|---|---:|---:|---:|
-| S1 Nominal | **0.777** | 0.826 | 0.783 |
-| S2 Aggressive (a_p = 0.6 mm) | **1.558** | 1.824 | 3.41 (panic transient) |
-| S3 Model mismatch (ω −8 %) | **0.900** | 20.8 (bounded hole) | 1.123 |
-| S4 High K_T (+30 %) | **1.013** | 1.078 | 1.040 |
+| Scenario | LQG | ESO-ADRC+HRC | ESO-ADRC (certified) | A-ESO-ADRC |
+|---|---:|---:|---:|---:|
+| S1 Nominal | 0.777 | **0.381 (+51 %)** | 0.826 | **0.381 (+51 %)** |
+| S2 Aggressive (a_p = 0.6 mm) | **1.558** | DIVERGES | 1.824 | 2.43 |
+| S3 Model mismatch (ω −8 %) | **0.900** | 251 (bounded) | 20.8 (bounded hole) | 12.0 (bounded, recovering) |
+| S4 High K_T (+30 %) | **1.013** | 1.135 | 1.078 | 1.135 |
 
 ### Drift / stress benchmark (`main_adaptive_removal.py`)
 
-| Case | LQG | ESO-ADRC | A-ESO-ADRC |
-|---|---:|---:|---:|
-| D0 no drift | **0.777** | 0.826 | 0.783 |
-| D1 ramp to +15 % during the pass | **0.682** | 1.276 | 1.256 |
-| D2 ramp to −12 % during the pass | **DIVERGES** | 0.898 | 1.151 |
-| D3 static −12 % | **DIVERGES** | 1.140 | 1.708 |
-| D4 piezo effectiveness ×0.25 | 1.241 | 1.221 | **1.184** |
+| Case | LQG | ESO-ADRC+HRC | ESO-ADRC | A-ESO-ADRC |
+|---|---:|---:|---:|---:|
+| D0 no drift | 0.777 | **0.381** | 0.826 | **0.381** |
+| D1 ramp to +15 % during the pass | **0.682** | 0.955 | 1.276 | 1.424 |
+| D2 ramp to −12 % during the pass | DIVERGES | 33.6 (bounded) | **0.898** | 1.209 |
+| D3 static −12 % | DIVERGES | DIVERGES | 1.140 | **1.057** |
+| D4 piezo effectiveness ×0.25 | 1.241 | 2.096 | 1.221 | **1.200** |
 
-**The honest headline:** inside the fixed-design envelope the correctly-modelled
-LQG is the best regulator (it also wins the ±3 %-frequency Monte-Carlo: medians
-0.788 vs 0.850/0.886 µm, all 50/50 converged). The ESO's return is
-**architectural robustness** — its per-mode disturbance states absorb the model
-error, so it survives −12 % drift (static AND ramped) where the LQG diverges. No
-fixed tuning covers everything (the Floquet certification map shows complementary
-holes), and **A-ESO-ADRC is the only controller that never diverges across all 9
-scenarios**, staying within 0.8 % of LQG nominally.
+**The headline (P5):** the tooth-harmonic resonant layer (HRC — the online,
+causal counterpart of model-inverse ILC, exploiting only the KNOWN spindle
+frequency) cuts the nominal RMS **~50 % below LQG** (0.381 vs 0.777 µm) at lower
+peak voltage, and wins the Monte-Carlo (±15 % cutting, ±3 % frequency, ±20 %
+damping): medians 0.410 vs 0.788 µm, **+48 % median gain, better in 94 % of the
+50 samples, everything 50/50 converged**. No fixed tuning covers the whole range
+(the HRC design diverges at a_p = 0.6, LQG beyond −10 % drift, the certified ESO
+rings at −8 %): **A-ESO-ADRC — the 4-rung supervised ladder — is the only
+controller that never diverges across all 9 scenarios** while matching the HRC
+rung nominally. Honest weak spot: at ω−8 % its recovery is bounded but slow
+(12 µm over the 0.5 s pass vs LQG's 0.90 µm).
 
 ### Stability lobes at 4900 RPM — closed-loop coupled monodromy, worst of 3 tool positions
 

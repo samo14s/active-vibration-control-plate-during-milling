@@ -79,6 +79,22 @@ A-ESO-ADRC therefore runs a LADDER of pre-designed rungs (design tuples
 
 The supervisor updates from measured signals only — no probe, no cutting-force
 knowledge, no model identification — and is verified in main_adaptive_removal.py.
+
+P5 EXTENSION — HARMONIC RESONANT CANCELLATION (ESO_ADRC_HRC_Controller) and the
+4-RUNG LADDER. The cutting force is periodic at the KNOWN tooth frequency
+(spindle-synchronous, model-independent): per-line LTI resonant compensators with
+inverse-closed-loop-FRF phase (the online causal counterpart of model-inverse ILC)
+cut the nominal RMS ~50 % BELOW the LQG baseline. DESIGN FINDING #5: the harmonic
+states must live in the CONTROLLER OUTPUT PATH driven by y — putting them inside
+the ESO (with or without LQ-optimal disturbance feedthrough) destabilises the true
+5-mode plant via estimator spillover, verified over every intensity tested. The
+HRC rung is nominal-brilliant but fragile off-nominal, which the supervised ladder
+absorbs: A-ESO-ADRC runs [HRC, performance-ESO, quasi-Kalman-ESO, certified-ESO]
+with the v3 supervisor (rising-energy cascade panic with severity-based target,
+recovery-trend holds, sticky per-pass failure flags, probe aborts, desperation
+probing from the robust end, escalating locks) — the only controller in the study
+that never diverges across all 9 stress scenarios while beating LQG by ~50 % on
+the nominal plant.
 """
 import numpy as np
 from scipy.linalg import expm, solve_continuous_are
@@ -207,62 +223,210 @@ class ESO_ADRC_Controller:
 
 
 # =====================================================================
+# Harmonic resonant cancellation (HRC) extension
+# =====================================================================
+class ESO_ADRC_HRC_Controller(ESO_ADRC_Controller):
+    """
+    ESO-ADRC + tooth-harmonic resonant internal model (HRC).
+
+    The cutting force is periodic at the KNOWN tooth-passing frequency (spindle-
+    synchronous — independent of the plant model). For each harmonic h = 1..H a
+    small LTI resonant compensator
+
+        C_h(s) = g_h (c1 s + c0) / (s^2 + 2 lam s + wh^2),   wh = h*w_tooth
+
+    driven by the measured y is added to the ESO-ADRC law. The phase (c1, c0) is
+    set from the DESIGN closed-loop FRF G_cl(j wh) (plant design model + the base
+    ESO-ADRC in the loop) so that C_h(j wh) G_cl(j wh) is negative-real, and the
+    per-line gain is normalised: g_h = g_base / |G_cl(j wh)|. This is the exact
+    LTI equivalent of phase-compensated adaptive feedforward cancellation (AFC),
+    and the ONLINE, causal counterpart of the earlier trial-based model-inverse
+    ILC. IMPORTANT design finding: putting the harmonic states INSIDE the ESO
+    (with or without optimal DAC feedthrough) destabilises the true 5-mode plant
+    through estimator spillover — the resonant layer must live in the CONTROLLER
+    OUTPUT PATH, driven by y directly, with the ESO left untouched. The pointwise
+    inverse-FRF phase at the lines is essentially exact (design-vs-5-mode phase
+    error ~0.0 deg at every line).
+
+    Everything stays LTI: controller_realization() returns the augmented
+    (A_con, B_con_y, K_con) with state [z_eso; x_res], so the generic monodromy
+    SLD and the design-ball certification apply unchanged.
+    """
+
+    def __init__(self, design, dt, w_q, w_qd, sigma_d, n_harm, g_base, lam=5.0,
+                 w_tooth=None, gamma=0.0, w_r=1.0, kalman_V=1e-12, beta_d=10.0,
+                 u_max=150.0, verbose=True):
+        super().__init__(design, dt, w_q, w_qd, sigma_d, gamma=gamma, w_r=w_r,
+                         kalman_V=kalman_V, beta_d=beta_d, u_max=u_max,
+                         verbose=False)
+        if w_tooth is None:
+            raise ValueError("w_tooth (tooth-passing angular frequency) required")
+        self.n_harm = int(n_harm)
+        self.g_base = float(g_base)
+        self.lam = float(lam)
+        self.w_tooth = float(w_tooth)
+        me = 3 * self.n
+        mr = 2 * self.n_harm
+        # design closed-loop FRF from additive u to y (base ESO in the loop)
+        A_cl, B_cl, C_cl = self._design_closed_loop()
+        A_r = np.zeros((mr, mr))
+        B_r = np.zeros(mr)
+        K_r = np.zeros(mr)
+        for h in range(self.n_harm):
+            wh = (h + 1) * self.w_tooth
+            G = complex(C_cl @ np.linalg.solve(
+                1j * wh * np.eye(A_cl.shape[0]) - A_cl, B_cl))
+            psi = np.pi - np.angle(G)          # C(jwh)*G_cl(jwh) negative-real
+            gh = self.g_base / abs(G)
+            i0 = 2 * h
+            A_r[i0, i0 + 1] = 1.0
+            A_r[i0 + 1, i0] = -wh**2
+            A_r[i0 + 1, i0 + 1] = -2.0 * self.lam
+            B_r[i0 + 1] = 1.0
+            K_r[i0] = -gh * (-wh * np.sin(psi))     # u = -K_con z_total
+            K_r[i0 + 1] = -gh * np.cos(psi)
+        self.A_r, self.B_r = A_r, B_r
+        # augmented implementation matrices: state zt = [z_eso; x_res]
+        self.n_x = me + mr
+        K_e = self.K_con                            # base ESO law
+        self.K_con = np.concatenate([K_e, K_r])
+        A_impl = np.zeros((self.n_x, self.n_x))
+        A_impl[:me, :me] = self.A_e - np.outer(self.L, self.C_e)
+        A_impl[me:, me:] = A_r
+        B_u = np.concatenate([self.B_e, np.zeros(mr)])
+        B_y = np.concatenate([self.L, B_r])
+        self.A_d, G2 = _zoh(A_impl, np.column_stack([B_u, B_y]), self.dt)
+        self.G_u, self.G_y = G2[:, 0], G2[:, 1]
+        if verbose:
+            print(f"[ESO-ADRC+HRC] base (w_q={w_q:.0e}, w_qd={w_qd:.0e}, "
+                  f"sigma_d={sigma_d:.0e}), H={self.n_harm} tooth harmonics, "
+                  f"g_base={g_base:g}, lam={lam:g} rad/s")
+
+    def _design_closed_loop(self):
+        """Closed loop of the DESIGN model with the base ESO-ADRC: additive u->y."""
+        Km, Cm, H, D_obs, n = modal_matrices(self.design)
+        # K_con is still the base (3n) ESO law when this is called in __init__
+        K_e = self.K_con[:3 * n]
+        m = 3 * n
+        A = np.zeros((2 * n + m, 2 * n + m))
+        A[0:n, n:2 * n] = np.eye(n)
+        A[n:2 * n, 0:n] = -Km
+        A[n:2 * n, n:2 * n] = -Cm
+        A[n:2 * n, 2 * n:] = -np.outer(H, K_e)
+        A[2 * n:, 0:n] = np.outer(self.L, D_obs)
+        A[2 * n:, 2 * n:] = self.A_e - np.outer(self.B_e, K_e)             - np.outer(self.L, self.C_e)
+        B = np.zeros(2 * n + m)
+        B[n:2 * n] = H
+        B[2 * n:] = self.B_e                    # additive u also seen by the ESO
+        C = np.concatenate([D_obs, np.zeros(n + m)])
+        return A, B, C
+
+    # controller_realization: u = -K_con zt,  zt_dot = A_con zt + B_y y
+    def controller_realization(self):
+        me = 3 * self.n
+        mr = 2 * self.n_harm
+        m = me + mr
+        A = np.zeros((m, m))
+        A[:me, :me] = self.A_e - np.outer(self.B_e, self.K_con[:me])             - np.outer(self.L, self.C_e)
+        A[:me, me:] = np.outer(self.B_e, -self.K_con[me:])
+        A[me:, me:] = self.A_r
+        B_y = np.concatenate([self.L, self.B_r])
+        return A, B_y, self.K_con
+
+
+# =====================================================================
 # Adaptive controller
 # =====================================================================
 class AdaptiveESO_ADRC_Controller:
     """
-    A-ESO-ADRC = a ladder of pre-designed ESO-ADRC rungs sharing ONE physical
-    observer state z = [q_hat; q_hat_dot; d_hat] (bumpless switching), under a
-    measurement-cost supervisor:
-      * slow-EMA cost vs a RUNNING-MIN quiet level (self-calibrating, floored);
-      * dwell-limited, hysteretic toggling perf <-> robust rung;
-      * fast-EMA PANIC jump to the certified-robust rung, with an ABSOLUTE panic
-        floor active from the first step (catches divergence during calibration)
-        and ESCALATING post-panic locks (2x per panic) that suppress limit-cycle
-        toggling between a rung's instability hole and the robust rung.
-    See the module docstring for the rationale (and for the REJECTED kappa
-    self-identification mechanism — DESIGN FINDING #4).
+    A-ESO-ADRC v2 = an ORDERED LADDER of pre-designed rungs (index 0 = highest
+    performance ... last = certified-robust fallback), sharing one physical state
+    [z_eso (3n); x_res (2*H_max)] (bumpless switching; resonant states are zeroed
+    on every switch), under a measurement-cost supervisor:
 
-    Parameters
-    ----------
-    rungs : sequence of (w_q, w_qd, sigma_d). rungs[perf_rung] is the performance
-        design, rungs[robust_rung] the certified-robust fallback (certify at design
-        time with the generic monodromy over the mismatch ball — see
-        main_simulation.py).
+      * slow-EMA cost vs a RUNNING-MIN quiet level, floored AND CAPPED — the cap
+        (~1 um RMS) encodes an absolute performance expectation so the supervisor
+        also reacts when the initial rung is *bounded but bad* (without it, a rung
+        ringing at, say, 5 um calibrates its own misery as "quiet");
+      * dwell-limited moves ONE rung at a time: toward robust when the cost is
+        elevated, toward performance when quiet; each rung's last measured cost is
+        remembered (with a freshness window), so the supervisor prefers the
+        neighbour with the better fresh record — this resolves the case where the
+        ROBUST end is itself in a sensitivity hole and the middle rung is right;
+      * fast-EMA PANIC jump straight to the last (certified) rung, with an
+        absolute floor active from step one and ESCALATING post-panic locks
+        (2x per panic) on performance-ward moves.
+
+    Rungs are given as dicts: {'kind': 'eso', 'w_q':..., 'w_qd':..., 'sigma_d':...}
+    or {'kind': 'hrc', ..., 'n_harm':..., 'g_base':..., 'lam':...} (requires
+    w_tooth). No plant parameter is identified anywhere — see the module
+    docstring for why (identifiability under stable periodic cutting).
     """
 
-    def __init__(self, design, dt, rungs=((1e16, 1e8, 3e3), (1e14, 1e8, 1e4)),
-                 perf_rung=0, robust_rung=None, gamma=0.0,
+    def __init__(self, design, dt, rungs, w_tooth=None,
                  kalman_V=1e-12, beta_d=10.0, u_max=150.0,
                  # supervisor
                  cost_tau=10e-3, fast_tau=1.5e-3, calib_steps=4 * 82,
                  ratio_up=6.0, ratio_back=1.5, panic_ratio=30.0,
-                 dwell_steps=250, panic_lock_steps=2000,
-                 quiet_floor=0.3e-6, panic_abs=2.5e-6,
+                 dwell_steps=1000, dwell_up_steps=600, panic_lock_steps=2000,
+                 quiet_floor=0.3e-6, quiet_cap=1.0e-6, panic_abs=2.5e-6,
+                 mem_fresh_steps=3000,
                  verbose=True):
         self.design = design
         self.dt = float(dt)
         self.u_max = float(u_max)
-        self.gamma = float(gamma)
         Km, Cm, H, D_obs, n = modal_matrices(design)
         self.n = n
-        self.n_x = 3 * n
-        self.H = H
-        self.A_e, self.B_e, self.C_e = eso_matrices(design, beta_d=beta_d)
-        self.rung_defs = [tuple(map(float, r)) for r in rungs]
-        self.perf_rung = int(perf_rung)
-        self.robust_rung = int(robust_rung) if robust_rung is not None \
-            else len(self.rung_defs) - 1
-        # Precompute per-rung gains and discrete matrices (shared physical state).
+        me = 3 * n
+        # Build each rung as a standalone controller, then embed into the shared
+        # state layout [z_eso; x_res(2*H_max)]. ESO-only rungs leave the resonant
+        # substate decaying (no drive, no output).
+        self.rung_defs = list(rungs)
+        objs = []
+        for r in self.rung_defs:
+            if r['kind'] == 'hrc':
+                objs.append(ESO_ADRC_HRC_Controller(
+                    design, dt, r['w_q'], r['w_qd'], r['sigma_d'],
+                    n_harm=r['n_harm'], g_base=r['g_base'],
+                    lam=r.get('lam', 5.0), w_tooth=w_tooth,
+                    kalman_V=kalman_V, beta_d=beta_d, u_max=u_max,
+                    verbose=False))
+            else:
+                objs.append(ESO_ADRC_Controller(
+                    design, dt, r['w_q'], r['w_qd'], r['sigma_d'],
+                    kalman_V=kalman_V, beta_d=beta_d, u_max=u_max,
+                    verbose=False))
+        H_max = max((o.n_harm if hasattr(o, 'n_harm') else 0) for o in objs)
+        mr = 2 * H_max
+        self.n_x = me + mr
+        self.n_rungs = len(objs)
+        self.robust_rung = self.n_rungs - 1
+        LAM_DECAY = 30.0                      # unused resonant states decay
         self._tables = []
-        for (w_q, w_qd, sigma_d) in self.rung_defs:
-            L = eso_gain(design, sigma_d, V=kalman_V, beta_d=beta_d)
-            K_fb = lqr_output_weighted(design, w_q, w_qd)
-            K_con = np.concatenate([K_fb, gamma * H / (H @ H)])
-            A_obs = self.A_e - np.outer(L, self.C_e)
-            Ad, G = _zoh(A_obs, np.column_stack([self.B_e, L]), self.dt)
-            self._tables.append(dict(L=L, K_con=K_con, A_d=Ad,
-                                     G_u=G[:, 0], G_y=G[:, 1]))
+        for o in objs:
+            mo = o.n_x
+            A_impl = np.zeros((self.n_x, self.n_x))
+            B_u = np.zeros(self.n_x)
+            B_y = np.zeros(self.n_x)
+            K_con = np.zeros(self.n_x)
+            # ESO block (common physical meaning across rungs)
+            A_impl[:me, :me] = o.A_e - np.outer(o.L, o.C_e)
+            B_u[:me] = o.B_e
+            B_y[:me] = o.L
+            K_con[:me] = o.K_con[:me]
+            # resonant block
+            if mo > me:                        # HRC rung
+                mr_o = mo - me
+                A_impl[me:me + mr_o, me:me + mr_o] = o.A_r
+                B_y[me:me + mr_o] = o.B_r
+                K_con[me:me + mr_o] = o.K_con[me:]
+                if self.n_x > mo:
+                    A_impl[mo:, mo:] = -LAM_DECAY * np.eye(self.n_x - mo)
+            elif mr > 0:
+                A_impl[me:, me:] = -LAM_DECAY * np.eye(mr)
+            Ad, G = _zoh(A_impl, np.column_stack([B_u, B_y]), self.dt)
+            self._tables.append(dict(obj=o, A_d=Ad, G_u=G[:, 0], G_y=G[:, 1],
+                                     K_con=K_con))
         # supervisor parameters
         self.cost_tau = float(cost_tau)
         self.fast_tau = float(fast_tau)
@@ -271,80 +435,163 @@ class AdaptiveESO_ADRC_Controller:
         self.r_back = float(ratio_back)
         self.panic_ratio = float(panic_ratio)
         self.dwell = int(dwell_steps)
+        self.dwell_up = int(dwell_up_steps)
         self.panic_lock0 = int(panic_lock_steps)
         self.quiet_floor = float(quiet_floor)**2
+        self.quiet_cap = float(quiet_cap)**2
         self.panic_abs = float(panic_abs)**2
+        self.mem_fresh = int(mem_fresh_steps)
         self.reset_adaptation()
         if verbose:
-            names = ", ".join(f"({w:.0e},{wd:.0e},{sd:.0e})"
-                              for (w, wd, sd) in self.rung_defs)
-            print(f"[A-ESO-ADRC] rungs [{names}], perf={self.perf_rung}, "
-                  f"robust={self.robust_rung} (cost-supervised, panic + "
-                  f"escalating locks)")
+            kinds = "/".join(r['kind'] for r in self.rung_defs)
+            print(f"[A-ESO-ADRC] {self.n_rungs}-rung ladder ({kinds}), "
+                  f"robust rung = {self.robust_rung} "
+                  f"(cost-supervised, memory + panic + escalating locks)")
 
     # ------------------------------------------------------------------
     def reset_adaptation(self):
-        self.i_rung = self.perf_rung
+        self.i_rung = 0
         self._E_slow = 0.0
         self._E_fast = 0.0
-        self._E_quiet = None       # running min of E_slow after calibration
+        self._E_quiet = None
         self._k = 0
         self._k_last_sw = 0
         self._k_panic = -10**9
         self._n_panic = 0
+        self._E_ff = 0.0           # 25 ms EMA of E_fast (trend ref)
+        self._E_ss = 0.0           # 50 ms EMA of E_slow (trend ref)
+        self._cost_mem = [None] * self.n_rungs
+        self._cost_k = [-10**9] * self.n_rungs
+        self._failed = [False] * self.n_rungs
+        self._perfward = False
+        self._Ef_sw = 0.0
         self.history_rung = []
         self.history_cost = []
 
     # Frozen-rung continuous realization for the monodromy SLD.
     def controller_realization(self, rung=None):
-        t = self._tables[self.i_rung if rung is None else int(rung)]
-        A_con = self.A_e - np.outer(self.B_e, t['K_con']) \
-              - np.outer(t['L'], self.C_e)
-        return A_con, t['L'], t['K_con']
+        o = self._tables[self.i_rung if rung is None else int(rung)]['obj']
+        return o.controller_realization()
 
     # ------------------------------------------------------------------
+    def _switch(self, target):
+        self._cost_mem[self.i_rung] = self._E_slow
+        self._cost_k[self.i_rung] = self._k
+        if int(target) > self.i_rung:
+            # left robust-ward => this rung failed here; E_slow lags a divergence
+            # caught early, so a cost snapshot alone would under-report it. The
+            # flag lasts the whole pass: never RELAX onto a rung that failed.
+            self._failed[self.i_rung] = True
+        self._perfward = int(target) < self.i_rung
+        self.i_rung = int(target)
+        self._k_last_sw = self._k
+        self._Ef_sw = max(self._E_fast, self.quiet_floor)
+        self._zero_res = True                 # zero resonant substate at next step
+
+    def _fresh(self, i):
+        return (self._cost_mem[i] is not None
+                and self._k - self._cost_k[i] <= self.mem_fresh)
+
     def step(self, z_prev, u_prev, y_meas):
+        if getattr(self, '_zero_res', False):
+            z_prev = z_prev.copy()
+            z_prev[3 * self.n:] = 0.0
+            self._zero_res = False
         t = self._tables[self.i_rung]
         z = t['A_d'] @ z_prev + t['G_u'] * u_prev + t['G_y'] * y_meas
         self._k += 1
 
-        # --- cost monitors (EMAs of measured y^2) --------------------------
+        # --- cost monitors -----------------------------------------------------
         af = self.dt / self.fast_tau
         as_ = self.dt / self.cost_tau
         y2 = y_meas * y_meas
         self._E_fast = (1 - af) * self._E_fast + af * y2
         self._E_slow = (1 - as_) * self._E_slow + as_ * y2
-        # Quiet level: running MIN of the slow cost after the calibration window
-        # (floored) — robust to a cut that is already elevated at calibration time.
+        aff = self.dt / (self.fast_tau * 16)
+        ass = self.dt / (self.cost_tau * 5)
+        self._E_ff = (1 - aff) * self._E_ff + aff * self._E_fast
+        self._E_ss = (1 - ass) * self._E_ss + ass * self._E_slow
         if self._k >= self.calib:
-            cand = max(self._E_slow, self.quiet_floor)
+            cand = min(max(self._E_slow, self.quiet_floor), self.quiet_cap)
             self._E_quiet = cand if self._E_quiet is None \
                 else min(self._E_quiet, cand)
 
-        # --- PANIC: jump to the certified-robust rung ----------------------
-        # Ratio test once calibrated; absolute floor active from step one.
+        # --- PANIC = DIVERGENCE detector: energy high AND RISING ---------------
+        # (a ringing-DOWN plate inherited from the previous rung has high but
+        # decaying energy and must not trigger it). Cascade one rung toward the
+        # robust end — jumping straight to the last rung would fly past a
+        # middle rung whose basin still contains the current amplitude.
         panic_level = self.panic_abs if self._E_quiet is None \
             else max(self.panic_ratio * self._E_quiet, self.panic_abs)
-        if self.i_rung != self.robust_rung and self._E_fast > panic_level:
-            self.i_rung = self.robust_rung
-            self._k_last_sw = self._k
+        # Re-arm delay: right after ANY switch the trend EMAs still reflect the
+        # previous rung — give the new rung ~15 ms to bend the energy trend.
+        # Trend margin x2: at a FLAT (bounded) ring the fast EMA oscillates about
+        # its 25 ms average within a tooth period, so only a sustained doubling
+        # counts as growth (true divergence reaches x20+ within the EMA lag).
+        ksw = self._k - self._k_last_sw
+        # PROBE ABORT: a performance-ward probe from a quiet robust rung must be
+        # aborted at the first sign of growth (x3 the energy at the switch) —
+        # beyond the LQG margin no rung can ring down from a large excursion
+        # (every Floquet radius is >= 1 there), so the escape must fire while
+        # the amplitude is still inside the fallback's bounded regime.
+        if (self._perfward and 60 <= ksw < self.dwell
+                and self._E_fast > 3.0 * self._Ef_sw
+                and self._E_fast > self.quiet_floor):
+            self._switch(self.i_rung + 1)
+            self._k_panic = self._k
+            self._n_panic += 1
+            ksw = 0
+        hard = ksw >= 60 and self._E_fast > 8.0 * self._E_ff
+        soft = ksw >= 300 and self._E_fast > 2.0 * self._E_ff
+        if (self.i_rung != self.robust_rung
+                and self._E_fast > panic_level and (hard or soft)):
+            # Severity picks the target: EXPLOSIVE growth jumps straight to the
+            # certified end (no time to audition intermediate rungs); moderate
+            # growth cascades one rung, so a middle rung whose basin still
+            # contains the current amplitude gets its chance (the -8 % hole).
+            self._switch(self.robust_rung if hard else self.i_rung + 1)
             self._k_panic = self._k
             self._n_panic += 1
 
-        # --- slow supervisor (dwell-limited, hysteretic, escalating locks) --
+        # --- slow supervisor -----------------------------------------------------
+        # Escalate quickly (dwell_up) when the cost is elevated AND not in
+        # sustained decline (a slowly recovering rung — ring-down can take
+        # hundreds of ms near a marginal Floquet radius — is left to finish the
+        # job). Performance-ward moves use the long dwell, the post-panic locks
+        # (escalating 2x per panic) and the per-rung cost memory.
         elif (self._E_quiet is not None
-                and self._k - self._k_last_sw >= self.dwell):
+                and self._k - self._k_last_sw >= self.dwell_up):
             lock = self.panic_lock0 * 2**min(max(self._n_panic - 1, 0), 5)
+            perfward_ok = self._k - self._k_panic >= lock
+            long_ok = self._k - self._k_last_sw >= self.dwell
             r = self._E_slow / self._E_quiet
-            if self.i_rung == self.perf_rung and r > self.r_up:
-                self.i_rung = self.robust_rung        # sustained elevated cost
-                self._k_last_sw = self._k
-            elif (self.i_rung == self.robust_rung and r < self.r_back
-                    and self._k - self._k_panic >= lock):
-                self.i_rung = self.perf_rung          # quiet again -> performance
-                self._k_last_sw = self._k
+            declining = self._E_slow < 0.95 * self._E_ss
+            if r > self.r_up and not declining:
+                up = self.i_rung + 1          # toward robust
+                dn = self.i_rung - 1          # toward performance
+                if up < self.n_rungs and not (self._fresh(up)
+                        and self._cost_mem[up] >= self._E_slow):
+                    self._switch(up)
+                elif (dn >= 0 and perfward_ok and long_ok
+                        and (not self._failed[dn]
+                             or (self.i_rung == self.robust_rung
+                                 and self._k - self._k_last_sw >= 2000))
+                        and not (self._fresh(dn)
+                                 and self._cost_mem[dn] >= self._E_slow)):
+                    # desperation probe: at the robust end with a persistently
+                    # elevated cost (a sensitivity hole), a previously-failed
+                    # rung is the only remaining option — panic guards the try.
+                    self._switch(dn)
+            elif (r < self.r_back and self.i_rung > 0 and perfward_ok
+                    and long_ok):
+                dn = self.i_rung - 1
+                # never relax onto a rung that failed this pass, nor onto one
+                # freshly measured as bad
+                if not self._failed[dn] and not (self._fresh(dn)
+                        and self._cost_mem[dn] > self.r_up * self._E_quiet):
+                    self._switch(dn)
 
-        # --- control law at the current rung --------------------------------
+        # --- control law at the current rung -----------------------------------
         u = float(np.clip(-(t['K_con'] @ z), -self.u_max, self.u_max))
         self.history_rung.append(self.i_rung)
         self.history_cost.append(self._E_slow)

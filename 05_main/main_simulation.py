@@ -33,8 +33,8 @@ import matplotlib.pyplot as plt
 from plate_model import PlateModel
 from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
-from adrc_controller import (ESO_ADRC_Controller, AdaptiveESO_ADRC_Controller,
-                             modal_matrices)
+from adrc_controller import (ESO_ADRC_Controller, ESO_ADRC_HRC_Controller,
+                             AdaptiveESO_ADRC_Controller, modal_matrices)
 from newmark_solver import NewmarkSimulator
 from fdm_stability import (compute_closed_loop_SLD, compute_closed_loop_SLD_generic,
                            closed_loop_rho, closed_loop_rho_generic)
@@ -71,9 +71,11 @@ OUT_DIR = "figs_lqg_vs_adrc"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 LBL_LQG = "LQG"
+LBL_HRC = "ESO-ADRC+HRC"
 LBL_ADRC = "ESO-ADRC"
 LBL_AADRC = "A-ESO-ADRC"
-COL = {LBL_LQG: '#2E8B57', LBL_ADRC: '#1E5AA8', LBL_AADRC: '#DC143C'}
+COL = {LBL_LQG: '#2E8B57', LBL_HRC: '#8A2BE2', LBL_ADRC: '#1E5AA8',
+       LBL_AADRC: '#DC143C'}
 
 
 # ============================================================
@@ -275,11 +277,55 @@ print(f"[design] CERTIFIED design  : (w_q={cert_row['w_q']:.0e}, "
 ADRC_FIXED = ESO_ADRC_Controller(design_view, DT, cert_row['w_q'],
                                  cert_row['w_qd'], cert_row['sd'],
                                  kalman_V=KALMAN_V, verbose=False)
-# A-ESO-ADRC ladder = [performance rung, certified rung].
-RUNGS = ((perf_row['w_q'], perf_row['w_qd'], perf_row['sd']),
-         (cert_row['w_q'], cert_row['w_qd'], cert_row['sd']))
+
+# --- Stage 2: HRC grid (tooth-harmonic resonant layer on the perf base) --------
+W_TOOTH = 2 * np.pi * NT * RPM / 60.0
+print("[design] HRC grid (n_harm x g_base) on the performance base...")
+# n_harm is capped at 4 BY DESIGN: the h=5 line (1225 Hz) would coincide with
+# mode 2 under a +15 % drift (1070*1.15 = 1230 Hz) — lines must stay clear of
+# the mode-2 drift band. A design-model constraint, no held-out data involved.
+hrc_rows = []
+for Hh in (2, 3, 4):
+    for gb in (60.0, 150.0):
+        try:
+            c = ESO_ADRC_HRC_Controller(design_view, DT, perf_row['w_q'],
+                                        perf_row['w_qd'], perf_row['sd'],
+                                        n_harm=Hh, g_base=gb, lam=5.0,
+                                        w_tooth=W_TOOTH, kalman_V=KALMAN_V,
+                                        verbose=False)
+        except Exception:
+            continue
+        if not nocut_stable(c):
+            continue
+        r = sim_design.simulate(alpha3_nom, alpha4_nom, kp_idx_nom,
+                                controller=c, meas_noise_std=MEAS_NOISE_STD,
+                                rng=np.random.default_rng(1234), progress=False)
+        i = r['stop_idx']
+        rms_h = np.sqrt(np.mean(r['y'][:i+1]**2))*1e6
+        if i < sim_design.nstep - 2:
+            rms_h = np.inf
+        hrc_rows.append(dict(H=Hh, g=gb, rms=rms_h))
+hrc_row = min(hrc_rows, key=lambda d: d['rms'])
+print(f"[design] HRC design: H={hrc_row['H']}, g_base={hrc_row['g']:.0f}, "
+      f"rms_nom={hrc_row['rms']:.4f}um")
+ADRC_HRC_FIXED = ESO_ADRC_HRC_Controller(
+    design_view, DT, perf_row['w_q'], perf_row['w_qd'], perf_row['sd'],
+    n_harm=hrc_row['H'], g_base=hrc_row['g'], lam=5.0, w_tooth=W_TOOTH,
+    kalman_V=KALMAN_V, verbose=False)
+
+# A-ESO-ADRC ladder: HRC / performance ESO / quasi-Kalman ESO / certified ESO.
+RUNGS = [
+    dict(kind='hrc', w_q=perf_row['w_q'], w_qd=perf_row['w_qd'],
+         sigma_d=perf_row['sd'], n_harm=hrc_row['H'], g_base=hrc_row['g'],
+         lam=5.0),
+    dict(kind='eso', w_q=perf_row['w_q'], w_qd=perf_row['w_qd'],
+         sigma_d=perf_row['sd']),
+    dict(kind='eso', w_q=cert_row['w_q'], w_qd=cert_row['w_qd'], sigma_d=1e3),
+    dict(kind='eso', w_q=cert_row['w_q'], w_qd=cert_row['w_qd'],
+         sigma_d=cert_row['sd']),
+]
 AADRC = AdaptiveESO_ADRC_Controller(design_view, DT, rungs=RUNGS,
-                                    perf_rung=0, robust_rung=1,
+                                    w_tooth=W_TOOTH,
                                     kalman_V=KALMAN_V, verbose=False)
 print(f"[design] Plant modes (Hz): {np.round(PLANT_NOMINAL.freq_n, 0)}; "
       f"controllers see first {N_MODES_CTRL}. Meas. noise = "
@@ -295,7 +341,8 @@ def build_scenario_plant(ap, freq_perturb):
     return plant
 
 
-CONTROLLERS = [(LBL_LQG, LQG_SHARED), (LBL_ADRC, ADRC_FIXED), (LBL_AADRC, AADRC)]
+CONTROLLERS = [(LBL_LQG, LQG_SHARED), (LBL_HRC, ADRC_HRC_FIXED),
+               (LBL_ADRC, ADRC_FIXED), (LBL_AADRC, AADRC)]
 
 
 def run_scenario(name, ap, KT_actual, freq_perturb):
@@ -335,7 +382,7 @@ def run_scenario(name, ap, KT_actual, freq_perturb):
         if lbl == LBL_AADRC and len(AADRC.history_rung):
             hr = np.array(AADRC.history_rung)
             metrics[lbl]['n_switch'] = int(np.sum(np.diff(hr) != 0))
-            metrics[lbl]['frac_robust'] = float(np.mean(hr == 1))
+            metrics[lbl]['frac_robust'] = float(np.mean(hr == AADRC.robust_rung))
             metrics[lbl]['rung_hist'] = hr.copy()
 
     hdr = "".join(f"{lbl:<14}" for lbl, _ in CONTROLLERS)
@@ -367,12 +414,12 @@ for name, ap, KT_, fp in scenarios_def:
 names = [s['name'].split(' - ')[0] for s in scenarios]
 fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
 x = np.arange(len(names))
-w = 0.26
+w = 0.20
 
 ax = axes[0]
 for j, (lbl, _) in enumerate(CONTROLLERS):
     v = [s['metrics'][lbl]['y_rms'] for s in scenarios]
-    bars = ax.bar(x + (j-1)*w, v, w, color=COL[lbl], alpha=0.85,
+    bars = ax.bar(x + (j-1.5)*w, v, w, color=COL[lbl], alpha=0.85,
                   edgecolor='k', label=lbl, linewidth=1.2)
     for bar, vi in zip(bars, v):
         ax.text(bar.get_x()+bar.get_width()/2, vi*1.02, f'{vi:.2f}',
@@ -383,10 +430,10 @@ ax.set_title("Vibration RMS", fontsize=12, fontweight='bold')
 ax.legend(fontsize=10); ax.grid(True, axis='y', alpha=0.5)
 
 ax = axes[1]
-for j, lbl in enumerate([LBL_ADRC, LBL_AADRC]):
+for j, lbl in enumerate([LBL_HRC, LBL_ADRC, LBL_AADRC]):
     g = [(1 - s['metrics'][lbl]['y_rms']/s['metrics'][LBL_LQG]['y_rms'])*100
          for s in scenarios]
-    bars = ax.bar(x + (j-0.5)*0.38, g, 0.38, color=COL[lbl], alpha=0.85,
+    bars = ax.bar(x + (j-1)*0.27, g, 0.27, color=COL[lbl], alpha=0.85,
                   edgecolor='k', label=f"{lbl} vs LQG", linewidth=1.2)
     for bar, gi in zip(bars, g):
         ax.text(bar.get_x()+bar.get_width()/2, gi + (1 if gi > 0 else -3),
@@ -401,7 +448,7 @@ ax.legend(fontsize=10); ax.grid(True, axis='y', alpha=0.5)
 ax = axes[2]
 for j, (lbl, _) in enumerate(CONTROLLERS):
     v = [s['metrics'][lbl]['u_max'] for s in scenarios]
-    ax.bar(x + (j-1)*w, v, w, color=COL[lbl], alpha=0.85,
+    ax.bar(x + (j-1.5)*w, v, w, color=COL[lbl], alpha=0.85,
            edgecolor='k', label=lbl, linewidth=1.2)
 ax.axhline(150, color='red', linestyle='--', linewidth=1.5, alpha=0.7,
            label='Sat. piezo')
@@ -528,9 +575,9 @@ for i, s in enumerate(scenarios):
         t_ms = s['sim'].t_vec[1:len(m['rung_hist'])+1] * 1e3
         ax.step(t_ms, m['rung_hist'], where='post', color=COL[LBL_AADRC],
                 linewidth=1.5)
-    ax.set_yticks([0, 1])
-    ax.set_yticklabels(['perf rung', 'certified rung'])
-    ax.set_ylim([-0.2, 1.2])
+    ax.set_yticks(range(AADRC.n_rungs))
+    ax.set_yticklabels(['r0 HRC', 'r1 perf', 'r2 mid', 'r3 certified'][:AADRC.n_rungs])
+    ax.set_ylim([-0.2, AADRC.n_rungs - 0.8])
     ax.set_title(f"{s['name']} — {m.get('n_switch', 0)} switches",
                  fontsize=10, fontweight='bold')
     ax.grid(True, alpha=0.5)
@@ -595,11 +642,14 @@ def rho_curve_lqg():
 rho_lqg_curve = rho_curve_lqg()
 rho_perf_curve = rho_curve_generic(ADRC_PERF_CTRL)
 rho_cert_curve = rho_curve_generic(ADRC_FIXED)
+rho_hrc_curve = rho_curve_generic(ADRC_HRC_FIXED)
 
 fig, ax = plt.subplots(figsize=(11, 6))
 mm = np.array(mismatch_grid)*100
 ax.plot(mm, rho_lqg_curve, 'o-', color=COL[LBL_LQG], linewidth=2,
         label='LQG')
+ax.plot(mm, rho_hrc_curve, '^-', color=COL[LBL_HRC], linewidth=2,
+        label='ESO-ADRC+HRC (rung 0)')
 ax.plot(mm, rho_perf_curve, 's-', color='#E8A020', linewidth=2,
         label=f"ESO-ADRC performance rung "
               f"({perf_row['w_q']:.0e},{perf_row['w_qd']:.0e},{perf_row['sd']:.0e})")
@@ -784,7 +834,7 @@ for idx, (metric, ylabel, title) in enumerate(metrics_list):
     ax = axes[idx // 3, idx % 3]
     for j, (lbl, _) in enumerate(CONTROLLERS):
         v = [s['metrics'][lbl][metric] for s in scenarios]
-        bars = ax.bar(x + (j-1)*w, v, w, color=COL[lbl], alpha=0.85,
+        bars = ax.bar(x + (j-1.5)*w, v, w, color=COL[lbl], alpha=0.85,
                       edgecolor='k', label=lbl, linewidth=1.0)
         for bar, vi in zip(bars, v):
             ax.text(bar.get_x() + bar.get_width()/2, vi*1.02, f'{vi:.2f}',

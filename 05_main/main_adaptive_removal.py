@@ -28,7 +28,8 @@ import matplotlib.pyplot as plt
 from plate_model import PlateModel
 from milling_force import precompute_alpha_periodic, cutting_constants
 from lqg_controller import LQGController
-from adrc_controller import ESO_ADRC_Controller, AdaptiveESO_ADRC_Controller
+from adrc_controller import (ESO_ADRC_Controller, ESO_ADRC_HRC_Controller,
+                             AdaptiveESO_ADRC_Controller)
 from newmark_solver import NewmarkSimulator
 
 # ---------------- physical parameters (article) ----------------
@@ -83,13 +84,27 @@ lqg.discretize_observer()
 
 PERF_DESIGN = (1e16, 1e8, 3e3)      # from the main_simulation design grid
 CERT_DESIGN = (1e14, 1e8, 1e4)
+HRC_DESIGN = dict(n_harm=4, g_base=150.0, lam=5.0)
+W_TOOTH = 2*np.pi*NT*RPM/60.0
 adrc = ESO_ADRC_Controller(design, DT, *CERT_DESIGN, kalman_V=KALMAN_V,
                            verbose=False)
-aadrc = AdaptiveESO_ADRC_Controller(design, DT, rungs=(PERF_DESIGN, CERT_DESIGN),
-                                    perf_rung=0, robust_rung=1,
+hrc = ESO_ADRC_HRC_Controller(design, DT, *PERF_DESIGN, w_tooth=W_TOOTH,
+                              kalman_V=KALMAN_V, verbose=False, **HRC_DESIGN)
+RUNGS = [
+    dict(kind='hrc', w_q=PERF_DESIGN[0], w_qd=PERF_DESIGN[1],
+         sigma_d=PERF_DESIGN[2], **HRC_DESIGN),
+    dict(kind='eso', w_q=PERF_DESIGN[0], w_qd=PERF_DESIGN[1],
+         sigma_d=PERF_DESIGN[2]),
+    dict(kind='eso', w_q=CERT_DESIGN[0], w_qd=CERT_DESIGN[1], sigma_d=1e3),
+    dict(kind='eso', w_q=CERT_DESIGN[0], w_qd=CERT_DESIGN[1],
+         sigma_d=CERT_DESIGN[2]),
+]
+aadrc = AdaptiveESO_ADRC_Controller(design, DT, rungs=RUNGS, w_tooth=W_TOOTH,
                                     kalman_V=KALMAN_V, verbose=False)
-CONTROLLERS = [("LQG", lqg), ("ESO-ADRC", adrc), ("A-ESO-ADRC", aadrc)]
-COL = {"LQG": '#2E8B57', "ESO-ADRC": '#1E5AA8', "A-ESO-ADRC": '#DC143C'}
+CONTROLLERS = [("LQG", lqg), ("ESO-ADRC+HRC", hrc), ("ESO-ADRC", adrc),
+               ("A-ESO-ADRC", aadrc)]
+COL = {"LQG": '#2E8B57', "ESO-ADRC+HRC": '#8A2BE2', "ESO-ADRC": '#1E5AA8',
+       "A-ESO-ADRC": '#DC143C'}
 
 NSTEP = int(np.round(T_END/DT)) + 1
 
@@ -152,7 +167,7 @@ for cname, pl, sched in cases:
         extra = ""
         if 'rung' in res:
             extra = (f"  [{res['n_switch']} switches, "
-                     f"{np.mean(res['rung'] == 1)*100:.0f}% certified rung]")
+                     f"{np.mean(res['rung'] == 3)*100:.0f}% certified rung]")
         print(f"  {lbl:<12} rms={res['rms']:10.4f}µm  umax={res['umax']:7.2f}V  "
               f"{'DIVERGED' if res['diverged'] else 'OK'}{extra}")
 
@@ -190,9 +205,9 @@ ax2 = ax.twinx()
 ax2.plot(res['t']*1e3, ramp_hold(0.88)*100 - 100, color='gray', linestyle='--',
          linewidth=1.5, label='true drift (%)')
 ax2.set_ylabel("plant frequency drift (%)", color='gray')
-ax.set_yticks([0, 1])
-ax.set_yticklabels(['perf', 'certified'])
-ax.set_ylim([-0.2, 1.2])
+ax.set_yticks(range(4))
+ax.set_yticklabels(['r0 HRC', 'r1', 'r2', 'r3 cert'])
+ax.set_ylim([-0.2, 3.2])
 ax.set_xlabel("Temps (ms)")
 ax.set_title("A-ESO-ADRC rung supervision under D2", fontweight='bold')
 ax.grid(True, alpha=0.4)
@@ -208,9 +223,9 @@ ax2 = ax.twinx()
 ax2.plot(res['t']*1e3, ramp_hold(1.15)*100 - 100, color='gray', linestyle='--',
          linewidth=1.5)
 ax2.set_ylabel("plant frequency drift (%)", color='gray')
-ax.set_yticks([0, 1])
-ax.set_yticklabels(['perf', 'certified'])
-ax.set_ylim([-0.2, 1.2])
+ax.set_yticks(range(4))
+ax.set_yticklabels(['r0 HRC', 'r1', 'r2', 'r3 cert'])
+ax.set_ylim([-0.2, 3.2])
 ax.set_xlabel("Temps (ms)")
 ax.set_title("A-ESO-ADRC rung supervision under D1", fontweight='bold')
 ax.grid(True, alpha=0.4)
@@ -219,7 +234,7 @@ ax.grid(True, alpha=0.4)
 ax = fig.add_subplot(gs[2, :])
 cnames = [c[0] for c in cases]
 xb = np.arange(len(cnames))
-wb = 0.26
+wb = 0.2
 CEIL = 1e3
 for j, (lbl, _) in enumerate(CONTROLLERS):
     vals, hats = [], []
@@ -227,7 +242,7 @@ for j, (lbl, _) in enumerate(CONTROLLERS):
         res = results[cname][lbl]
         vals.append(min(res['rms'], CEIL) if res['diverged'] else res['rms'])
         hats.append('//' if res['diverged'] else None)
-    bars = ax.bar(xb + (j-1)*wb, vals, wb, color=COL[lbl], alpha=0.85,
+    bars = ax.bar(xb + (j-1.5)*wb, vals, wb, color=COL[lbl], alpha=0.85,
                   edgecolor='k', label=lbl, linewidth=1.2)
     for bar, v, h, cname in zip(bars, vals, hats, cnames):
         if h:

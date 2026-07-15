@@ -343,6 +343,150 @@ class ESO_ADRC_HRC_Controller(ESO_ADRC_Controller):
         return A, B_y, self.K_con
 
 
+class ESO_ADRC_AdaptiveHRC_Controller(ESO_ADRC_Controller):
+    """
+    ESO-ADRC + ADAPTIVE tooth-harmonic cancellation (FxLMS / AFC).
+    *** DOCUMENTED NEGATIVE RESULT — kept as an artifact, NOT recommended here. ***
+
+    Motivation (the plausible hypothesis this class TESTS). The fixed HRC
+    (ESO_ADRC_HRC_Controller) freezes each harmonic's phase psi_h and gain g_h at the
+    DESIGN closed-loop FRF G_cl(j w_h). The tooth-line frequencies w_h = h*w_tooth are
+    spindle-locked (exact even under plant drift), but when the plant drifts the TRUE
+    G_cl(j w_h) moves, so the frozen psi_h / g_h become wrong. The hypothesis: a per-line
+    complex weight W_h adapted online by filtered-x LMS should re-converge to the value
+    that nulls the DRIFTED residual and thus beat the frozen HRC under drift:
+
+        u_hrc(k) = sum_h Re{ W_h * e^{j w_h k dt} }                    (output path)
+        W_h <- (1-leak) W_h - mu_h * y(k) * conj( e^{j phi_h} e^{j w_h k dt} )
+
+    phi_h = angle G_cl,design(j w_h) is the FxLMS secondary-path phase SEED; FxLMS
+    converges only while the true-vs-seed secondary-path phase error stays < 90 deg.
+    mu_h = mu0 / |G_cl,design(j w_h)| gives the same |G|-normalisation as g_h.
+
+    WHAT THE MEASUREMENTS SHOWED (P8; docs/REPRODUCED_RESULTS.md). The hypothesis is
+    REFUTED on this plant. Tuned on nominal only (mu0=0.01, leak=1e-4) it matches the
+    fixed HRC nominally (0.389 vs 0.381 um) but is WORSE under every drift tested:
+    D1 +15% 3.41 vs 0.955, S3 -8% diverges harder (302 vs 251), D2 -12% diverges,
+    S4 +30% diverges. The reason is physical: this plant's structural modes sit CLOSE
+    to the tooth lines (mode 1 = 521 Hz between lines h2=490 / h3=735; mode 2 = 1070 Hz
+    near h4=980), so even modest drift swings the secondary-path phase past the FxLMS
+    +-90 deg cone at a line adjacent to a mode, and the low-margin integral action then
+    INJECTS rather than cancels. A well-DAMPED fixed resonator (larger lam) degrades far
+    more gracefully -- see the certified robust-HRC in main_hrc_robustness.py, which is
+    the actual P8 improvement (LTI, certifiable, D2 -12% ramp 33.6 -> 0.59 um).
+
+    The optional w_cap self-protection (shed a runaway line) does NOT rescue it: the
+    nominal converged per-line |W| is already O(100 V) on this plant (the lines partly
+    cancel), so any cap tight enough to catch a true runaway also sheds healthy lines,
+    and even a correct cap only addresses the exact line-on-mode coincidence, not the
+    near-mode phase degradation that dominates the loss. Left in as an opt-in flag.
+
+    The ESO base is UNTOUCHED (output-path layer; the fixed-HRC finding that harmonic
+    states inside the ESO destabilise the 5-mode plant via estimator spillover applies
+    here too). n_x = 3n (ESO only); the adaptive weights + phase clock are INSTANCE
+    state, zeroed by reset_adaptation() each pass. Being adaptive it is also NOT LTI,
+    so the monodromy SLD / design-ball certification do not apply.
+    """
+
+    def __init__(self, design, dt, w_q, w_qd, sigma_d, n_harm, mu0, leak=1e-3,
+                 lam=5.0, w_tooth=None, gamma=0.0, w_r=1.0, kalman_V=1e-12,
+                 beta_d=10.0, u_max=150.0, harmonics=None, w_cap=None,
+                 shed_decay=0.99, verbose=True):
+        super().__init__(design, dt, w_q, w_qd, sigma_d, gamma=gamma, w_r=w_r,
+                         kalman_V=kalman_V, beta_d=beta_d, u_max=u_max,
+                         verbose=False)
+        if w_tooth is None:
+            raise ValueError("w_tooth (tooth-passing angular frequency) required")
+        if harmonics is None:
+            harmonics = list(range(1, int(n_harm) + 1))
+        self.harmonics = [int(h) for h in harmonics]
+        self.n_harm = len(self.harmonics)
+        self.mu0 = float(mu0)
+        self.leak = float(leak)
+        self.w_tooth = float(w_tooth)
+        # SELF-PROTECTION (model-free line shedding). A tooth line drifting ONTO a
+        # lightly-damped mode swings the true secondary-path phase >90 deg past the
+        # fixed seed phi_h, so that line's FxLMS weight runs away and injects at
+        # resonance. If |W_h| exceeds w_cap (Volts; a single line demanding near-
+        # actuator-authority is unphysical), that line is SHED: its adaptation stops
+        # (mu_h -> 0) and its weight decays to 0 (shed_decay/step). Needs NO plant
+        # ID -- it watches only its own weight energy. w_cap=None disables it (plain
+        # FxLMS). This directly targets the line-on-mode blow-up the plain law suffers.
+        self.w_cap = None if w_cap is None else float(w_cap)
+        self.shed_decay = float(shed_decay)
+        # design closed-loop (secondary-path) FRF -> phase seed phi_h, gain |G_h|
+        A_cl, B_cl, C_cl = self._design_closed_loop()
+        self._omega = np.array([h * self.w_tooth for h in self.harmonics])
+        self._phi = np.zeros(self.n_harm)
+        self._mu = np.zeros(self.n_harm)
+        for j, h in enumerate(self.harmonics):
+            wh = h * self.w_tooth
+            G = complex(C_cl @ np.linalg.solve(
+                1j * wh * np.eye(A_cl.shape[0]) - A_cl, B_cl))
+            self._phi[j] = np.angle(G)                 # secondary-path phase seed
+            self._mu[j] = self.mu0 / abs(G)            # |G|-normalised step
+        self.reset_adaptation()
+        if verbose:
+            print(f"[ESO-ADRC+AdaptiveHRC] base (w_q={w_q:.0e}, w_qd={w_qd:.0e}, "
+                  f"sigma_d={sigma_d:.0e}), harmonics={self.harmonics}, "
+                  f"mu0={mu0:g}, leak={leak:g} (FxLMS, output-path)")
+
+    # closed loop of the DESIGN model with the base ESO-ADRC: additive u -> y.
+    # (identical to ESO_ADRC_HRC_Controller._design_closed_loop; K_con is the base
+    #  3n ESO law here so it applies directly.)
+    def _design_closed_loop(self):
+        Km, Cm, H, D_obs, n = modal_matrices(self.design)
+        K_e = self.K_con[:3 * n]
+        m = 3 * n
+        A = np.zeros((2 * n + m, 2 * n + m))
+        A[0:n, n:2 * n] = np.eye(n)
+        A[n:2 * n, 0:n] = -Km
+        A[n:2 * n, n:2 * n] = -Cm
+        A[n:2 * n, 2 * n:] = -np.outer(H, K_e)
+        A[2 * n:, 0:n] = np.outer(self.L, D_obs)
+        A[2 * n:, 2 * n:] = self.A_e - np.outer(self.B_e, K_e) \
+            - np.outer(self.L, self.C_e)
+        B = np.zeros(2 * n + m)
+        B[n:2 * n] = H
+        B[2 * n:] = self.B_e
+        C = np.concatenate([D_obs, np.zeros(n + m)])
+        return A, B, C
+
+    def reset_adaptation(self):
+        self._W = np.zeros(2 * self.n_harm)      # [Wr_1, Wi_1, Wr_2, Wi_2, ...]
+        self._shed = np.zeros(self.n_harm, dtype=bool)   # per-line shed flags
+        self._k = 0
+
+    def step(self, z_prev, u_prev, y_meas):
+        # base ESO-ADRC observer + law (ESO sees the TOTAL applied u_prev)
+        z = self.A_d @ z_prev + self.G_u * u_prev + self.G_y * y_meas
+        u_base = -self.K_con @ z
+        # adaptive harmonic injection + FxLMS weight update
+        th = self._omega * (self._k * self.dt)       # (n_harm,) line phases
+        c, s = np.cos(th), np.sin(th)
+        Wr = self._W[0::2]
+        Wi = self._W[1::2]
+        u_hrc = float(np.sum(Wr * c - Wi * s))       # sum_h Re{W_h e^{j th_h}}
+        ang = self._phi + th                         # phi_h + w_h k dt
+        ca, sa = np.cos(ang), np.sin(ang)
+        mu = np.where(self._shed, 0.0, self._mu)     # shed lines stop adapting
+        Wr_new = (1.0 - self.leak) * Wr - mu * y_meas * ca
+        Wi_new = (1.0 - self.leak) * Wi + mu * y_meas * sa
+        if self.w_cap is not None:
+            mag = np.hypot(Wr_new, Wi_new)
+            newly = (~self._shed) & (mag > self.w_cap)
+            if np.any(newly):
+                self._shed |= newly
+            if np.any(self._shed):                   # decay shed weights to zero
+                Wr_new[self._shed] *= self.shed_decay
+                Wi_new[self._shed] *= self.shed_decay
+        self._W[0::2] = Wr_new
+        self._W[1::2] = Wi_new
+        self._k += 1
+        u = float(np.clip(u_base + u_hrc, -self.u_max, self.u_max))
+        return z, u
+
+
 # =====================================================================
 # Adaptive controller
 # =====================================================================

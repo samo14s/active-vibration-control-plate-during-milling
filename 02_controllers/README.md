@@ -14,6 +14,7 @@ request; `docs/AUDIT_FINDINGS.md` keeps the historical audit record.
 | `adrc_controller.py` | Modal ESO-ADRC (fixed) | `ESO_ADRC_Controller` |
 | `adrc_controller.py` | Adaptive ESO-ADRC (supervised ladder) | `AdaptiveESO_ADRC_Controller` |
 | `adrc_controller.py` | Canonical output LADRC — **negative result**, kept reproducible | `CanonicalLADRC_Controller` |
+| `adrc_controller.py` | **P8**: adaptive (FxLMS/AFC) HRC — **negative result**, kept reproducible | `ESO_ADRC_AdaptiveHRC_Controller` |
 | `adaptive_id.py` | **P6**: real-time-ID-scheduled controller (re-tunes to identified frequencies per finishing pass) | `IDScheduledController` |
 | `predictive_removal.py` | **P7**: material-removal-aware preview-predictive controller (feasibility study) | `PreviewPredictiveController`, `PhysicsCuttingModel` |
 
@@ -183,3 +184,22 @@ HRC (0.39 µm)**, and — being model-based — inherently limited by cutting-mo
 (weaker than P6's probe, which measures the truth). Anti-inverse-crime: the
 controller's `PhysicsCuttingModel` is mismatched (+15 % KT, +15 % kn, −15 % µc) from
 the plant. Driver: `python main_predictive_removal.py`.
+
+## Robust HRC + adaptive HRC (P8 — improving the P5 HRC line)
+
+Driver `main_hrc_robustness.py`. The P5 fixed HRC resonator width `lam` is exposed as a
+certification-consistent **robustness/performance knob**. Narrow resonators (lam = 5) give
+the deepest nominal notch (0.381 µm) but are fragile: under a −12 % frequency ramp the
+standalone HRC nearly diverges (33.6 µm). The **design-ball worst-case closed-loop Floquet
+radius decreases monotonically with lam** (1.393 → 1.348), so a wider resonator is provably
+more robust by the same certification used for the ESO rung. The **robust HRC (lam = 20)**
+costs 7 % nominal (0.407 µm) but controls the −12 % ramp (**0.59 µm**) and +30 % K_T
+(0.97 µm), staying fully LTI-certifiable (the fixed `ESO_ADRC_HRC_Controller` simply takes a
+larger `lam`). Recommended as the standalone HRC (performance/certified duality); inside the
+supervised ladder it is a wash (drift handled by rung switching), so A-ESO-ADRC is unchanged.
+
+`ESO_ADRC_AdaptiveHRC_Controller` is a **documented negative result**: adapting a complex
+weight per tooth line by filtered-x LMS (AFC) to re-null the drifted residual is worse than a
+well-damped fixed resonator here — this plant's modes sit close to the tooth lines, so modest
+drift swings the secondary-path phase past the FxLMS ±90° cone and the low-margin integral
+action injects rather than cancels (WORSE under every drift; refuted). Kept reproducible.

@@ -39,8 +39,18 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > controllable regime has ~0 removal). The delivered preview-predictive controller is
 > stable and modestly beats LQG but is dominated ~2× by the HRC layer. Artifacts: the
 > x-resolved moving-front removal model + the preview controller + the two-walls
-> analysis. All protocol/integrity fixes carry over unchanged. Remaining: P3
-> (experimental validation) — everything here is simulation.
+> analysis. All protocol/integrity fixes carry over unchanged.
+> **P8 improves the P5 HRC line** (`main_hrc_robustness.py`): the narrow performance
+> resonator (lam = 5) is fragile to drift (−12 % ramp → 33.6 µm near-divergence). A
+> **certification-consistent wider resonator (lam = 20)** — the design-ball worst-case
+> Floquet radius decreases monotonically with lam — costs 7 % nominal (0.407 µm) but
+> turns the −12 % ramp into control (**0.59 µm**) and improves +30 % K_T (1.14→0.97),
+> staying fully LTI-certifiable. An **adaptive (FxLMS) HRC was tried and REFUTED** — on
+> this closely-spaced-modes plant it is worse than a well-damped fixed resonator under
+> every drift (documented negative result). Inside the supervised ladder the wider rung
+> is a wash, so the deployed 4-rung A-ESO-ADRC is unchanged; the robust HRC is the
+> recommended standalone variant. Remaining: P3 (experimental validation) —
+> everything here is simulation.
 
 ---
 

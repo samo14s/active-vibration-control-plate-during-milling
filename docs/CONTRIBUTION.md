@@ -65,6 +65,19 @@ committed code (see `REPRODUCED_RESULTS.md`), and (iv) the ESO-ADRC design study
 > inverse crime — stable, modestly beats LQG, dominated ~2× by HRC), and the two-walls
 > boundary result. An honest negative/boundary contribution: predict-from-physics is
 > weaker than P6's probe wherever the cutting model is uncertain.
+> **P8 (2026-07-15, "improve P5 further"):** the HRC resonator width is exposed as a
+> certification-consistent robustness/performance knob. The narrow performance notch
+> (lam = 5, nominal 0.381 µm) is fragile to drift (−12 % ramp → 33.6 µm); a wider
+> resonator (lam = 20) — selected because the design-ball worst-case closed-loop Floquet
+> radius decreases monotonically with lam — costs 7 % nominal but controls the −12 %
+> ramp (0.59 µm) and +30 % K_T (0.97 µm), all fully LTI-certifiable. Honest negative
+> result: an adaptive (FxLMS/AFC) harmonic canceller was implemented and REFUTED — on a
+> plant whose modes sit close to the tooth lines, modest drift pushes the secondary-path
+> phase past the FxLMS ±90° cone and the low-margin integrator injects rather than
+> cancels, so it is worse than a well-damped fixed resonator under every drift. Honest
+> deployment note: inside the supervised ladder the wider rung is a wash (drift already
+> handled by rung switching), so the deployed A-ESO-ADRC is unchanged and the robust HRC
+> is offered as the recommended standalone variant.
 
 ---
 

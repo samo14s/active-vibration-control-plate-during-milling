@@ -1,5 +1,82 @@
 # Reproduced Results — Verification Log
 
+## P8 UPDATE (2026-07-15): improving the P5 HRC — certified robust resonator + adaptive negative result
+
+The P5 fixed HRC uses NARROW resonators (lam = 5 rad/s) for the deepest nominal notch
+(0.381 µm, ~2× LQG). Narrow notches are FRAGILE to plant drift. Two routes to improve
+robustness were investigated; driver `05_main/main_hrc_robustness.py` (~105 s).
+
+**Route 1 — adaptive (FxLMS/AFC) harmonic cancellation. REFUTED.** Adapt a complex
+weight per tooth line online to re-null the drifted residual
+(`ESO_ADRC_AdaptiveHRC_Controller`). Tuned on nominal only (mu0 = 0.01, leak = 1e-4) it
+matches the fixed HRC nominally (0.389 vs 0.381 µm) but is WORSE under every drift:
+
+| case | LQG | HRC perf (lam5) | **adaptive-HRC** | A-ESO-ADRC |
+|---|---:|---:|---:|---:|
+| S1 nominal | 0.777 | 0.381 | 0.389 | 0.381 |
+| D1 ramp +15% | 0.682 | 0.955 | **3.407** | 1.424 |
+| S3 static −8% | 0.900 | 251 | **302** | 12.03 |
+| D2 ramp −12% | DIV | 33.6 | **DIV** | 1.209 |
+| S4 K_T +30% | 1.013 | 1.135 | **DIV** | 1.135 |
+
+Mechanism (physical, honest): this plant's modes sit CLOSE to the tooth lines (mode 1 =
+521 Hz between lines h2 = 490 / h3 = 735; mode 2 = 1070 Hz near h4 = 980), so even modest
+drift swings the secondary-path phase past the FxLMS ±90° convergence cone at a line
+adjacent to a mode, and the low-margin integral action then INJECTS rather than cancels.
+The optional `w_cap` self-protection does not rescue it (the nominal converged per-line
+|W| is already O(100 V) because the lines partly cancel, so any cap tight enough to catch
+a runaway also sheds healthy lines). Kept as a documented negative-result artifact.
+
+**Route 2 — wider LTI resonator (larger lam). THE IMPROVEMENT.** Widening trades notch
+depth for phase margin at each line. The design-ball worst-case closed-loop Floquet
+radius (the SAME certification used for the ESO rung) decreases MONOTONICALLY with lam,
+so a wider resonator is provably more robust by the project's own metric:
+
+| lam (rad/s) | nominal RMS (µm) | worst-ρ (design ball) |
+|---:|---:|---:|
+| 5 (performance) | 0.381 | 1.3927 |
+| 10 | 0.388 | 1.3884 |
+| **20 (robust)** | **0.407** | **1.3800** |
+| 40 | 0.451 | 1.3637 |
+| 60 | 0.491 | 1.3481 |
+
+Selection (honest — a smooth dial, NOT a threshold). The certification fixes the
+DIRECTION (wider = more robust); the payoff on the in-ball −12 % frequency ramp then
+improves SMOOTHLY and monotonically with lam, with no sharp "controls it" cutoff:
+
+| lam | nominal (µm) | D2 −12 % ramp (µm) | S4 +30 % K_T (µm) |
+|---:|---:|---:|---:|
+| 8 | 0.385 | 6.40 | 1.094 |
+| 10 | 0.388 | 3.82 | 1.069 |
+| 12 | 0.391 | 2.28 | 1.045 |
+| 15 | 0.397 | 1.14 | 1.013 |
+| **20** | **0.407** | **0.591** | **0.968** |
+
+So lam is a tunable robustness/performance dial. **lam = 20** is chosen as a balance
+point: it brings the −12 % ramp (perf-HRC 33.6 µm, near-divergence) down to 0.591 µm —
+below the supervised ladder's 1.209 µm and the LQG-envelope ~0.7 µm — at a modest +7 %
+nominal cost (0.407 µm), and +30 % K_T improves too (1.135 → 0.968). A different operating
+point (e.g. lam = 15: 0.397 µm nominal, 1.14 µm ramp) is equally defensible; the value is
+the documented dial, not one magic width.
+Held-out checks: S4 (+30 % K_T, outside the freq ball) improves; the two static-drift
+failures (S3 −8 %, D3 −12 %) remain — these are the resonance-coincidence case (mode 2
+drifts ONTO the h4 line) with no settling time, exactly what the supervised ladder covers.
+The robust HRC stays fully LTI → the monodromy SLD / certification still apply.
+
+**Benign-regime Monte-Carlo** (±3 % freq, ±15 % K_T, ±20 % damping, 25 samples, all
+25/25 converged): LQG 0.747, perf-HRC 0.361, robust-HRC 0.388, A-ESO-ADRC 0.361 µm — the
+robust width's small benign cost (+7 %), the price for the large-drift robustness.
+
+**Deployment (honest):** inside the A-ESO-ADRC SUPERVISED ladder the wider rung is a WASH
+(the supervisor already gets drift robustness by switching to the ESO rungs: a swapped
+lam=20 rung helps −8 % 12.0→9.3 and +30 % 1.14→0.97 but costs nominal 0.381→0.407 and D2
+1.21→2.03; an inserted 5th wide-HRC rung helps +15 % 1.42→1.21 but hurts −8 % and D2). So
+the deployed 4-rung ladder is UNCHANGED; the robust HRC is the recommended STANDALONE HRC
+(performance/certified duality, mirroring the ESO designs). Figure:
+`figures/15_hrc_robustness.pdf`.
+
+---
+
 ## P7 UPDATE (2026-07-15): material-removal-aware predictive control — feasibility study
 
 The user requested a controller that accounts for the material removed DURING the cut

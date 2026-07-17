@@ -13,6 +13,7 @@ these drivers and are logged in `docs/REPRODUCED_RESULTS.md`.
 | `main_realtime_id.py` | **P6**: real-time identification over an accurate material-removal finishing sequence | Console + fig |
 | `main_predictive_removal.py` | **P7**: material-removal-aware predictive control — honest feasibility study (two walls + controller comparison) | Console + fig |
 | `main_hrc_robustness.py` | **P8**: improving the P5 HRC — certification-consistent robust resonator (lam sweep + drift) + adaptive-HRC negative result + benign MC | Console + fig |
+| `main_piezo_structure.py` | **P9**: plant-modeling refinement — piezo-patch structural mass+stiffness in the FEM (instrumented modes vs article) | Console + fig |
 | `main_realistic_piezo.py` | LQG with realistic piezo non-linearities | Console + figs |
 
 ## main_simulation.py

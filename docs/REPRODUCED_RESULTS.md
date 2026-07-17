@@ -1,5 +1,45 @@
 # Reproduced Results — Verification Log
 
+## P9 UPDATE (2026-07-17): plant MODELING refinement — piezo-patch structure in the FEM
+
+Returning to the P5 modeling: the bonded PZT patch entered the model ONLY as an
+actuation force (`add_piezo_patch` → `H_Pe_modal`); the modal analysis ran on the
+**bare aluminium plate**. But a 20×60×0.7 mm surface-bonded PZT layer is not
+massless/stiffnessless. `PlateModel.add_piezo_structure` now smears it into the patch
+elements as an equivalent Kirchhoff element with the composite bending rigidity about
+the laminate neutral axis (**×1.583**, +58 %) and the added areal mass (**×1.464**,
++46 %; neutral-axis shift 0.324 mm), then re-solves the modes (108 patch elements).
+
+Natural frequencies (Hz) vs Du et al. (2024) Table 4 **measured**:
+
+| mode | bare | +structure | shift | measured | bare err | instr err |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 521.1 | 541.1 | +3.8 % | 540 | −3.5 % | **+0.2 %** |
+| 2 | 1069.9 | 1093.9 | +2.2 % | 1068 | +0.2 % | +2.4 % |
+| 3 | 2733.0 | 2745.0 | +0.4 % | 2787 | −1.9 % | −1.5 % |
+| 4 | 3334.4 | 3407.3 | +2.2 % | 3351 | −0.5 % | +1.7 % |
+| 5 | 4145.6 | 4193.1 | +1.1 % | 4122 | +0.6 % | +1.7 % |
+
+Near the clamped root (peak mode-1 curvature) the stiffening dominates → modes rise
+0.4–3.8 %. The **mode-1** match improves markedly (−3.5 % → +0.2 %, 541 vs 540 Hz);
+modes 2/4/5 shift up ~2 % (mode 2 the wrong way), so the **net RMS frequency error vs
+measured improves modestly, 1.83 % → 1.67 %** — the gain is mode-1-driven, reported in
+full, not cherry-picked. A-ESO-ADRC re-designed+evaluated consistently per plant holds
+**0.381 (bare) vs 0.346 µm (instrumented)** at a_p = 0.3 mm.
+
+Honest caveats (all in the driver docstring): (1) the pure-bending Kirchhoff element
+neglects the bending–membrane coupling of the offset neutral axis (laminate B-matrix) —
+standard for thin bonded patches; (2) PZT density `rho_Pe` is ASSUMED 7500 kg/m³
+(PZT-5H) — the article gives d31/E_Pe but not density; sensitivity is negligible (mode 1
+= 541.1 Hz at 7500 vs 540.8 at 7800); (3) whether the article's measured Table-4 values
+were taken bare or instrumented is unstated — the improved mode-1 match is consistent
+with, but not proof of, the patch having been bonded during the modal test. This is an
+**opt-in higher-fidelity plant**; the committed P1–P8 numbers keep the bare-plate model
+so they stay comparable. Driver: `05_main/main_piezo_structure.py` (~6 s). Figure:
+`figures/16_piezo_structure.pdf`.
+
+---
+
 ## P8 UPDATE (2026-07-15): improving the P5 HRC — certified robust resonator + adaptive negative result
 
 The P5 fixed HRC uses NARROW resonators (lam = 5 rad/s) for the deepest nominal notch

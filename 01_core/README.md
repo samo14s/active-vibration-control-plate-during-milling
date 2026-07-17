@@ -55,6 +55,27 @@ results = sim.simulate(a3, a4, kp_idx, controller=my_controller)
 - **dt**: time step (5×10⁻⁵ s for high-resolution; 1×10⁻⁴ s for full path)
 
 
+## Piezo-patch STRUCTURE (P9) — `PlateModel.add_piezo_structure`
+
+`add_piezo_patch` adds only the patch's actuation force (`H_Pe_modal`); the modal
+analysis otherwise runs on the **bare aluminium plate**. P9 adds the OPTIONAL
+`add_piezo_structure(xP1,xP2,zP1,zP2, E_Pe,nu_Pe,h_Pa,rho_Pe)`, which smears the
+surface-bonded PZT layer into the patch elements as an equivalent Kirchhoff element
+with the **composite bending rigidity about the laminate neutral axis** (+58 %) and
+the **added areal mass** (+46 %), then re-solves the modes — the INSTRUMENTED
+(plate+PZT) structure. Near the clamped root (where mode 1 has peak curvature) the
+stiffening dominates and lifts the modes: FEM natural frequencies rise 0.4–3.8 % and
+the mode-1 match to the article's measured plate improves markedly (**−3.5 % → +0.2 %**,
+541 vs 540 Hz; net RMS error 1.83 % → 1.67 %). Call it BEFORE `precompute_Dp` /
+`set_observation` / `add_piezo_patch` (they consume the mode shapes it recomputes).
+Honest caveats: bending–membrane coupling from the offset neutral axis is neglected
+(pure-bending element — standard for thin bonded patches); `rho_Pe` (PZT density) is
+assumed 7500 kg/m³ (PZT-5H; mode 1 moves <0.1 % between 7500 and 7800); whether the
+article's measured Table-4 frequencies were taken bare or instrumented is unstated.
+Offered as an opt-in higher-fidelity plant — the committed P1–P8 results keep the
+bare-plate model for comparability. Driver + figure: `05_main/main_piezo_structure.py`.
+
+
 ## Material removal (P6) — `material_removal.py`
 
 The physically accurate, time-varying model of the workpiece as it is thinned by a

@@ -78,6 +78,20 @@ committed code (see `REPRODUCED_RESULTS.md`), and (iv) the ESO-ADRC design study
 > deployment note: inside the supervised ladder the wider rung is a wash (drift already
 > handled by rung switching), so the deployed A-ESO-ADRC is unchanged and the robust HRC
 > is offered as the recommended standalone variant.
+>
+> **P9 (2026-07-17, "back to the P5 modeling"):** a plant-MODELING refinement. The
+> bonded PZT patch had entered only as an actuation force, with the modes solved on the
+> BARE plate. `PlateModel.add_piezo_structure` smears the surface-bonded PZT layer into
+> the patch elements as an equivalent Kirchhoff element with the composite bending
+> rigidity about the laminate neutral axis (+58 %) and the added areal mass (+46 %), then
+> re-solves — the instrumented (plate+PZT) structure. Modes rise 0.4–3.8 %; the mode-1
+> match to the article's measured 540 Hz improves markedly (−3.5 % → +0.2 %, 541 vs 540
+> Hz) and the net RMS frequency error vs measured drops 1.83 %→1.67 % (mode-1-driven,
+> reported in full). Honest: the pure-bending element neglects the offset-neutral-axis
+> bending–membrane coupling (standard for thin bonded patches); PZT density is assumed
+> 7500 kg/m³ (sensitivity <0.1 % on mode 1); the article's modal-test instrumentation is
+> unstated. Offered as an opt-in higher-fidelity plant — committed P1–P8 keep the bare
+> model for comparability.
 
 ---
 

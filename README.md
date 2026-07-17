@@ -49,7 +49,15 @@ plates. The plant model is anchored to Du, Liu, Dai & Long (2024),
 > this closely-spaced-modes plant it is worse than a well-damped fixed resonator under
 > every drift (documented negative result). Inside the supervised ladder the wider rung
 > is a wash, so the deployed 4-rung A-ESO-ADRC is unchanged; the robust HRC is the
-> recommended standalone variant. Remaining: P3 (experimental validation) —
+> recommended standalone variant.
+> **P9 refines the P5 plant MODELING** (`main_piezo_structure.py`): the bonded PZT
+> patch entered only as an actuation force, with the modes solved on the BARE plate.
+> `PlateModel.add_piezo_structure` now smears the patch's composite bending stiffness
+> (+58 %) and mass (+46 %) into the FEM and re-solves — the instrumented plate. Modes
+> rise 0.4–3.8 %; the mode-1 match to the article's measured 540 Hz improves markedly
+> (**−3.5 % → +0.2 %**), net RMS frequency error 1.83 %→1.67 %. Opt-in higher-fidelity
+> plant (committed P1–P8 keep the bare model); caveats documented (bending–membrane
+> coupling neglected, PZT density assumed). Remaining: P3 (experimental validation) —
 > everything here is simulation.
 
 ---

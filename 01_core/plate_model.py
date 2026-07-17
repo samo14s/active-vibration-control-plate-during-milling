@@ -66,6 +66,7 @@ class PlateModel:
             print("[PlateModel] Assemblage FEM...")
         Ke = stiffness_matrix_K(self.E, self.nu, self.lex, self.ley, self.bp)
         Me = mass_matrix_K(self.rho,        self.lex, self.ley, self.bp)
+        self._Ke, self._Me = Ke, Me          # cached for optional patch structure
 
         nelem = self.N1 * self.N2
         n1 = self.n1
@@ -96,6 +97,72 @@ class PlateModel:
                              shape=(self.ndof, self.ndof))
         if self.verbose:
             print(f"[PlateModel] ndof = {self.ndof}, nelem = {nelem}")
+
+    # ---------------------------------------------------------------
+    def add_piezo_structure(self, xP1, xP2, zP1, zP2,
+                            E_Pe, nu_Pe, h_Pa, rho_Pe, verbose=None):
+        """Add the bonded piezo patch's STRUCTURAL mass and bending stiffness to the
+        plate FEM (the actuation force is separate — see add_piezo_patch), then re-run
+        the modal analysis so the modes reflect the INSTRUMENTED (plate+PZT) structure
+        rather than the bare aluminium plate.
+
+        The Al plate + surface-bonded PZT layer is smeared into each patch element as
+        an equivalent single-layer Kirchhoff element carrying the COMPOSITE bending
+        rigidity about the laminate neutral axis, plus the added areal mass:
+
+            k_scale = D_comp / D_plate,
+            D_comp  = sum_i  E_i/(1-nu_i^2) * [ t_i^3/12 + t_i * d_i^2 ]   (parallel axis)
+            m_scale = (rho*bp + rho_Pe*h_Pa) / (rho*bp)
+
+        HONEST APPROXIMATION: a pure-bending (Kirchhoff, w-only) element cannot carry
+        the bending-membrane coupling that the offset neutral axis introduces (the
+        laminate B-matrix); this smears in the DOMINANT local stiffening + mass loading
+        and neglects that second-order coupling — standard for thin surface-bonded
+        patches. Must be called BEFORE precompute_Dp / set_observation / add_piezo_patch
+        (they consume the mode shapes, which this recomputes)."""
+        if verbose is None:
+            verbose = self.verbose
+        E, nu, bp, rho = self.E, self.nu, self.bp, self.rho
+        z_pzt = 0.5 * bp + 0.5 * h_Pa                        # PZT centroid (mid-plane=0)
+        z_na = (E_Pe * h_Pa * z_pzt) / (E * bp + E_Pe * h_Pa)  # laminate neutral axis
+        D_plate = E * bp**3 / (12 * (1 - nu**2))
+        D_al = E / (1 - nu**2) * (bp**3 / 12 + bp * z_na**2)
+        D_pzt = E_Pe / (1 - nu_Pe**2) * (h_Pa**3 / 12 + h_Pa * (z_pzt - z_na)**2)
+        k_scale = (D_al + D_pzt) / D_plate
+        m_scale = (rho * bp + rho_Pe * h_Pa) / (rho * bp)
+        dK = (k_scale - 1.0) * self._Ke
+        dM = (m_scale - 1.0) * self._Me
+        n1 = self.n1
+        rows, cols, kdat, mdat = [], [], [], []
+        npatch = 0
+        for J in range(1, self.N2 + 1):
+            z_c = (J - 0.5) * self.ley
+            if not (zP1 <= z_c <= zP2):
+                continue
+            for I in range(1, self.N1 + 1):
+                x_c = (I - 0.5) * self.lex
+                if not (xP1 <= x_c <= xP2):
+                    continue
+                DofE = np.r_[3*(J-1)*n1 + 3*(I-1) + np.arange(6),
+                             3*J*n1     + 3*(I-1) + np.arange(3, 6),
+                             3*J*n1     + 3*(I-1) + np.arange(3)]
+                for a in range(12):
+                    for b in range(12):
+                        rows.append(DofE[a]); cols.append(DofE[b])
+                        kdat.append(dK[a, b]); mdat.append(dM[a, b])
+                npatch += 1
+        self.Kg = self.Kg + csr_matrix((kdat, (rows, cols)),
+                                       shape=(self.ndof, self.ndof))
+        self.Mg = self.Mg + csr_matrix((mdat, (rows, cols)),
+                                       shape=(self.ndof, self.ndof))
+        self.piezo_structure = dict(k_scale=k_scale, m_scale=m_scale, z_na=z_na,
+                                    n_patch_elem=npatch)
+        if verbose:
+            print(f"[PlateModel] piezo structure: {npatch} patch elements, bending "
+                  f"x{k_scale:.3f}, mass x{m_scale:.3f}, neutral-axis shift "
+                  f"{z_na*1e3:.3f} mm; re-solving modes...")
+        self._apply_bc()
+        self._modal_analysis()
 
     # ---------------------------------------------------------------
     def _apply_bc(self):

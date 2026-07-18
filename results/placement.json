@@ -1,0 +1,263 @@
+{
+  "linear_map": [
+    {
+      "px": 0.0,
+      "pz": 0.0,
+      "b0": -0.7246137449549137,
+      "Hpe_norm": 0.11101150438524504,
+      "signs": "---",
+      "tune": [
+        1500,
+        18000
+      ],
+      "ap_crit_linear_mm": 3.236328125
+    },
+    {
+      "px": 0.0,
+      "pz": 0.01,
+      "b0": -0.3663165379425796,
+      "Hpe_norm": 0.09587054409744794,
+      "signs": "--+",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 4.745703125000001
+    },
+    {
+      "px": 0.0,
+      "pz": 0.02,
+      "b0": -0.24955904207448845,
+      "Hpe_norm": 0.12119652664478538,
+      "signs": "-+-",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.02,
+      "pz": 0.0,
+      "b0": 0.006697676722858947,
+      "Hpe_norm": 0.15054698225547272,
+      "signs": "--+",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.02,
+      "pz": 0.01,
+      "b0": 0.5343729929692467,
+      "Hpe_norm": 0.16379831768790437,
+      "signs": "--+",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.02,
+      "pz": 0.02,
+      "b0": 1.387326959510396,
+      "Hpe_norm": 0.204659268804789,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.04,
+      "pz": 0.0,
+      "b0": 0.30043774207983787,
+      "Hpe_norm": 0.19880538763705347,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.04,
+      "pz": 0.01,
+      "b0": 1.2981373214576248,
+      "Hpe_norm": 0.2924287706371077,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.04,
+      "pz": 0.02,
+      "b0": 2.7880261282639918,
+      "Hpe_norm": 0.3846667688011103,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.06,
+      "pz": 0.0,
+      "b0": -0.7215610903040263,
+      "Hpe_norm": 0.1505469822551379,
+      "signs": "---",
+      "tune": [
+        1000,
+        16000
+      ],
+      "ap_crit_linear_mm": 4.7261718749999995
+    },
+    {
+      "px": 0.06,
+      "pz": 0.01,
+      "b0": -0.3817978149081941,
+      "Hpe_norm": 0.16379831768770828,
+      "signs": "---",
+      "tune": [
+        1800,
+        28800
+      ],
+      "ap_crit_linear_mm": 12.0
+    },
+    {
+      "px": 0.06,
+      "pz": 0.02,
+      "b0": 0.1412161334497756,
+      "Hpe_norm": 0.2046592688045996,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.08,
+      "pz": 0.0,
+      "b0": -1.153917595950552,
+      "Hpe_norm": 0.11101150438477764,
+      "signs": "---",
+      "tune": [
+        1800,
+        28800
+      ],
+      "ap_crit_linear_mm": 2.3722656250000007
+    },
+    {
+      "px": 0.08,
+      "pz": 0.01,
+      "b0": 0.23862443807668587,
+      "Hpe_norm": 0.09587054409849374,
+      "signs": "--+",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    },
+    {
+      "px": 0.08,
+      "pz": 0.02,
+      "b0": 0.8464247074372471,
+      "Hpe_norm": 0.12119652664652622,
+      "signs": "-++",
+      "tune": [
+        1000,
+        8000
+      ],
+      "ap_crit_linear_mm": 0.01
+    }
+  ],
+  "feasible": [
+    {
+      "px": 0.06,
+      "pz": 0.01,
+      "signs": "---",
+      "b0": -0.3817978149081941,
+      "ap_crit_linear_mm": 12.0,
+      "tune_feasible": [
+        1200,
+        14400
+      ],
+      "ap_feasible_mm": 0.925
+    },
+    {
+      "px": 0.0,
+      "pz": 0.01,
+      "signs": "--+",
+      "b0": -0.3663165379425796,
+      "ap_crit_linear_mm": 4.745703125000001,
+      "tune_feasible": [
+        1200,
+        14400
+      ],
+      "ap_feasible_mm": 1.2875
+    },
+    {
+      "px": 0.06,
+      "pz": 0.0,
+      "signs": "---",
+      "b0": -0.7215610903040263,
+      "ap_crit_linear_mm": 4.7261718749999995,
+      "tune_feasible": [
+        1500,
+        18000
+      ],
+      "ap_feasible_mm": 1.378125
+    },
+    {
+      "px": 0.0,
+      "pz": 0.0,
+      "signs": "---",
+      "b0": -0.7246137449549137,
+      "ap_crit_linear_mm": 3.236328125,
+      "tune_feasible": [
+        1800,
+        21600
+      ],
+      "ap_feasible_mm": 1.921875
+    },
+    {
+      "px": 0.08,
+      "pz": 0.0,
+      "signs": "---",
+      "b0": -1.153917595950552,
+      "ap_crit_linear_mm": 2.3722656250000007,
+      "tune_feasible": [
+        1500,
+        18000
+      ],
+      "ap_feasible_mm": 1.10625
+    },
+    {
+      "px": 0.02,
+      "pz": 0.0,
+      "signs": "--+",
+      "b0": 0.006697676722858947,
+      "ap_crit_linear_mm": 0.01,
+      "tune_feasible": null,
+      "ap_feasible_mm": 0.0
+    }
+  ],
+  "lqg_feasible_mm": 1.378125,
+  "u_max": 150.0,
+  "rpm": 4900,
+  "patch_size_mm": [
+    20.0,
+    60.0
+  ],
+  "note": "Linear a_p,crit uses CL-SD with the ESO in the monodromy; feasible a_p uses saturated nonlinear time-domain bisection (chatter = divergence or steady tip RMS > 50 um). The two metrics rank placements differently: design must use the feasible metric."
+}

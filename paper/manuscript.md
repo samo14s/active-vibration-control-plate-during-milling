@@ -19,13 +19,23 @@ matrix, giving the true controlled SLD; its open-loop critical depth
 **(ii)** Using CL-SD we show that the Kalman observer materially reduces the LQG
 stability margin (1.92 mm with the observer in the loop, versus 2.43 mm for the
 idealised static-feedback bound). **(iii)** We design an *active disturbance
-rejection control* (ADRC) with a collocated piezo sensor: it raises the critical
-depth to 3.25 mm, reduces tip vibration by ~51 % versus LQG at 25-55 V, and --
-because it needs only the input gain b0 -- stays robust when the plant frequency
-drifts, whereas LQG loses stability at -20 % drift. **(iv)** A phase-aware
+rejection control* (ADRC) with a collocated piezo sensor: it raises the linear
+critical depth to 3.25 mm, reduces tip vibration by ~51 % versus LQG at 25-55 V,
+and -- because it needs only the input gain b0 -- stays robust when the plant
+frequency drifts, whereas LQG loses stability at -20 % drift. **(iv)** We
+introduce a *two-stage stability metric*: the linear CL-SD boundary must be
+paired with the **voltage-feasible critical depth** -- the largest depth at which
+the saturated (+/-150 V) nonlinear loop remains chatter-free.  A
+transducer-placement co-design study shows the two metrics *rank placements in
+nearly opposite order* (Spearman rho = -0.4 on this benchmark): the placement
+with a 12 mm linear boundary achieves only 0.93 mm feasibly, while the
+strongly-coupled original placement (3.2 mm linear) is the feasible optimum at
+1.92 mm -- 39 % above the LQG baseline (1.38 mm).  **(v)** A phase-aware
 feedforward in a two-degree-of-freedom controller is shown, analytically and with
 CL-SD, to reduce forced vibration and peak voltage but *not* the stability
-boundary. We also document and correct the fabricated results of the package this
+boundary; and two natural ADRC augmentations (a regeneration-aware delayed
+channel and a resonant ESO) are honestly reported as *negative results* (< 2 %
+gain).  We also document and correct the fabricated results of the package this
 work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
@@ -152,6 +162,37 @@ the static bound is optimistic: the realizable depth is set by the observer
 (Sec. 4.1) and by the +/-150 V budget at the actual cutting depth. We therefore
 report it as a design aid, not as an achievable operating point.
 
+### 3.5 Two-stage metric and transducer-placement co-design
+
+Linear Floquet analysis (open- or closed-loop) is the field's standard tool, but
+it ignores the actuator's voltage limit, which in practice binds first: a design
+can be linearly stable at a depth whose disturbance level demands far more than
++/-150 V, in which case saturation re-opens the loop and chatter returns.  We
+therefore evaluate every candidate design with a two-stage metric
+(`experiments/placement_study.py`):
+
+1. **Linear stage (fast):** CL-SD boundary with the ESO in the monodromy, used
+   to pre-filter placements (sign-viability of the modal coupling
+   c_i * H_pe,i, i.e. the minimum-phase condition for a single-b0 ADRC) and to
+   tune bandwidths.  ~10 ms per evaluation.
+2. **Feasible stage (honest):** the *voltage-feasible critical depth*
+   a_p,feas -- the largest depth at which the saturated nonlinear time-domain
+   loop stays chatter-free (divergence or steady tip RMS > 50 um counts as
+   chatter) -- found by bisection over full Newmark simulations, with the ADRC
+   bandwidths re-selected under this metric.
+
+The co-design study slides the 20 x 60 mm patch (with its collocated corner
+sensor) over a 5 x 3 position grid on the plate and applies both stages.
+
+### 3.6 Augmentations evaluated (negative results)
+
+Two natural improvements of the plain ESO were tested against the same CL-SD
+criterion (`experiments/augmentation_study.py`): a *regeneration-aware delayed
+channel* u_tau = g [y(t-tau) - y(t)] exploiting the exactly-known tooth-passing
+delay (the monodromy supports controller delayed-output terms), and a *resonant
+ESO* embedding an internal model at/near the dominant mode.  Both are reported
+in Sec. 4.7.
+
 ## 4. Results
 
 All numbers are produced by `experiments/run_all.py` (4900 rpm; CL-SD with m = 30;
@@ -217,13 +258,62 @@ shows for the observer and as the voltage curve in Fig. 5 shows for the actuator
 the *realizable* depth is well below this static ceiling; the curve is a design
 aid, not an operating envelope.
 
+### 4.6 Placement co-design: the two metrics rank in opposite order
+
+Of the 15 candidate patch positions, 10 are sign-infeasible for a single-b0 ADRC
+(mixed-sign modal coupling makes the collocated map non-minimum-phase and the
+loop unstabilisable at any tested bandwidth) -- the sign-viability rule alone
+partitions the plate into "allowed" and "forbidden" placement regions (Fig. 6a).
+For the five viable placements the two metrics give (Fig. 6b):
+
+| Patch (x0, z0) mm | linear CL-SD boundary | voltage-feasible depth |
+|---|---:|---:|
+| (60, 10) | **12.0 mm** (rank 1) | 0.93 mm (**rank 5**) |
+| (0, 10)  | 4.75 mm (rank 2) | 1.29 mm (rank 3) |
+| (60, 0)  | 4.73 mm (rank 3) | 1.38 mm (rank 2) |
+| (0, 0) *(original)* | 3.24 mm (rank 4) | **1.92 mm** (**rank 1**) |
+| (80, 0)  | 2.37 mm (rank 5) | 1.11 mm (rank 4) |
+
+The rankings are anti-correlated (Spearman rho = -0.4).  The mechanism is
+plain: weakly-coupled placements (small |b0|) tolerate the delay well in the
+linear analysis but need proportionally more voltage to reject the same cutting
+disturbance, so the +/-150 V wall arrives much earlier; strongly-coupled
+placements spend less voltage per unit of rejection.  **Selecting a transducer
+placement -- or reporting a controlled SLD -- from linear analysis alone is
+therefore unsafe, even when the analysis honestly includes the controller and
+its observer.**  Under the honest metric the original placement of [1] is in
+fact near-optimal, and the feasible headline comparison at identical hardware is
+
+| Controller (original placement) | voltage-feasible depth |
+|---|---:|
+| LQG (tip sensor + Kalman observer) | 1.38 mm |
+| **ADRC (collocated, wc=1800, wo=21600)** | **1.92 mm (+39 %)** |
+
+confirmed by 0.5 s saturated simulations (ADRC stable at 1.8 mm, chatter at
+2.1 mm; LQG stable at 1.3 mm, chatter at 1.5 mm).
+
+### 4.7 Augmentations: honest negative results
+
+Neither augmentation of Sec. 3.6 improves the linear boundary materially over
+the plain delay-tuned ESO (baseline 3.25 mm at the nominal placement): the best
+delayed-channel gain gives 3.27 mm (+0.7 %) before rapid destabilisation at
+larger |g|, and the best resonant-ESO configuration gives 3.31 mm (+1.8 %), with
+most configurations worse.  The interpretation is structural: the ESO already
+reconstructs the total disturbance with lag ~1/wo << tau, so the delayed channel
+mostly injects wrong-phase feedback, and a fixed internal model cannot track the
+chatter frequency, which shifts with depth and lobe number.  At fixed hardware
+the plain bandwidth-parameterised ESO with delay-aware tuning is close to the
+ceiling of single-channel output-feedback laws; the remaining levers are the
+transducer placement (Sec. 4.6) and the actuator budget itself.
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is
-linear and does not include actuator saturation, sensor noise, or amplifier
-dynamics (the realistic piezo model captures those in time domain); simulated
-stable depths are therefore optimistic relative to the experiments of [1], and
-should be read as relative comparisons under identical assumptions. The ADRC
+linear; the voltage-feasible stage (Sec. 3.5) closes the largest gap -- actuator
+saturation -- but sensor noise and amplifier dynamics are still idealised in the
+stability numbers (the realistic piezo model captures them in time domain);
+simulated depths therefore remain optimistic relative to the experiments of [1]
+and should be read as relative comparisons under identical assumptions. The ADRC
 comparison uses a collocated control sensor (natural for a piezo transducer)
 while the model-based controllers use the tip measurement with a full-state
 observer; performance for all is read at the tip. The static feedback-authority
@@ -237,10 +327,17 @@ versus feedforward, and observer versus static feedback, can and cannot do.
 We presented a closed-loop semi-discretization method that embeds the controller
 and its observer in the Floquet analysis, quantified the observer's cost to the
 LQG stability margin, and designed an ADRC controller that -- needing only the
-input gain -- extends the critical depth (3.25 vs 1.92 mm), roughly halves tip
-vibration at low voltage, and remains stable under frequency drift that
-destabilises LQG. A two-degree-of-freedom feedforward was shown to help forced
-vibration but not stability. Every reported number is reproducible from the code.
+input gain -- extends the linear critical depth (3.25 vs 1.92 mm), roughly halves
+tip vibration at low voltage, and remains stable under frequency drift that
+destabilises LQG.  Beyond the linear analysis, we introduced the voltage-feasible
+critical depth as the honest design metric and showed, through a
+transducer-placement co-design study, that it ranks placements in nearly the
+opposite order to the linear boundary (12 mm linear can mean 0.93 mm feasible);
+under this metric ADRC delivers 1.92 mm versus 1.38 mm for LQG (+39 %) at
+identical hardware.  Two natural ADRC augmentations were honestly reported as
+negative results, and a two-degree-of-freedom feedforward was shown to help
+forced vibration but not stability.  Every reported number is reproducible from
+the code.
 
 ## References
 

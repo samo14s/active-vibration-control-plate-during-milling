@@ -244,13 +244,19 @@ class ClosedLoopFDM:
         C[0, :self.n] = self.C_obs
         return C
 
-    def rho_dynamic(self, RPM, ap, Ac, Bc, Cc, Dc, m_div=None):
+    def rho_dynamic(self, RPM, ap, Ac, Bc, Cc, Dc, m_div=None,
+                    Bc_tau=None, D_tau=None):
         """Dominant Floquet multiplier for a linear *dynamic* output-feedback
-        controller  z_dot = Ac z + Bc y,  u = Cc z + Dc y.
+        controller  z_dot = Ac z + Bc y + Bc_tau y(t-tau),
+                    u     = Cc z + Dc y + D_tau  y(t-tau).
 
         The closed loop augments the plant state x = [q; q_dot] with the
-        controller state z; the regenerative delay acts on x only.  With ADRC,
-        z is the extended-state-observer state, so this is the true ADRC SLD.
+        controller state z; the regenerative delay acts on x, and the optional
+        controller terms Bc_tau / D_tau use the *same* tooth-passing delay tau
+        (known from the spindle speed), so they enter the same history node of
+        the monodromy.  With ADRC, z is the extended-state-observer state, so
+        this is the true ADRC SLD; Bc_tau/D_tau support regeneration-aware
+        (delayed-output) controller channels.
         """
         m_div = self.m_div if m_div is None else m_div
         n, nx = self.n, self.nx
@@ -263,6 +269,8 @@ class ClosedLoopFDM:
         BCc = B @ Cc                       # (nx, nz)
         BDcCpl = B @ Dc @ Cpl              # (nx, nx)
         BcCpl = Bc @ Cpl                   # (nz, nx)
+        BDtCpl = (B @ np.asarray(D_tau, float) @ Cpl) if D_tau is not None else None
+        BctCpl = (np.asarray(Bc_tau, float) @ Cpl) if Bc_tau is not None else None
         a4, dt_int = self._a4_over_period(RPM, ap, m_div)
         n_tau = m_div
         N = (n_tau + 1) * na
@@ -285,6 +293,10 @@ class ClosedLoopFDM:
             A_now[nx:, nx:] = Ac
             A_del = np.zeros((na, na))
             A_del[n:nx, :n] = a4k * self.Dp2      # regenerative delay on x only
+            if BDtCpl is not None:
+                A_del[:nx, :nx] += BDtCpl          # delayed output -> input channel
+            if BctCpl is not None:
+                A_del[nx:, :nx] += BctCpl          # delayed output -> controller state
             Pd, Ig = _expm_and_integral(A_now, dt_int)
             R = Ig @ A_del
             D[top, :] = 0.0
@@ -294,20 +306,24 @@ class ClosedLoopFDM:
         return float(np.max(np.abs(np.linalg.eigvals(Phi))))
 
     def ap_crit_dynamic(self, RPM, Ac, Bc, Cc, Dc, ap_max=6e-3,
-                        n_coarse=40, refine=True, m_div=None, ap_floor=1e-5):
+                        n_coarse=40, refine=True, m_div=None, ap_floor=1e-5,
+                        Bc_tau=None, D_tau=None):
         """Critical depth of cut for a dynamic output-feedback controller."""
-        if self.rho_dynamic(RPM, ap_floor, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+        def _rho(ap):
+            return self.rho_dynamic(RPM, ap, Ac, Bc, Cc, Dc, m_div,
+                                    Bc_tau=Bc_tau, D_tau=D_tau)
+        if _rho(ap_floor) >= 1.0:
             return ap_floor
         ap_grid = np.linspace(ap_max / n_coarse, ap_max, n_coarse)
         prev = ap_floor
         for ap in ap_grid:
-            if self.rho_dynamic(RPM, ap, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+            if _rho(ap) >= 1.0:
                 if not refine:
                     return ap
                 lo, hi = prev, ap
                 for _ in range(30):
                     mid = 0.5 * (lo + hi)
-                    if self.rho_dynamic(RPM, mid, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+                    if _rho(mid) >= 1.0:
                         hi = mid
                     else:
                         lo = mid

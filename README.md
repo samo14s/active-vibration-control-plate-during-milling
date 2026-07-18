@@ -21,12 +21,20 @@ Here the controller — **including its observer** — is placed **inside** the
 Floquet monodromy matrix (`src/cl_fdm.py`, *closed-loop semi-discretization*), so
 the controlled SLD is genuine. On that basis: (1) we show the Kalman observer
 costs the LQG margin ~21 % (1.92 vs 2.43 mm); (2) we design an **ADRC** controller
-(`src/adrc_control.py`) with a collocated piezo sensor that raises the critical
-depth to **3.25 mm**, roughly **halves** tip vibration versus LQG at 25–55 V, and
-stays stable under ±20 % frequency drift where LQG chatters — needing only the
-input gain `b₀`; (3) a **phase-aware feedforward** (`src/twodof_control.py`) is
-shown to reduce forced vibration/voltage but *not* the stability boundary. All
-numbers are computed and reproducible.
+(`src/adrc_control.py`) with a collocated piezo sensor that raises the linear
+critical depth to **3.25 mm**, roughly **halves** tip vibration versus LQG at
+25–55 V, and stays stable under ±20 % frequency drift where LQG chatters —
+needing only the input gain `b₀`; (3) we introduce the **voltage-feasible
+critical depth** (saturated nonlinear time domain) as the honest design metric
+and show through a **transducer-placement co-design study** that it ranks
+placements in nearly the *opposite* order to the linear boundary (Spearman
+ρ = −0.4; a 12 mm linear boundary can mean 0.93 mm feasible) — under it, ADRC
+achieves **1.92 mm vs 1.38 mm for LQG (+39 %)** at identical hardware; (4) two
+natural ADRC augmentations (regeneration-aware delayed channel, resonant ESO)
+are honestly documented as **negative results** (< 2 % gain); (5) a **phase-aware
+feedforward** (`src/twodof_control.py`) is shown to reduce forced
+vibration/voltage but *not* the stability boundary. All numbers are computed and
+reproducible.
 
 ## Layout
 
@@ -45,7 +53,9 @@ src/                       importable modules
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
   floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
-  run_all.py               reproduces every result -> results/
+  run_all.py               reproduces every core result -> results/
+  placement_study.py       transducer-placement co-design (linear + feasible)
+  augmentation_study.py    negative results: delayed channel & resonant ESO
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)
 figures/                   publication figures (created by make_figures.py)
@@ -66,7 +76,12 @@ python experiments/make_figures.py     # writes figures/
 Use `--quick` for a coarser (faster) SLD grid. Individual stages:
 `--stage 1` (authority curve), `2` (SLD: OL/LQG/ADRC, observer in loop),
 `3` (2-DOF scenarios), `4` (feedforward role), `5` (ADRC scenarios),
-`6` (robustness sweep).
+`6` (robustness sweep). Then:
+
+```bash
+python experiments/placement_study.py      # ~3 min: co-design + feasible depths
+python experiments/augmentation_study.py   # ~1 min: negative results
+```
 
 ## Physical setup
 

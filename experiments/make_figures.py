@@ -175,10 +175,74 @@ def fig_authority():
     save(fig, "fig5_authority")
 
 
+# ---------------------------------- Fig 6: placement co-design / metric inversion
+def fig_placement():
+    d = load("placement.json")
+    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.0),
+                             gridspec_kw={"width_ratios": [1.15, 1.0]})
+    # (a) plate map: patch positions coloured by class
+    ax = axes[0]
+    LPmm, HPmm = 100.0, 80.0
+    pw, ph = d["patch_size_mm"]
+    ax.add_patch(plt.Rectangle((0, 0), LPmm, HPmm, fc="#f2f2f2", ec="k", lw=1.5))
+    ax.plot([0, LPmm], [HPmm, HPmm], color="#c62828", lw=3, alpha=0.6)
+    ax.text(50, HPmm + 2.2, "tool path (top edge)", ha="center", fontsize=9,
+            color="#c62828")
+    ax.plot([0, LPmm], [0, 0], color="k", lw=4)
+    ax.text(50, -5.5, "clamped edge", ha="center", fontsize=9)
+    feas = {(round(f["px"] * 1e3), round(f["pz"] * 1e3)): f for f in d["feasible"]}
+    for r in d["linear_map"]:
+        x, z = r["px"] * 1e3, r["pz"] * 1e3
+        key = (round(x), round(z))
+        viable = r["signs"].startswith("--") and r["ap_crit_linear_mm"] > 0.1
+        if not viable:
+            ax.add_patch(plt.Rectangle((x, z), pw, ph, fill=False,
+                                       ec="#bbbbbb", lw=1.0, ls=":"))
+            ax.plot([x, x + pw], [z, z + ph], color="#bbbbbb", lw=0.8)
+            ax.plot([x, x + pw], [z + ph, z], color="#bbbbbb", lw=0.8)
+        else:
+            f = feas.get(key)
+            ax.add_patch(plt.Rectangle((x, z), pw, ph, fill=False,
+                                       ec=C_ADRC, lw=1.8))
+            if f:
+                ax.text(x + pw / 2, z + ph / 2,
+                        f"lin {f['ap_crit_linear_mm']:.1f}\nfeas {f['ap_feasible_mm']:.2f}",
+                        ha="center", va="center", fontsize=8, color=C_ADRC,
+                        fontweight="bold")
+    ax.set_xlim(-4, 104); ax.set_ylim(-9, 90)
+    ax.set_aspect("equal"); ax.grid(False)
+    ax.set_xlabel("x (mm)"); ax.set_ylabel("z (mm)")
+    ax.set_title("(a) patch candidates\n(boxed = viable, crossed = sign-infeasible)", fontsize=10)
+    # (b) inversion: linear vs feasible ranking
+    ax = axes[1]
+    fs = sorted(d["feasible"], key=lambda r: -r["ap_crit_linear_mm"])
+    fs = [r for r in fs if r["ap_feasible_mm"] > 0.05]
+    labels = [f"({r['px']*1e3:.0f},{r['pz']*1e3:.0f})" for r in fs]
+    lin = [r["ap_crit_linear_mm"] for r in fs]
+    fea = [r["ap_feasible_mm"] for r in fs]
+    x = np.arange(len(fs)); w = 0.38
+    ax.bar(x - w / 2, lin, w, color="#9e9e9e", ec="k", label="linear CL-SD boundary")
+    ax.bar(x + w / 2, fea, w, color=C_ADRC, ec="k", label="voltage-feasible (150 V)")
+    for xi, v in zip(x - w / 2, lin):
+        ax.text(xi, v + 0.12, f"{v:.1f}", ha="center", fontsize=8)
+    for xi, v in zip(x + w / 2, fea):
+        ax.text(xi, v + 0.12, f"{v:.2f}", ha="center", fontsize=8, fontweight="bold")
+    ax.axhline(d["lqg_feasible_mm"], color=C_LQG, ls="--", lw=1.5)
+    ax.text(len(fs) - 0.4, d["lqg_feasible_mm"] + 0.15,
+            f"LQG feasible {d['lqg_feasible_mm']:.2f} mm", color=C_LQG,
+            fontsize=8.5, ha="right")
+    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=9)
+    ax.set_xlabel("patch position (x0, z0) mm — sorted by linear boundary")
+    ax.set_ylabel(r"critical depth $a_p$ (mm)")
+    ax.set_title("(b) metric inversion:\nlinear vs voltage-feasible ranking", fontsize=10)
+    ax.legend(fontsize=9)
+    save(fig, "fig6_placement")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
-           ("synthesis.json", fig_authority)]
+           ("synthesis.json", fig_authority), ("placement.json", fig_placement)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

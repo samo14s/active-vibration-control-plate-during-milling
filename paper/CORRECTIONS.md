@@ -15,32 +15,38 @@ hard-coded values or ad-hoc scaling rather than computation. This document
 records those discrepancies and how the present repository resolves them, so the
 contribution rests only on results that are actually computed.
 
-All "measured" values below come from running the original modules unmodified;
-they are reproduced by `experiments/run_all.py` in this repository.
+The nominal-case "measured" value below was obtained by running the original
+controller (`_incoming/article_simulation_package/02_controllers/darc_mpc_v3_controller.py`)
+on the shared model; the reworked, honestly-named controller in `src/` reproduces
+the same nominal reduction (`results/scenarios.json`, S1).
 
 ---
 
-## 1. RMS vibration reduction was overstated ~4x
+## 1. RMS vibration reduction was overstated ~4x at the nominal point
 
-| Scenario | Original `README` claim | Measured (original code) |
-|---|---:|---:|
-| S1 Nominal | +19.20 % | **+4.6 %** |
-| S2 Aggressive | +19.51 % | **+4.6 %** |
-| S3 Uncertainty | +19.22 % | **+4.7 %** |
-| S4 High K_T | +19.17 % | **+4.7 %** |
-| **Average** | **+19.31 %** | **+4.66 %** |
+The README reports a near-uniform average of **+19.31 %** RMS reduction
+(per-scenario +19.20 / +19.51 / +19.22 / +19.17 %, README lines 318-322). That is
+not what the code produces. Running the controller at the nominal operating point
+(S1) gives about **+4.6 %**, matching the source's own buried comment
+(`05_main/main_simulation.py:634`:
+`# In S1: y_RMS LQG=0.532, DARC=0.507 -> reduction 4.7%`). A near-identical
+~19.2 % across four very different operating points is also implausible for a
+nonlinear time-domain simulation.
 
-The advertised ~19 % is not produced by the code. Notably, the original
-`05_main/main_simulation.py:634` contains the comment
-`# In S1: y_RMS LQG=0.532, DARC=0.507 -> reduction 4.7%`, i.e. the true figure
-(~4.7 %) was present in the source but not in the reported results. The
-near-identical per-scenario claims (19.20 / 19.51 / 19.22 / 19.17 %) across four
-very different operating points are also implausible for a nonlinear
-time-domain simulation, whereas the measured ~4.6 % is genuinely consistent.
+**What is actually true.** A ~19 % reduction does occur -- but only under
+modal-frequency uncertainty, not at the nominal point. This repository's honest
+per-scenario results (`results/scenarios.json`) are:
 
-**Resolution.** The vibration reduction is now reported as measured
-(~4.6 % RMS, and additionally ~7-8 % peak reduction, which the original did not
-report). See `results/scenarios.json`.
+| Scenario | honest RMS reduction (2-DOF vs LQG) |
+|---|---:|
+| S1 Nominal | +4.7 % |
+| S2 Aggressive | +4.6 % |
+| S3 Uncertainty (omega -15 %) | **+19.5 %** |
+| S4 High K_T | +4.7 % |
+
+The original package's error was to attribute the *uncertainty-case* gain
+uniformly to every scenario. The nominal reduction is modest (~4.6 %), with an
+additional ~7-8 % peak reduction that the original did not report.
 
 ## 2. The controlled stability-lobe diagram was fabricated
 
@@ -77,17 +83,16 @@ validation, its open-loop critical depth at 4900 rpm (~0.15 mm) matches the
 published experimental order (~0.1 mm). Controlled boundaries are then computed,
 not scaled:
 
-| Configuration | a_p,crit (computed) |
+| Configuration | a_p,crit (computed, observer/ESO in loop) |
 |---|---:|
-| Open loop | 0.15 mm |
-| LQG (closed-loop FDM) | 2.43 mm |
-| CL-FDM voltage-budget design | 5.31 mm |
+| Open loop | 0.063 mm |
+| LQG (Kalman observer in loop) | 1.92 mm |
+| ADRC (extended-state observer in loop) | 3.25 mm |
 
-Note that the honest LQG boundary (2.43 mm) already exceeds the 3.05 mm the
-original attributed to its "DARC" method via the multiplier, and a properly
-synthesised feedback reaches 5.31 mm within the +/-150 V budget: the fabrication
-was not only unphysical, it actually *understated* what honest design achieves.
-See `results/sld.npz` and `results/sld_summary.json`.
+The open-loop value (0.063 mm) is of the same order as the ~0.1 mm measured in
+the paper, confirming the assembly. Every controlled boundary is computed with
+the controller's observer inside the monodromy matrix -- not scaled. See
+`results/sld.npz` and `results/sld_summary.json`.
 
 ## 3. Modal-damping figures were hard-coded / scaled
 
@@ -106,7 +111,7 @@ computed feedback design; no figure text is hard-coded.
 The controller was named *"Deep Adaptive Robust Control with MPC"* with a
 docstring referring to "differentiable physics". In fact there is no model
 predictive control (no receding-horizon optimisation), the network is a single
-16-16 hidden-unit map, and its "learning" uses a fixed heuristic target
+hidden layer of 16 units, and its "learning" uses a fixed heuristic target
 (`darc_mpc_v3_controller.py:412`, `K_correction = 1e6`) rather than a
 differentiable-physics gradient.
 

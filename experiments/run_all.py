@@ -30,8 +30,10 @@ from plate_model import PlateModel
 from milling_force import precompute_alpha_periodic
 from lqg_controller import LQGController
 from twodof_control import TwoDOFController
+from adrc_control import ADRCController
 from newmark_solver import NewmarkSimulator
 from cl_fdm import ClosedLoopFDM, default_cutting
+from kirchhoff_q4 import shape_at_point
 import floquet_synthesis as fs
 
 # ----------------------------------------------------------------------
@@ -49,12 +51,26 @@ ZETA = [0.0031, 0.0017, 0.0027]
 DT = 5e-5
 GAIN_CAP = 1e8            # actuator-authority proxy used by both selection rules
 
+# ADRC design (collocated piezo sensor; see manuscript sec. on ADRC)
+ADRC_WC = 1500.0          # controller bandwidth [rad/s]
+ADRC_WO = 18000.0         # observer bandwidth [rad/s]
+ADRC_SENSOR = (0.020, 0.060)   # collocated control sensor at the piezo corner
 
-def build_plate(ap, freq_perturb=0.0):
+
+def build_plate(ap, freq_perturb=0.0, sensor="tip"):
+    """Build the plate model. sensor='tip' puts the measurement at the tool tip
+    (used by the model-based controllers with a full-state observer); 'piezo'
+    puts it at the collocated piezo corner (used by ADRC). p.D_tip always holds
+    the tip shape so performance is evaluated at the tip regardless of sensor."""
     p = PlateModel(LP, HP, BP, RHO, E_AL, NU_AL, N1=N1, N2=N2, n_modes=N_MODES,
                    zeta_modes=ZETA, verbose=False)
     p.precompute_Dp(zp_pos=HP - ap / 2, n_pos=2001)
     p.set_observation(x_obs=LP, z_obs=HP)
+    p.D_tip = p.D_obs.copy()               # tip shape, for performance metrics
+    if sensor == "piezo":
+        Nv = shape_at_point(ADRC_SENSOR[0], ADRC_SENSOR[1],
+                            p.N1, p.N2, p.lex, p.ley, p.n1)
+        p.D_obs = Nv[p.DOFf] @ p.V         # collocated control sensor
     p.add_piezo_patch(0, 0.020, 0, 0.060, D31, H_PA, E_PE, NU_PE)
     if abs(freq_perturb) > 1e-6:           # perturbed "real" plant (robustness)
         p.Kp = p.Kp * (1 + freq_perturb) ** 2
@@ -177,42 +193,58 @@ def stage1_synthesis():
 
 
 # ======================================================================
-def stage2_sld(quick=False):
-    print("\n=== Stage 2: controlled SLD grids (CL-FDM) ===")
-    t0 = time.time()
-    plate = build_plate(0.3e-3)
-    clf = ClosedLoopFDM.from_plate(plate, cutting_setup(), m_div=(20 if quick else 25))
+def _lqg_lti(plate):
+    """LQG (Kalman observer + LQR) as a linear dynamic output-feedback controller
+    y -> u, so its stability can be evaluated with the observer IN the loop."""
     lqg = LQGController(plate, dt=DT, verbose=False)
     lqg.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
                          w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
-    syn = json.load(open(os.path.join(RESULTS, "synthesis.json")))
-    K_flo = np.array(syn["selected"]["K"]).reshape(1, 2 * N_MODES)
+    A, B, C, K, L = lqg.A, lqg.B, lqg.C, lqg.K_lqr, lqg.L_kal
+    Ac = A - L @ C - B @ K
+    return dict(Ac=Ac, Bc=L, Cc=-K, Dc=np.zeros((1, 1)), K=K, lqg=lqg)
+
+
+def stage2_sld(quick=False):
+    """Fair controlled SLDs, all with the controller's observer/ESO IN the loop
+    (closed-loop semi-discretization).  OL, LQG and ADRC are directly comparable."""
+    print("\n=== Stage 2: controlled SLDs (observer/ESO in the loop) ===")
+    t0 = time.time()
+    m = 20 if quick else 30
+    plate = build_plate(0.3e-3)                       # tip sensor (LQG)
+    clf = ClosedLoopFDM.from_plate(plate, cutting_setup(), m_div=m)
+    lti = _lqg_lti(plate)
+    plate_p = build_plate(0.3e-3, sensor="piezo")     # collocated sensor (ADRC)
+    clf_p = ClosedLoopFDM.from_plate(plate_p, cutting_setup(), m_div=m)
+    adrc = ADRCController(plate_p, dt=DT, wc=ADRC_WC, wo=ADRC_WO)
+    Aa, Ba, Ca, Da = adrc.export_lti()
 
     n_rpm = 24 if quick else 30
     n_ap = 20 if quick else 28
     RPM_arr = np.linspace(2500, 7500, n_rpm)
-    ap_arr = np.linspace(0.05e-3, 6.0e-3, n_ap)
+    ap_arr = np.linspace(0.02e-3, 6.0e-3, n_ap)
 
-    print("  OL ..."); rho_OL = clf.sld_grid(RPM_arr, ap_arr, None, verbose=True)
-    print("  LQG ..."); rho_LQG = clf.sld_grid(RPM_arr, ap_arr, lqg.K_lqr, verbose=True)
-    print("  Floquet ..."); rho_FLO = clf.sld_grid(RPM_arr, ap_arr, K_flo, verbose=True)
-
-    def apcrit_at(rho):
-        j = np.argmin(np.abs(RPM_arr - RPM))
-        col = rho[:, j]
-        idx = np.where(col >= 1.0)[0]
-        return float(ap_arr[idx[0]] * 1e3) if len(idx) else float(ap_arr[-1] * 1e3)
+    print("  OL ...")
+    rho_OL = clf.sld_grid(RPM_arr, ap_arr, None, verbose=True)
+    print("  LQG (observer in loop) ...")
+    rho_LQG = clf.sld_grid_dynamic(RPM_arr, ap_arr, lti["Ac"], lti["Bc"],
+                                   lti["Cc"], lti["Dc"], verbose=True)
+    print("  ADRC (ESO in loop) ...")
+    rho_ADRC = clf_p.sld_grid_dynamic(RPM_arr, ap_arr, Aa, Ba, Ca, Da, verbose=True)
 
     np.savez(os.path.join(RESULTS, "sld.npz"),
-             RPM=RPM_arr, ap=ap_arr, rho_OL=rho_OL, rho_LQG=rho_LQG, rho_FLO=rho_FLO,
-             K_lqr=lqg.K_lqr, K_flo=K_flo)
-    summ = dict(ap_crit_OL_mm=apcrit_at(rho_OL),
-                ap_crit_LQG_mm=apcrit_at(rho_LQG),
-                ap_crit_FLO_mm=apcrit_at(rho_FLO), elapsed_s=time.time() - t0)
+             RPM=RPM_arr, ap=ap_arr, rho_OL=rho_OL, rho_LQG=rho_LQG, rho_ADRC=rho_ADRC)
+    summ = dict(
+        ap_crit_OL_mm=clf.ap_crit(RPM, None) * 1e3,
+        ap_crit_LQG_static_mm=clf.ap_crit(RPM, lti["K"]) * 1e3,
+        ap_crit_LQG_dyn_mm=clf.ap_crit_dynamic(RPM, lti["Ac"], lti["Bc"],
+                                               lti["Cc"], lti["Dc"]) * 1e3,
+        ap_crit_ADRC_mm=clf_p.ap_crit_dynamic(RPM, Aa, Ba, Ca, Da) * 1e3,
+        elapsed_s=time.time() - t0)
     json.dump(summ, open(os.path.join(RESULTS, "sld_summary.json"), "w"), indent=2)
     print(f"  a_p,crit @ {RPM}rpm  OL={summ['ap_crit_OL_mm']:.3f}  "
-          f"LQG={summ['ap_crit_LQG_mm']:.3f}  Floquet={summ['ap_crit_FLO_mm']:.3f} mm "
-          f"({summ['elapsed_s']:.1f}s)")
+          f"LQG(static)={summ['ap_crit_LQG_static_mm']:.3f}  "
+          f"LQG(obs)={summ['ap_crit_LQG_dyn_mm']:.3f}  "
+          f"ADRC={summ['ap_crit_ADRC_mm']:.3f} mm  ({summ['elapsed_s']:.1f}s)")
     return summ
 
 
@@ -318,14 +350,106 @@ def stage4_feedforward():
     return out
 
 
+def _run_lqg(ap, kt, fp):
+    """Tip-referenced metrics for the LQG baseline (tip sensor + observer)."""
+    plate_d = build_plate(ap)
+    plate_r = build_plate(ap, fp)
+    sim = NewmarkSimulator(plate_r, dt=DT, T_end=0.5, ft=FT, tau=60 / (NT * RPM), verbose=False)
+    a3, a4, kp, _ = make_forces(sim, ap, kt)
+    lqg = LQGController(plate_d, dt=DT, verbose=False)
+    lqg.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                         w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
+    lqg.discretize_observer()
+    return tdmetrics(sim.simulate(a3, a4, kp, controller=lqg, progress=False))
+
+
+def _run_adrc(ap, kt, fp):
+    """Tip-referenced metrics for ADRC (collocated piezo sensor).
+
+    The controller uses the collocated measurement (p.D_obs) for feedback; the
+    performance is read at the tool tip (p.D_tip) from the modal history, so it
+    is directly comparable with the model-based controllers."""
+    plate_d = build_plate(ap, sensor="piezo")            # nominal design
+    plate_r = build_plate(ap, fp, sensor="piezo")        # real (perturbed) plant
+    sim = NewmarkSimulator(plate_r, dt=DT, T_end=0.5, ft=FT, tau=60 / (NT * RPM), verbose=False)
+    a3, a4, kp, _ = make_forces(sim, ap, kt)
+    adrc = ADRCController(plate_d, dt=DT, wc=ADRC_WC, wo=ADRC_WO, u_max=150.0)
+    adrc.reset()
+    res = sim.simulate(a3, a4, kp, controller=adrc, progress=False)
+    ie = res['stop_idx']
+    ytip = plate_r.D_tip @ res['qm'][:, :ie + 1]
+    u = res['u'][:ie + 1]
+    return dict(y_rms=float(np.sqrt(np.mean(ytip ** 2)) * 1e6),
+                y_max=float(np.max(np.abs(ytip)) * 1e6),
+                u_max=float(np.max(np.abs(u))),
+                u_rms=float(np.sqrt(np.mean(u ** 2))), stop=int(ie))
+
+
+def stage5_adrc(quick=False):
+    print("\n=== Stage 5: ADRC (collocated) -- scenarios ===")
+    t0 = time.time()
+    plate = build_plate(0.3e-3, sensor="piezo")
+    clf = ClosedLoopFDM.from_plate(plate, cutting_setup(), m_div=(20 if quick else 30))
+    adrc = ADRCController(plate, dt=DT, wc=ADRC_WC, wo=ADRC_WO)
+    Ac, Bc, Cc, Dc = adrc.export_lti()
+    ap_adrc = clf.ap_crit_dynamic(RPM, Ac, Bc, Cc, Dc)
+
+    defs = [("S1 Nominal", 0.3e-3, KT_NOM, 0.0),
+            ("S2 Aggressive ap=0.6mm", 0.6e-3, KT_NOM, 0.0),
+            ("S3 Uncertainty omega-15%", 0.3e-3, KT_NOM, -0.15),
+            ("S4 High K_T +30%", 0.3e-3, 1.3 * KT_NOM, 0.0)]
+    lqg_sc = json.load(open(os.path.join(RESULTS, "scenarios.json")))["scenarios"]
+    rows = []
+    for d, lrow in zip(defs, lqg_sc):
+        mA = _run_adrc(d[1], d[2], d[3])
+        mL = lrow["lqg"]
+        rows.append(dict(name=d[0], lqg=mL, adrc=mA,
+                         rms_gain_pct=(1 - mA['y_rms'] / mL['y_rms']) * 100,
+                         peak_gain_pct=(1 - mA['y_max'] / mL['y_max']) * 100,
+                         umax_change_pct=(mA['u_max'] / mL['u_max'] - 1) * 100))
+        print(f"  {d[0]:<26} LQG {mL['y_rms']:.3f} -> ADRC {mA['y_rms']:.3f} um "
+              f"({rows[-1]['rms_gain_pct']:+.1f}%)  u_max {mA['u_max']:.1f}V")
+    out = dict(wc=ADRC_WC, wo=ADRC_WO, sensor=ADRC_SENSOR, b0=adrc.b0,
+               ap_crit_mm=ap_adrc * 1e3, scenarios=rows,
+               avg_rms_gain_pct=float(np.mean([r['rms_gain_pct'] for r in rows])),
+               elapsed_s=time.time() - t0)
+    json.dump(out, open(os.path.join(RESULTS, "adrc.json"), "w"), indent=2)
+    print(f"  ADRC a_p,crit @ {RPM}rpm = {ap_adrc*1e3:.3f} mm; "
+          f"avg RMS vs LQG {out['avg_rms_gain_pct']:+.1f}%  ({out['elapsed_s']:.1f}s)")
+    return out
+
+
+def stage6_robustness():
+    """Vibration under modal-frequency drift: model-based LQG vs model-light ADRC.
+    Both controllers are designed on the nominal plant; the real plant is drifted."""
+    print("\n=== Stage 6: robustness to frequency drift (LQG vs ADRC) ===")
+    t0 = time.time()
+    fps = [-0.20, -0.15, -0.10, -0.05, 0.0, 0.05, 0.10, 0.15, 0.20]
+    rows = []
+    for fp in fps:
+        mL = _run_lqg(0.3e-3, KT_NOM, fp)
+        mA = _run_adrc(0.3e-3, KT_NOM, fp)
+        rows.append(dict(freq_perturb=fp, lqg_yrms=mL['y_rms'], adrc_yrms=mA['y_rms'],
+                         lqg_umax=mL['u_max'], adrc_umax=mA['u_max']))
+        print(f"  df={fp:+.0%}  LQG y_rms={mL['y_rms']:.3f}  ADRC y_rms={mA['y_rms']:.3f} um")
+    out = dict(sweep=rows, elapsed_s=time.time() - t0)
+    json.dump(out, open(os.path.join(RESULTS, "robustness.json"), "w"), indent=2)
+    lqg_v = [r['lqg_yrms'] for r in rows]; adrc_v = [r['adrc_yrms'] for r in rows]
+    print(f"  LQG y_rms range [{min(lqg_v):.3f},{max(lqg_v):.3f}] um; "
+          f"ADRC [{min(adrc_v):.3f},{max(adrc_v):.3f}] um  ({out['elapsed_s']:.1f}s)")
+    return out
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--stage", type=int, default=0, help="run a single stage (1-4)")
+    ap.add_argument("--stage", type=int, default=0, help="run a single stage (1-6)")
     args = ap.parse_args()
     T = time.time()
     if args.stage in (0, 1): stage1_synthesis()
     if args.stage in (0, 2): stage2_sld(quick=args.quick)
     if args.stage in (0, 3): stage3_scenarios()
     if args.stage in (0, 4): stage4_feedforward()
+    if args.stage in (0, 5): stage5_adrc(quick=args.quick)
+    if args.stage in (0, 6): stage6_robustness()
     print(f"\nTOTAL {time.time()-T:.1f}s  ->  results/ written.")

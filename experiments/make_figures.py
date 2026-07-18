@@ -2,10 +2,16 @@
 make_figures.py
 ===============
 Publication figures generated strictly from the computed results in ``results/``.
-No value is hard-coded; every figure loads a JSON/NPZ produced by
-``run_all.py``.  Output: 300-dpi PNG + PDF in ``figures/``.
+No value is hard-coded; every figure loads a JSON/NPZ produced by ``run_all.py``.
+Output: 300-dpi PNG + PDF in ``figures/``.
+
+  fig1_sld           OL / LQG / ADRC stability lobes (observer/ESO in the loop)
+  fig2_robustness    tip vibration vs modal-frequency drift: LQG vs ADRC
+  fig3_scenarios     RMS reduction vs LQG across 4 scenarios: 2-DOF and ADRC
+  fig4_feedforward   role of the phase-aware feedforward (does not move stability)
+  fig5_authority     feedback-authority vs stability design curve (supplementary)
 """
-import os, sys, json
+import os, json
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -19,7 +25,7 @@ os.makedirs(FIG, exist_ok=True)
 
 plt.rcParams.update({"font.size": 11, "axes.grid": True, "grid.alpha": 0.3,
                      "figure.dpi": 110, "savefig.bbox": "tight"})
-C_OL, C_LQG, C_FLO, C_2D = "#7f7f7f", "#2E8B57", "#1f4e8c", "#c62828"
+C_OL, C_LQG, C_2D, C_ADRC = "#7f7f7f", "#2E8B57", "#c62828", "#1f4e8c"
 RPM_OP, AP_OP = 4900, 0.3
 
 
@@ -37,93 +43,81 @@ def load(name):
 # ---------------------------------------------------------------- Fig 1: SLD
 def fig_sld():
     d = np.load(os.path.join(RES, "sld.npz"))
+    s = load("sld_summary.json")
     RPM, ap = d["RPM"], d["ap"] * 1e3
-    fig, ax = plt.subplots(figsize=(8.2, 5.2))
-    for rho, c in [("rho_OL", C_OL), ("rho_LQG", C_LQG), ("rho_FLO", C_FLO)]:
-        ax.contour(RPM, ap, d[rho], levels=[1.0], colors=c, linewidths=2.4)
-    # legend proxies
-    handles = [plt.Line2D([0], [0], color=C_OL, lw=2.4, label="Open loop"),
-               plt.Line2D([0], [0], color=C_LQG, lw=2.4, label="LQG (CL-FDM)"),
-               plt.Line2D([0], [0], color=C_FLO, lw=2.4,
-                          label="Voltage-budget design (CL-FDM)")]
-    ax.plot(RPM_OP, AP_OP, "*", color="gold", ms=18, mec="k", mew=1.2,
-            label="operating point", zorder=5)
+    fig, ax = plt.subplots(figsize=(8.4, 5.3))
+    for key, c in [("rho_OL", C_OL), ("rho_LQG", C_LQG), ("rho_ADRC", C_ADRC)]:
+        ax.contour(RPM, ap, d[key], levels=[1.0], colors=c, linewidths=2.5)
+    handles = [
+        plt.Line2D([0], [0], color=C_OL, lw=2.5,
+                   label=f"Open loop  ($a_{{p,crit}}$={s['ap_crit_OL_mm']:.2f} mm)"),
+        plt.Line2D([0], [0], color=C_LQG, lw=2.5,
+                   label=f"LQG, observer in loop  ({s['ap_crit_LQG_dyn_mm']:.2f} mm)"),
+        plt.Line2D([0], [0], color=C_ADRC, lw=2.5,
+                   label=f"ADRC, ESO in loop  ({s['ap_crit_ADRC_mm']:.2f} mm)"),
+    ]
+    ax.plot(RPM_OP, AP_OP, "*", color="gold", ms=17, mec="k", mew=1.1, zorder=5)
     handles.append(plt.Line2D([0], [0], marker="*", color="w", markerfacecolor="gold",
                               markeredgecolor="k", ms=13, label="operating point"))
     ax.set_xlabel("Spindle speed (rpm)")
     ax.set_ylabel(r"Depth of cut $a_p$ (mm)")
     ax.set_title("Controlled stability-lobe diagram (stable region below each curve)")
     ax.set_ylim(0, ap.max())
-    ax.legend(handles=handles, loc="upper right", framealpha=0.95)
+    ax.legend(handles=handles, loc="upper right", framealpha=0.95, fontsize=9.5)
     save(fig, "fig1_sld")
 
 
-# --------------------------------------- Fig 2: authority design curve + voltage
-def fig_pareto():
-    s = load("synthesis.json")
-    cur = s["design_curve"]
-    gn = np.array([r["gain_norm"] for r in cur])
-    ac = np.array([r["ap_crit_mm"] for r in cur])
-    uv = np.array([r["u_max_apeval"] for r in cur])
-    fig, ax = plt.subplots(figsize=(8.0, 5.2))
-    ax.plot(gn, ac, "-o", color="#444", lw=1.6, ms=5, zorder=3,
-            label=r"CL-FDM design curve $a_{p,\mathrm{crit}}(\|K\|)$")
-    ax.scatter([s["lqg"]["gain_norm"]], [s["lqg"]["ap_crit_mm"]], s=150, marker="s",
-               color=C_LQG, ec="k", zorder=5,
-               label=f"LQG baseline: {s['lqg']['ap_crit_mm']:.2f} mm @ "
-                     f"{s['lqg']['u_max_apeval']:.0f} V")
-    ax.scatter([s["selected"]["gain_norm"]], [s["selected"]["ap_crit_mm"]], s=210,
-               marker="*", color=C_FLO, ec="k", zorder=6,
-               label=f"voltage-budget pick: {s['selected']['ap_crit_mm']:.2f} mm @ "
-                     f"{s['selected']['u_max_apeval']:.0f} V")
-    ax.set_xscale("log")
-    ax.set_xlabel(r"Feedback-gain norm $\|K\|$")
-    ax.set_ylabel(r"Critical depth $a_{p,\mathrm{crit}}$ (mm)", color="#444")
-    ax.set_ylim(2.1, 5.9)
-    ax.set_title("Feedback authority vs chatter stability (CL-FDM) and voltage cost")
-    ax2 = ax.twinx()
-    ax2.plot(gn, uv, "--^", color=C_2D, lw=1.3, ms=5, zorder=2,
-             label=f"peak voltage at $a_p$={s['ap_eval_mm']:.1f} mm")
-    ax2.axhline(s["u_budget"], color=C_2D, ls=":", lw=1.2)
-    ax2.set_ylim(0, 165)                       # voltage curve stays low; budget line on top
-    ax2.text(gn.min(), s["u_budget"] + 3, f"{s['u_budget']:.0f} V budget (never reached)",
-             color=C_2D, fontsize=9)
-    ax2.set_ylabel("peak actuator voltage (V)", color=C_2D)
-    ax2.grid(False)
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, loc="lower right", fontsize=8.5, framealpha=0.95)
-    save(fig, "fig2_authority_curve")
+# -------------------------------------------------- Fig 2: robustness sweep
+def fig_robustness():
+    r = load("robustness.json")["sweep"]
+    df = np.array([x["freq_perturb"] for x in r]) * 100
+    lqg = np.array([x["lqg_yrms"] for x in r])
+    adrc = np.array([x["adrc_yrms"] for x in r])
+    fig, ax = plt.subplots(figsize=(7.8, 5.2))
+    ax.semilogy(df, lqg, "-o", color=C_LQG, lw=1.8, ms=6, label="LQG (tip sensor + observer)")
+    ax.semilogy(df, adrc, "-s", color=C_ADRC, lw=1.8, ms=6, label="ADRC (collocated)")
+    # mark the LQG chatter point
+    imax = int(np.argmax(lqg))
+    if lqg[imax] > 10:
+        ax.annotate("LQG chatters\n(loses stability)", xy=(df[imax], lqg[imax]),
+                    xytext=(df[imax] + 4, lqg[imax] / 8), fontsize=9, color=C_LQG,
+                    arrowprops=dict(arrowstyle="->", color=C_LQG))
+    ax.set_xlabel("modal-frequency drift of the real plant (%)")
+    ax.set_ylabel(r"tip vibration $y_{RMS}$ ($\mu$m, log scale)")
+    ax.set_title("Robustness to varying dynamics: model-based LQG vs model-light ADRC")
+    ax.legend(loc="upper right", framealpha=0.95)
+    ax.grid(True, which="both", alpha=0.3)
+    save(fig, "fig2_robustness")
 
 
-# ----------------------------------------------------- Fig 3: scenario gains
+# ----------------------------------------------- Fig 3: scenario RMS gains
 def fig_scenarios():
-    s = load("scenarios.json")["scenarios"]
-    names = [r["name"].split()[0] for r in s]
-    rms = [r["rms_gain_pct"] for r in s]
-    peak = [r["peak_gain_pct"] for r in s]
-    x = np.arange(len(s)); w = 0.38
-    fig, ax = plt.subplots(figsize=(8.0, 4.8))
-    ax.bar(x - w / 2, rms, w, color=C_2D, ec="k", label="RMS reduction")
-    ax.bar(x + w / 2, peak, w, color="#ef9a9a", ec="k", label="peak reduction")
-    for xi, v in zip(x - w / 2, rms):
-        ax.text(xi, v + 0.1, f"{v:.1f}%", ha="center", fontsize=9, fontweight="bold")
-    for xi, v in zip(x + w / 2, peak):
-        ax.text(xi, v + 0.1, f"{v:.1f}%", ha="center", fontsize=9, fontweight="bold")
+    two = load("scenarios.json")["scenarios"]
+    adrc = load("adrc.json")["scenarios"]
+    names = [r["name"].split()[0] for r in two]
+    g2 = [r["rms_gain_pct"] for r in two]
+    ga = [r["rms_gain_pct"] for r in adrc]
+    x = np.arange(len(names)); w = 0.38
+    fig, ax = plt.subplots(figsize=(8.4, 4.9))
+    b1 = ax.bar(x - w / 2, g2, w, color=C_2D, ec="k", label="2-DOF (feedback + feedforward)")
+    b2 = ax.bar(x + w / 2, ga, w, color=C_ADRC, ec="k", label="ADRC")
+    for bars, vals in [(b1, g2), (b2, ga)]:
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.6, f"{v:.1f}%",
+                    ha="center", fontsize=9, fontweight="bold")
     ax.set_xticks(x); ax.set_xticklabels(names)
-    ax.set_ylabel("vibration reduction vs LQG (%)")
-    ax.set_title("Phase-aware feedforward: measured reduction (2-DOF vs LQG)")
+    ax.set_ylabel("tip RMS reduction vs LQG (%)")
+    ax.set_title("Vibration reduction relative to the LQG baseline")
+    ax.set_ylim(0, max(ga) * 1.28)
     ax.axhline(0, color="k", lw=0.8)
-    ax.legend()
+    ax.legend(loc="upper left", framealpha=0.95)
     save(fig, "fig3_scenarios")
 
 
-# ------------------------------------------------- Fig 4: feedforward role + traces
+# ------------------------------------------------- Fig 4: feedforward role
 def fig_feedforward():
     ff = load("feedforward.json")
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.6))
-    # (a) steady-state zoom of S1 tip vibration (dense oscillation is unreadable
-    #     over the full 500 ms, so show a representative ~60 ms window)
     ax = axes[0]
     tr = os.path.join(RES, "traces_S1.npz")
     if os.path.exists(tr):
@@ -138,7 +132,6 @@ def fig_feedforward():
         ax.set_xlabel("time (ms)"); ax.set_ylabel(r"$y_p$ ($\mu$m)")
         ax.set_title("(a) S1 tip vibration (steady-state zoom)")
         ax.legend(loc="upper right", fontsize=8.5)
-    # (b) role bars
     ax = axes[1]
     fb, fd = ff["feedback_only"], ff["feedback_plus_ff"]
     labels = [r"$y_{RMS}$ ($\mu$m)", r"$y_{peak}$ ($\mu$m)", r"$u_{max}$ (V)"]
@@ -148,18 +141,45 @@ def fig_feedforward():
     ax.bar(x - w / 2, fbv, w, color=C_LQG, ec="k", label="feedback only")
     ax.bar(x + w / 2, fdv, w, color=C_2D, ec="k", label="+ feedforward")
     ax.set_xticks(x); ax.set_xticklabels(labels)
-    ax.set_title(f"(b) role of feedforward  (a_p,crit unchanged = {ff['ap_crit_mm']:.2f} mm)")
+    ax.set_title(f"(b) role of feedforward  ($a_{{p,crit}}$ unchanged = {ff['ap_crit_mm']:.2f} mm)")
     ax.legend(fontsize=9)
     save(fig, "fig4_feedforward")
 
 
+# ------------------------------------- Fig 5: authority design curve (suppl.)
+def fig_authority():
+    s = load("synthesis.json")
+    cur = s["design_curve"]
+    gn = np.array([r["gain_norm"] for r in cur])
+    ac = np.array([r["ap_crit_mm"] for r in cur])
+    uv = np.array([r["u_max_apeval"] for r in cur])
+    fig, ax = plt.subplots(figsize=(8.0, 5.0))
+    ax.plot(gn, ac, "-o", color="#444", lw=1.6, ms=5,
+            label=r"static-feedback $a_{p,crit}(\|K\|)$ (ideal bound)")
+    ax.scatter([s["lqg"]["gain_norm"]], [s["lqg"]["ap_crit_mm"]], s=140, marker="s",
+               color=C_LQG, ec="k", zorder=5, label="LQG operating point")
+    ax.set_xscale("log")
+    ax.set_xlabel(r"feedback-gain norm $\|K\|$")
+    ax.set_ylabel(r"static $a_{p,crit}$ (mm)", color="#444")
+    ax.set_title("Feedback authority vs stability (static bound) and voltage cost")
+    ax2 = ax.twinx()
+    ax2.plot(gn, uv, "--^", color=C_2D, lw=1.3, ms=5,
+             label=f"peak voltage at $a_p$={s['ap_eval_mm']:.1f} mm")
+    ax2.axhline(s["u_budget"], color=C_2D, ls=":", lw=1.2)
+    ax2.set_ylim(0, 165)
+    ax2.text(gn.min(), s["u_budget"] + 3, f"{s['u_budget']:.0f} V budget", color=C_2D, fontsize=9)
+    ax2.set_ylabel("peak actuator voltage (V)", color=C_2D)
+    ax2.grid(False)
+    h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
+    ax.legend(h1 + h2, l1 + l2, loc="lower right", fontsize=8.5, framealpha=0.95)
+    save(fig, "fig5_authority")
+
+
 if __name__ == "__main__":
-    if os.path.exists(os.path.join(RES, "sld.npz")):
-        fig_sld()
-    if os.path.exists(os.path.join(RES, "synthesis.json")):
-        fig_pareto()
-    if os.path.exists(os.path.join(RES, "scenarios.json")):
-        fig_scenarios()
-    if os.path.exists(os.path.join(RES, "feedforward.json")):
-        fig_feedforward()
+    reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
+           ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
+           ("synthesis.json", fig_authority)]
+    for f, fn in reg:
+        if os.path.exists(os.path.join(RES, f)):
+            fn()
     print("figures/ done.")

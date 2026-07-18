@@ -1,6 +1,7 @@
 {
-  "ap_crit_OL_mm": 0.2703703703703704,
-  "ap_crit_LQG_mm": 2.4740740740740743,
-  "ap_crit_FLO_mm": 5.559259259259259,
-  "elapsed_s": 20.759424209594727
+  "ap_crit_OL_mm": 0.0627734375,
+  "ap_crit_LQG_static_mm": 2.432519531250001,
+  "ap_crit_LQG_dyn_mm": 1.9204101562500002,
+  "ap_crit_ADRC_mm": 3.247558593750001,
+  "elapsed_s": 66.04402232170105
 }

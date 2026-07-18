@@ -12,19 +12,21 @@ and contributes an **honest, control-oriented stability framework** plus a
 **two-degree-of-freedom controller** whose every reported number is computed and
 reproducible.
 
-## Contribution in one paragraph
+## Contributions in one paragraph
 
 The standard way to obtain a *controlled* stability-lobe diagram (SLD) is often
 faked (see [`paper/CORRECTIONS.md`](paper/CORRECTIONS.md)); a feedforward or a
 damping multiplier is used to "improve" a boundary that only feedback can move.
-Here the controller is placed **inside** the Floquet monodromy matrix
-(`src/cl_fdm.py`, the *closed-loop full-discretization method*), so the
-controlled SLD is genuine. On that basis, the feedback gain is chosen by
-**directly maximising the critical depth of cut** under a control-authority
-constraint (`src/floquet_synthesis.py`) instead of the usual eigenvalue proxy,
-and a **phase-aware feedforward** (`src/twodof_control.py`) is added purely to
-reduce forced vibration and peak actuator voltage — a role that is quantified
-honestly and shown *not* to move the stability boundary.
+Here the controller — **including its observer** — is placed **inside** the
+Floquet monodromy matrix (`src/cl_fdm.py`, *closed-loop semi-discretization*), so
+the controlled SLD is genuine. On that basis: (1) we show the Kalman observer
+costs the LQG margin ~21 % (1.92 vs 2.43 mm); (2) we design an **ADRC** controller
+(`src/adrc_control.py`) with a collocated piezo sensor that raises the critical
+depth to **3.25 mm**, roughly **halves** tip vibration versus LQG at 25–55 V, and
+stays stable under ±20 % frequency drift where LQG chatters — needing only the
+input gain `b₀`; (3) a **phase-aware feedforward** (`src/twodof_control.py`) is
+shown to reduce forced vibration/voltage but *not* the stability boundary. All
+numbers are computed and reproducible.
 
 ## Layout
 
@@ -37,9 +39,11 @@ src/                       importable modules
   piezo_actuator.py        realistic piezo (saturation, slew, hysteresis)
   lqg_controller.py        baseline LQG (Kalman + LQR)
   ol_fdm.py                open-loop stability-lobe solver (reference)
-  cl_fdm.py                *** closed-loop FDM: controller inside the monodromy
-  floquet_synthesis.py     *** Floquet-direct feedback gain selection
+  cl_fdm.py                *** closed-loop semi-discretization: controller
+                               (+ observer) inside the Floquet monodromy
+  adrc_control.py          *** ADRC (extended-state observer + control law)
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
+  floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
   run_all.py               reproduces every result -> results/
   make_figures.py          builds figures/ from results/
@@ -60,8 +64,9 @@ python experiments/make_figures.py     # writes figures/
 ```
 
 Use `--quick` for a coarser (faster) SLD grid. Individual stages:
-`python experiments/run_all.py --stage 1` (synthesis), `2` (SLD), `3`
-(scenarios), `4` (feedforward role).
+`--stage 1` (authority curve), `2` (SLD: OL/LQG/ADRC, observer in loop),
+`3` (2-DOF scenarios), `4` (feedforward role), `5` (ADRC scenarios),
+`6` (robustness sweep).
 
 ## Physical setup
 

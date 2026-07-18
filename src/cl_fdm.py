@@ -1,8 +1,14 @@
 """
 cl_fdm.py
 =========
-Closed-loop full-discretization method (CL-FDM) for chatter stability of
+Closed-loop semi-discretization (CL-SD) for chatter stability of
 actively-controlled thin-walled milling.
+
+Terminology note: the delayed state is frozen at one history node per
+sub-interval, i.e. this is the 0th-order semi-discretization scheme of Insperger
+& Stepan (2002/2004), not the higher-order full-discretization of Ding et al.
+The module/class names retain "FDM" for brevity; the manuscript uses the
+accurate name (semi-discretization).
 
 Motivation
 ----------
@@ -102,6 +108,7 @@ class ClosedLoopFDM:
         self.Dp2 = np.outer(self.Dp, self.Dp)          # rank-1 modal coupling
         self.B = np.zeros((self.nx, 1))
         self.B[self.n:, 0] = np.asarray(Hpe, float)
+        self.C_obs = None                    # sensor shape (set by from_plate)
         self.c = cutting
         self.m_div = int(m_div)
 
@@ -119,8 +126,10 @@ class ClosedLoopFDM:
             Dp = np.mean(samples, axis=0)
         else:
             Dp = plate.get_Dp_at(plate.Dp_array.shape[1] // 2)[0]
-        return cls(plate.omega_n, plate.zeta_modes, Dp, plate.H_Pe_modal,
-                   cutting, m_div=m_div)
+        obj = cls(plate.omega_n, plate.zeta_modes, Dp, plate.H_Pe_modal,
+                  cutting, m_div=m_div)
+        obj.C_obs = np.asarray(plate.D_obs, float)   # sensor shape, for output feedback
+        return obj
 
     # ------------------------------------------------------------------
     def _a4_over_period(self, RPM, ap, m_div):
@@ -178,24 +187,23 @@ class ClosedLoopFDM:
 
     # ------------------------------------------------------------------
     def ap_crit(self, RPM, K=None, K_tau=None, ap_max=6e-3,
-                n_coarse=40, refine=True, m_div=None):
+                n_coarse=40, refine=True, m_div=None, ap_floor=1e-5):
         """Critical (maximum stable) depth of cut at a given spindle speed.
 
-        A coarse scan brackets the first crossing rho = 1; an optional bisection
-        refines it to <1 percent.  Returns depth in metres.
+        The scan starts from a small stable floor (the regenerative coupling
+        vanishes as ap -> 0), brackets the first rho = 1 crossing and bisects it.
+        Returns depth in metres.
         """
+        if self.rho(RPM, ap_floor, K, K_tau, m_div) >= 1.0:
+            return ap_floor                          # unstable even at the floor
         ap_grid = np.linspace(ap_max / n_coarse, ap_max, n_coarse)
-        prev = ap_grid[0]
-        prev_rho = self.rho(RPM, prev, K, K_tau, m_div)
-        if prev_rho >= 1.0:
-            return prev
-        for ap in ap_grid[1:]:
-            r = self.rho(RPM, ap, K, K_tau, m_div)
-            if r >= 1.0:
+        prev = ap_floor
+        for ap in ap_grid:
+            if self.rho(RPM, ap, K, K_tau, m_div) >= 1.0:
                 if not refine:
                     return ap
                 lo, hi = prev, ap                    # bisection on [lo, hi]
-                for _ in range(20):
+                for _ in range(30):
                     mid = 0.5 * (lo + hi)
                     if self.rho(RPM, mid, K, K_tau, m_div) >= 1.0:
                         hi = mid
@@ -221,6 +229,107 @@ class ClosedLoopFDM:
                 rho_grid[i, j] = self.rho(RPM, ap, K, K_tau, m_div)
             if verbose and (j + 1) % max(1, RPM_array.size // 10) == 0:
                 print(f"  [CL-FDM] {100*(j+1)/RPM_array.size:5.1f}%  "
+                      f"({time.time()-t0:5.1f}s)")
+        return rho_grid
+
+
+    # ==================================================================
+    # Dynamic output-feedback controllers (e.g. ADRC / observer-based)
+    # ==================================================================
+    def _Cpl(self):
+        """Plant output row y = C_obs . q  (shape (1, nx))."""
+        if self.C_obs is None:
+            raise ValueError("C_obs (sensor shape) not set; build via from_plate().")
+        C = np.zeros((1, self.nx))
+        C[0, :self.n] = self.C_obs
+        return C
+
+    def rho_dynamic(self, RPM, ap, Ac, Bc, Cc, Dc, m_div=None):
+        """Dominant Floquet multiplier for a linear *dynamic* output-feedback
+        controller  z_dot = Ac z + Bc y,  u = Cc z + Dc y.
+
+        The closed loop augments the plant state x = [q; q_dot] with the
+        controller state z; the regenerative delay acts on x only.  With ADRC,
+        z is the extended-state-observer state, so this is the true ADRC SLD.
+        """
+        m_div = self.m_div if m_div is None else m_div
+        n, nx = self.n, self.nx
+        Ac = np.asarray(Ac, float); Bc = np.asarray(Bc, float)
+        Cc = np.asarray(Cc, float); Dc = np.asarray(Dc, float)
+        nz = Ac.shape[0]
+        na = nx + nz
+        Cpl = self._Cpl()
+        B = self.B
+        BCc = B @ Cc                       # (nx, nz)
+        BDcCpl = B @ Dc @ Cpl              # (nx, nx)
+        BcCpl = Bc @ Cpl                   # (nz, nx)
+        a4, dt_int = self._a4_over_period(RPM, ap, m_div)
+        n_tau = m_div
+        N = (n_tau + 1) * na
+        Phi = np.eye(N)
+        D = np.zeros((N, N))
+        for j in range(n_tau):
+            D[(j + 1) * na:(j + 2) * na, j * na:(j + 1) * na] = np.eye(na)
+        top = slice(0, na)
+        tail = slice(n_tau * na, (n_tau + 1) * na)
+        for k in range(m_div):
+            a4k = a4[k]
+            Ap = np.zeros((nx, nx))
+            Ap[:n, n:] = np.eye(n)
+            Ap[n:, :n] = -(self.Kp + a4k * self.Dp2)
+            Ap[n:, n:] = -self.Cp
+            A_now = np.zeros((na, na))
+            A_now[:nx, :nx] = Ap + BDcCpl
+            A_now[:nx, nx:] = BCc
+            A_now[nx:, :nx] = BcCpl
+            A_now[nx:, nx:] = Ac
+            A_del = np.zeros((na, na))
+            A_del[n:nx, :n] = a4k * self.Dp2      # regenerative delay on x only
+            Pd, Ig = _expm_and_integral(A_now, dt_int)
+            R = Ig @ A_del
+            D[top, :] = 0.0
+            D[top, top] = Pd
+            D[top, tail] = R
+            Phi = D @ Phi
+        return float(np.max(np.abs(np.linalg.eigvals(Phi))))
+
+    def ap_crit_dynamic(self, RPM, Ac, Bc, Cc, Dc, ap_max=6e-3,
+                        n_coarse=40, refine=True, m_div=None, ap_floor=1e-5):
+        """Critical depth of cut for a dynamic output-feedback controller."""
+        if self.rho_dynamic(RPM, ap_floor, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+            return ap_floor
+        ap_grid = np.linspace(ap_max / n_coarse, ap_max, n_coarse)
+        prev = ap_floor
+        for ap in ap_grid:
+            if self.rho_dynamic(RPM, ap, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+                if not refine:
+                    return ap
+                lo, hi = prev, ap
+                for _ in range(30):
+                    mid = 0.5 * (lo + hi)
+                    if self.rho_dynamic(RPM, mid, Ac, Bc, Cc, Dc, m_div) >= 1.0:
+                        hi = mid
+                    else:
+                        lo = mid
+                    if (hi - lo) < 1e-6:
+                        break
+                return 0.5 * (lo + hi)
+            prev = ap
+        return ap_max
+
+    def sld_grid_dynamic(self, RPM_array, ap_array, Ac, Bc, Cc, Dc,
+                         m_div=None, verbose=False):
+        """Spectral-radius grid for a dynamic output-feedback controller."""
+        import time
+        RPM_array = np.asarray(RPM_array, float)
+        ap_array = np.asarray(ap_array, float)
+        rho_grid = np.zeros((ap_array.size, RPM_array.size))
+        t0 = time.time()
+        for j, RPM in enumerate(RPM_array):
+            for i, ap in enumerate(ap_array):
+                rho_grid[i, j] = self.rho_dynamic(RPM, ap, Ac, Bc, Cc, Dc, m_div)
+            if verbose and (j + 1) % max(1, RPM_array.size // 10) == 0:
+                print(f"  [CL-FDM dyn] {100*(j+1)/RPM_array.size:5.1f}%  "
                       f"({time.time()-t0:5.1f}s)")
         return rho_grid
 

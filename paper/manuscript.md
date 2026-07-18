@@ -459,6 +459,49 @@ most predictable margin -- ADRC holds 40 % more margin than LQG (2.36 vs
 1.68 mm), without any re-identification or re-tuning.  This is the model-light
 property working on physically-generated, not synthetic, dynamics variation.
 
+**Full-process simulation (end-to-end, all passes).**  Finally, the process is
+simulated *continuously* (`experiments/full_process_sim.py`): four passes from
+edge to edge (4 x 20.41 s at the article feed, dt = 25 us, ~3.3 M Newmark
+steps per controller), the band thinned *behind the advancing tool* every
+5 mm, and the vibration state plus the regenerative delay history reprojected
+onto each updated modal basis with the mass-orthonormal transform
+T = V_new^T M V_old (near-identity per segment, diag ~0.999); the frozen
+controllers carry their internal states across all updates, as on the real
+machine.  Consistency check: the first-segment values reproduce the
+piecewise-frozen operating-point results (ADRC 0.251 vs 0.252 um; LQG 0.506 vs
+0.513 um) -- the frozen abstraction is *validated where it applies*; its
+limitation was coverage (~2 mm of travel), not correctness.
+
+The full path reveals a first-order effect that no short simulation can see
+(Fig. 9).  Per-pass process RMS:
+
+| pass (band ->) | LQG | ADRC |
+|---|---:|---:|
+| 1 (-> 3.75 mm) | 0.473 um | **0.458 um** |
+| 2 (-> 3.50 mm) | 0.474 um | 0.489 um |
+| 3 (-> 3.25 mm) | 0.484 um | 0.515 um |
+| 4 (-> 3.00 mm) | **0.495 um** | 0.533 um |
+
+The process-mean verdict *flips* by pass 4, and the spatial profiles explain
+why: the ADRC's single collocated sensor sits at the patch corner (x = 20 mm),
+and its rejection is outstanding near the sensor (pass-4 thirds: 0.28 um for
+x = 0-33 mm, twice better than LQG's 0.51) but degrades monotonically with
+tool-sensor distance (0.75 um for x = 66-100 mm, ~40 % worse than LQG's 0.53)
+-- the ESO cannot reject what its sensor barely observes, and the thinning
+amplifies the far-side deficit because the frozen b0 under-represents the
+strengthening coupling.  The LQG's tip sensor yields a flatter, U-shaped
+profile (0.42-0.59 um) that is nearly pass-independent.  Neither controller
+saturates anywhere in the 81.6 s process (ADRC <= 35 V, LQG <= 14 V).
+
+The honest synthesis of Sec. 4.9: ADRC's *stability margin* through the
+process is decisively better (+40 % at the thinnest state) and its vibration
+is far better over the third of the path nearest its sensor, but a *single*
+collocated sensor cannot deliver full-path forced-vibration superiority --
+the spatial observability footprint joins stability, voltage and sampling
+rate on the list of first-order design constraints, and points directly at
+dual-sensor or position-weighted sensing as the natural next design step
+(consistent with the placement co-design lens of Sec. 4.6).
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is

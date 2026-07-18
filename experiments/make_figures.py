@@ -10,6 +10,13 @@ Output: 300-dpi PNG + PDF in ``figures/``.
   fig3_scenarios     RMS reduction vs LQG across 4 scenarios: 2-DOF and ADRC
   fig4_feedforward   role of the phase-aware feedforward (does not move stability)
   fig5_authority     feedback-authority vs stability design curve (supplementary)
+  fig6_placement     transducer-placement co-design (linear vs feasible metric)
+  fig7_refinement    precise-model validation + fidelity-layer feasibility
+  fig8_material...   in-process material removal (drift + control through process)
+  fig9_full_process  4-pass end-to-end finish map (LQG vs ADRC)
+  fig10_afc          AFC-ADRC vs baselines (finish map + per-pass RMS)
+  fig11_timeseries   full 81.6 s tip time response of all controllers
+  fig11b_waveform    full-rate waveform snapshot at the worst region
 """
 import os, json
 import numpy as np
@@ -402,6 +409,76 @@ def fig_afc():
     save(fig, "fig10_afc")
 
 
+
+# ---------------- Fig 11: full-process time response (all controllers)
+def fig_timeseries():
+    import numpy as np
+    specs = [("full_process_lqg_traces.npz", C_LQG, "LQG (tip sensor + observer)"),
+             ("full_process_adrc_traces.npz", C_ADRC, "ADRC (collocated only)"),
+             ("full_process_afc_traces.npz", "#7b1fa2", "AFC-ADRC (dual sensor)")]
+    data = []
+    for f, c, lab in specs:
+        d = np.load(os.path.join(RES, f))
+        y = d["y"] * 1e6
+        dt_eff = float(d["dt"]) * int(d["decim"])
+        t = np.arange(len(y)) * dt_eff
+        # running RMS envelope (~80 ms window)
+        w = max(1, int(round(0.08 / dt_eff)))
+        rms = np.sqrt(np.convolve(y ** 2, np.ones(w) / w, mode="same"))
+        data.append((t, y, rms, c, lab))
+    Tpass = 20.41
+    ymax = 2.1
+    fig, axes = plt.subplots(3, 1, figsize=(13.5, 8.0), sharex=True)
+    for ax, (t, y, rms, c, lab) in zip(axes, data):
+        ax.plot(t, y, color=c, lw=0.15, alpha=0.55)
+        ax.plot(t, rms, color="k", lw=1.4)
+        ax.plot(t, -rms, color="k", lw=1.4)
+        for pb in [Tpass, 2 * Tpass, 3 * Tpass]:
+            ax.axvline(pb, color="0.4", ls="--", lw=1)
+        yr = np.sqrt(np.mean(y ** 2))
+        ax.text(0.006, 0.90, f"{lab}   (process RMS = {yr:.3f} $\\mu$m)",
+                transform=ax.transAxes, fontsize=10, fontweight="bold",
+                va="top", bbox=dict(fc="white", ec="none", alpha=0.8))
+        ax.set_ylim(-ymax, ymax)
+        ax.set_ylabel(r"$y_{tip}$ ($\mu$m)")
+        ax.grid(True, alpha=0.3)
+    for i, xlab in enumerate(["pass 1", "pass 2", "pass 3", "pass 4"]):
+        axes[0].text((i + 0.5) * Tpass, 1.75, xlab + "\n(x: 0$\\to$100 mm)",
+                     ha="center", fontsize=8.5, color="0.3")
+    axes[-1].set_xlabel("process time (s)   —   each pass sweeps the tool from x = 0 to 100 mm")
+    axes[0].set_xlim(0, 4 * Tpass)
+    fig.suptitle("Full-process tip response: 4 end-to-end passes with in-process "
+                 "material removal (black = 80 ms running RMS envelope)",
+                 fontsize=11.5, y=0.995)
+    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    save(fig, "fig11_timeseries")
+
+    # full-rate steady-state waveform snapshot at the worst region (x = 90 mm,
+    # h = 3.0 mm) -- shows the actual tooth-passing waveform and its cancellation
+    wf = os.path.join(RES, "waveform_x90.npz")
+    if os.path.exists(wf):
+        d = np.load(wf)
+        dtw = float(d["dt"])
+        fig, ax = plt.subplots(figsize=(11.5, 4.4))
+        for key, c, lab in [("lqg", C_LQG, "LQG"), ("adrc", C_ADRC, "ADRC (collocated only)"),
+                            ("afc", "#7b1fa2", "AFC-ADRC (dual sensor)")]:
+            y = d[key] * 1e6
+            t = np.arange(len(y)) * dtw * 1e3
+            rms = np.sqrt(np.mean(y ** 2))
+            ax.plot(t, y, color=c, lw=1.2, label=f"{lab}  (RMS={rms:.3f} $\\mu$m)")
+        # mark the tooth-passing period
+        f_t = 3 * 4900 / 60.0
+        ax.set_xlabel("time (ms)  —  steady state at x = 90 mm, wall h = 3.0 mm "
+                      f"(tooth passing = {f_t:.0f} Hz, period {1e3/f_t:.2f} ms)")
+        ax.set_ylabel(r"$y_{tip}$ ($\mu$m)")
+        ax.set_title("Full-rate waveform at the worst region: AFC-ADRC cancels the "
+                     "tooth-passing harmonics")
+        ax.legend(fontsize=9, loc="upper right", framealpha=0.95)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlim(0, len(d["lqg"]) * dtw * 1e3)
+        save(fig, "fig11b_waveform")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
@@ -409,7 +486,8 @@ if __name__ == "__main__":
            ("refinement.json", fig_refinement),
            ("material_removal.json", fig_material_removal),
            ("full_process_lqg.json", fig_full_process),
-           ("full_process_afc.json", fig_afc)]
+           ("full_process_afc.json", fig_afc),
+           ("full_process_afc_traces.npz", fig_timeseries)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

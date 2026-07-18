@@ -478,7 +478,8 @@ piecewise-frozen operating-point results (ADRC 0.251 vs 0.252 um; LQG 0.506 vs
 limitation was coverage (~2 mm of travel), not correctness.
 
 The full path reveals a first-order effect that no short simulation can see
-(Fig. 9).  Per-pass process RMS:
+(Fig. 9; the complete 81.6 s tip time response of all controllers, with the
+80 ms running-RMS envelope, is shown in Fig. 11).  Per-pass process RMS:
 
 | pass (band ->) | LQG | ADRC |
 |---|---:|---:|
@@ -564,7 +565,10 @@ AFC-ADRC delivers a ~3x reduction of the process RMS over BOTH baselines and
 resolves the spatial deficit that motivated it: the pass-4 thirds flatten to
 0.12 / 0.14 / 0.21 um (plain ADRC: 0.28 / 0.51 / 0.75; LQG: 0.51 / 0.45 /
 0.53), with the worst segment at 0.24 um versus 0.81 (ADRC) and 0.59 (LQG).
-The cost is negligible: peak voltage 37.8 V (plain ADRC 35.2 V), zero
+A full-rate waveform snapshot at the worst region (Fig. 11b) makes the
+mechanism explicit: the large tooth-passing peaks of both baselines (LQG
+0.55, ADRC 0.72 um at x = 90 mm) are flattened by the comb to 0.20 um.  The
+cost is negligible: peak voltage 37.8 V (plain ADRC 35.2 V), zero
 saturation anywhere in the 81.6 s process, no new hardware (both sensors exist
 on the rig of [1]), and the fast-loop stability boundaries of Secs. 4.1-4.8
 untouched.  Honest boundary of validity: the comb targets the *periodic*

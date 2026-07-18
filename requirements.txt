@@ -1,0 +1,7 @@
+# Scientific Python stack for the chatter-control study.
+# Install with:  pip install -r requirements.txt
+numpy>=1.20
+scipy>=1.7
+matplotlib>=3.5
+# The physical models, FDM solvers and the phase-aware feedforward are pure
+# NumPy/SciPy; no machine-learning framework is required.

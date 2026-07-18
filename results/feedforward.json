@@ -1,0 +1,22 @@
+{
+  "feedback_only": {
+    "y_rms": 0.5318960330493506,
+    "y_max": 1.9290257091087533,
+    "u_max": 12.812059457642826,
+    "u_rms": 3.633356210880692,
+    "stop": 10000
+  },
+  "feedback_plus_ff": {
+    "y_rms": 0.5071006924100658,
+    "y_max": 1.793238232560762,
+    "u_max": 12.595811854527327,
+    "u_rms": 3.701823337935585,
+    "stop": 10000
+  },
+  "rms_gain_pct": 4.661689333746965,
+  "peak_gain_pct": 7.039174019652005,
+  "umax_change_pct": -1.687844205144562,
+  "ap_crit_mm": 2.432519531250001,
+  "note": "a_p,crit is set by the feedback gain alone; the phase-aware feedforward does not enter the feedback path and therefore does not change the stability boundary.",
+  "elapsed_s": 10.986474990844727
+}

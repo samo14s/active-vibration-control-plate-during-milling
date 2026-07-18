@@ -502,6 +502,54 @@ rate on the list of first-order design constraints, and points directly at
 dual-sensor or position-weighted sensing as the natural next design step
 (consistent with the placement co-design lens of Sec. 4.6).
 
+### 4.10 Improving the ADRC: tip-driven adaptive feedforward (AFC-ADRC)
+
+Sec. 4.9 identified the single collocated sensor's spatial observability
+footprint as the binding weakness, and the far-side residual as *periodic*
+(tooth-passing harmonics; the dominant line is the 3rd at ~736 Hz).  Two
+structural facts shape the remedy.  First, the tip signal cannot enter the
+fast ESO loop: frozen-blend analysis shows even 20 % tip content destabilises
+the loop at ~4 kHz (the tip's mode-4/5 couplings are large and wrong-signed),
+a low-pass-filtered blend fails at ~700 Hz through the wrong-signed mode-2
+channel, and any right-side w-sensor flips mode 2 by antisymmetry -- so the
+fast loop's sensor must stay collocated.  Second, we showed in Sec. 4.4 that
+feedforward does not move the closed-loop poles.  The improvement therefore
+uses the tip sensor -- already present on the rig of [1] -- *outside* the fast
+loop (`src/afc_adrc.py`):
+
+    u = u_ADRC(y_col) + sum_k [ a_k cos(k*theta) + b_k sin(k*theta) ],
+
+a spindle-synchronous harmonic comb (K = 5, theta locked to the tooth period)
+whose coefficients adapt by normalized filtered-x LMS on the *tip* error
+through the closed-loop secondary path G_k, with per-harmonic gains
+g_k = 2/(tau_a |G_k|^2), tau_a = 0.3 s, +/-30 V clamp and leaky-LMS decay
+(tau_leak = 1 s).  Two implementation details proved essential and are
+documented as reproducible failure modes: G_k must include the ESO's response
+to the injection (input matrix [B; B_o] -- with [B; 0] the phase is wrong by
+up to ~280 deg and the comb pumps), and the comb must be phase-locked to the
+implemented tooth period (a 0.4 Hz mismatch from period rounding already
+voids the cancellation).
+
+**Fixed-position validation** (x = 90 mm, the worst region, tip RMS):
+
+| condition | plain ADRC | AFC-ADRC | gain |
+|---|---:|---:|---:|
+| nominal | 0.600 um | **0.177 um** | +70 % |
+| drift -20 % | 0.730 um | **0.303 um** | +58 % |
+| drift +20 % | 5.281 um | 5.266 um | +0.3 % (neutral) |
+
+Within the FxLMS validity envelope the comb removes ~2/3 of the far-side
+residual; at +20 % drift the 736 Hz line approaches the shifted fundamental,
+the 90-deg phase condition fails, and the leakage safely *disables* the comb
+instead of letting it pump (without leakage this case amplified 9x) -- the
+augmentation is never worse than the plain ADRC it wraps.  The machining-state
+robustness is also verified: with G_k frozen at h = 4.0 the cancellation still
+holds at h = 3.0 (0.126 vs 0.110 um).
+
+**Full-process result** (same 4-pass end-to-end protocol as Sec. 4.9, Fig. 10):
+
+_TBD: results/full_process_afc.json_
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is

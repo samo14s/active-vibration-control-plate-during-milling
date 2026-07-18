@@ -367,13 +367,49 @@ def fig_full_process():
     save(fig, "fig9_full_process")
 
 
+
+# --------------- Fig 10: AFC-ADRC improvement over the full process
+def fig_afc():
+    dl = load("full_process_lqg.json")
+    da = load("full_process_adrc.json")
+    df = load("full_process_afc.json")
+    fig, axes = plt.subplots(1, 2, figsize=(13.2, 4.8))
+    # (a) pass-4 profiles
+    ax = axes[0]
+    for d, c, lab in [(dl, C_LQG, "LQG"), (da, C_ADRC, "ADRC (collocated only)"),
+                      (df, "#7b1fa2", "AFC-ADRC (dual sensor)")]:
+        rows = [r for r in d["segments"] if r["n_pass"] == d["n_pass"]]
+        ax.plot([r["x_mm"] for r in rows], [r["y_rms_um"] for r in rows],
+                "-o", color=c, lw=1.8, ms=4, label=lab)
+    ax.set_xlabel("tool position x (mm)")
+    ax.set_ylabel(r"segment tip RMS ($\mu$m)")
+    ax.set_title("(a) final pass (h = 3.0 mm): vibration along the path", fontsize=10.5)
+    ax.legend(fontsize=9, framealpha=0.95)
+    # (b) per-pass process RMS
+    ax = axes[1]
+    x = np.arange(1, 5); w = 0.27
+    for off, d, c, lab in [(-w, dl, C_LQG, "LQG"), (0, da, C_ADRC, "ADRC"),
+                           (w, df, "#7b1fa2", "AFC-ADRC")]:
+        v = [r["y_rms_um"] for r in d["pass_summary"]]
+        bars = ax.bar(x + off, v, w, color=c, ec="k", label=lab)
+        for b_, vv in zip(bars, v):
+            ax.text(b_.get_x() + b_.get_width() / 2, vv + 0.008, f"{vv:.2f}",
+                    ha="center", fontsize=7.5)
+    ax.set_xticks(x); ax.set_xticklabels([f"pass {p}" for p in x])
+    ax.set_ylabel(r"process RMS ($\mu$m)")
+    ax.set_title("(b) per-pass process RMS", fontsize=10.5)
+    ax.legend(fontsize=9, framealpha=0.95)
+    save(fig, "fig10_afc")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
            ("synthesis.json", fig_authority), ("placement.json", fig_placement),
            ("refinement.json", fig_refinement),
            ("material_removal.json", fig_material_removal),
-           ("full_process_lqg.json", fig_full_process)]
+           ("full_process_lqg.json", fig_full_process),
+           ("full_process_afc.json", fig_afc)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

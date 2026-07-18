@@ -96,12 +96,21 @@ def make_controller(which):
                            w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
         l.discretize_observer()
         return _SelfStateWrapper(l, 10, 6), "tip"
-    else:
+    elif which == "adrc":
         d0 = build(5, include_dynamics=True, sensor="piezo")
         refresh_rows(d0)
         d0.D_obs = d0.D_col
         a = ADRCController(d0, dt=DT, wc=1800, wo=21600, u_max=U_MAX)
         return _SelfStateWrapper(a, 10, 10), "piezo"
+    else:  # afc
+        from afc_adrc import AFCADRCController
+        d0 = build(5, include_dynamics=True, sensor="piezo")
+        refresh_rows(d0)
+        d0.D_obs = d0.D_col
+        n_per = int(round(60.0 / (NT * RPM) / DT))
+        a = AFCADRCController(d0, dt=DT, wc=1800, wo=21600, n_per=n_per,
+                              K=5, tau_a=0.3, uff_max=30.0, u_max=U_MAX)
+        return a, "piezo"
 
 
 def run(which):
@@ -143,8 +152,12 @@ def run(which):
                 ph = k_global % n_per
                 a3 = alpha3[ph]; a4 = alpha4[ph]
 
-                y_ctrl = (plate.D_col if sensor == "piezo" else plate.D_tip) @ q
-                _, u = ctrl.step(None, u_prev, y_ctrl, k_step=k_global)
+                if getattr(ctrl, "dual", False):
+                    u = ctrl.step_dual(u_prev, plate.D_col @ q,
+                                       plate.D_tip @ q, k_global)
+                else:
+                    y_ctrl = (plate.D_col if sensor == "piezo" else plate.D_tip) @ q
+                    _, u = ctrl.step(None, u_prev, y_ctrl, k_step=k_global)
 
                 q_del = hist[k_global % n_tau]     # q(t - tau)
                 K_eff = Kp + a4 * DpT_Dp
@@ -212,6 +225,6 @@ def run(which):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--controller", choices=["lqg", "adrc"], required=True)
+    ap.add_argument("--controller", choices=["lqg", "adrc", "afc"], required=True)
     args = ap.parse_args()
     run(args.controller)

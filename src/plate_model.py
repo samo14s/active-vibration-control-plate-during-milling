@@ -303,6 +303,80 @@ class PlateModel:
                   f"dD1={dD1:.2f}, dD2={dD2:.2f} N·m, rho_eq·h={rho_eq*h:.2f} kg/m²")
 
     # ---------------------------------------------------------------
+    def remove_material(self, x1: float, x2: float,
+                        z1: float, z2: float,
+                        depth: float):
+        """Enlèvement de matière en cours d'usinage (fraisage périphérique).
+
+        Amincit la plaque de ``depth`` (réduction d'épaisseur, p.ex. la prise
+        radiale a_e) sur la bande [x1,x2] x [z1,z2].  Pour chaque élément
+        couvert, la raideur et la masse élémentaires sont remplacées par
+        celles de l'épaisseur restante (K ~ h³, M ~ h), pondérées par la
+        fraction de surface couverte (recouvrement partiel).  L'analyse
+        modale et les pré-calculs dépendants (Dp, observation) sont relancés.
+
+        Hypothèse standard « piecewise-frozen » : à un état d'usinage donné,
+        la dynamique est celle de la géométrie courante (l'enlèvement est
+        beaucoup plus lent que les vibrations).  Les appels sont cumulables
+        (l'épaisseur locale est suivie par élément dans self.h_elem).
+        """
+        if not hasattr(self, 'h_elem'):
+            self.h_elem = np.full((self.N2, self.N1), self.bp, dtype=float)
+
+        Kg = self.Kg.tolil()
+        Mg = self.Mg.tolil()
+        n1 = self.n1
+        n_mod = 0
+        for J in range(1, self.N2 + 1):
+            for I in range(1, self.N1 + 1):
+                xe_lo, xe_hi = (I - 1) * self.lex, I * self.lex
+                ze_lo, ze_hi = (J - 1) * self.ley, J * self.ley
+                dx = max(0.0, min(xe_hi, x2) - max(xe_lo, x1))
+                dz = max(0.0, min(ze_hi, z2) - max(ze_lo, z1))
+                frac = (dx * dz) / (self.lex * self.ley)
+                if frac < 1e-12:
+                    continue
+                h_old = self.h_elem[J - 1, I - 1]
+                h_new = max(h_old - depth, 1e-5)
+                if abs(h_new - h_old) < 1e-12:
+                    continue
+                dKe = (stiffness_matrix_K(self.E, self.nu, self.lex, self.ley, h_new)
+                       - stiffness_matrix_K(self.E, self.nu, self.lex, self.ley, h_old))
+                dMe = (mass_matrix_K(self.rho, self.lex, self.ley, h_new)
+                       - mass_matrix_K(self.rho, self.lex, self.ley, h_old))
+                DofE = np.r_[
+                    3 * (J - 1) * n1 + 3 * (I - 1) + np.arange(6),
+                    3 * J * n1 + 3 * (I - 1) + np.arange(3, 6),
+                    3 * J * n1 + 3 * (I - 1) + np.arange(3),
+                ]
+                Kg[np.ix_(DofE, DofE)] += frac * dKe
+                Mg[np.ix_(DofE, DofE)] += frac * dMe
+                # suivre l'épaisseur seulement si l'élément est (quasi)
+                # entièrement couvert; sinon l'amincissement partiel est déjà
+                # représenté par la pondération frac
+                if frac > 0.999:
+                    self.h_elem[J - 1, I - 1] = h_new
+                n_mod += 1
+        self.Kg = Kg.tocsr()
+        self.Mg = Mg.tocsr()
+        self._apply_bc()
+        self._modal_analysis()
+        if hasattr(self, 'zp_pos'):
+            self.precompute_Dp(self.zp_pos, n_pos=self.Dp_array.shape[1])
+        if hasattr(self, 'x_obs'):
+            self.set_observation(self.x_obs, self.z_obs)
+        if hasattr(self, 'patch'):        # re-project actuator on new modes
+            m_piezo = self.patch['m_piezo']
+            g_lap = laplace_n_patch(self.patch['xP1'], self.patch['xP2'],
+                                    self.patch['zP1'], self.patch['zP2'],
+                                    self.N1, self.N2, self.lex, self.ley,
+                                    self.n1, self.ndof)
+            self.H_Pe_modal = self.V.T @ (m_piezo * g_lap)[self.DOFf]
+        if self.verbose:
+            print(f"[PlateModel] material removed on {n_mod} elements; "
+                  f"f1 = {self.freq_n[0]:.2f} Hz")
+
+    # ---------------------------------------------------------------
     def get_Dp_at(self, kp: int):
         """Renvoie (Dp, DpT_Dp) à l'indice de position kp."""
         return self.Dp_array[:, kp], self.DpT_Dp_array[:, :, kp]

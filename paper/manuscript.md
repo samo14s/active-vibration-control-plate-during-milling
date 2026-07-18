@@ -382,12 +382,18 @@ plant).**
 |---|---:|---:|---|
 | 3-mode plant, dt = 50 us (Sec. 4.6) | 1.38 mm | 1.92 mm | ADRC +39 % |
 | refined 5-mode, dt = 50 us | 1.29 mm | 0.74 mm | sampling artifact |
-| **refined 5-mode, dt = 25 us** | **1.29 mm** | **1.65 mm** | **ADRC +28 %** |
+| **refined 5-mode, dt = 25 us** | **1.29 mm** | **1.47-1.65 mm** | **ADRC +14-28 %** |
 
 The ADRC advantage survives the refined model once the numerical artifact is
-removed, at a moderated magnitude (+28 % instead of +39 %) and with a re-tuned
-bandwidth (wc = 1200 rad/s instead of 1800 -- the refined plant rewards a
-gentler loop).  The drift-robustness conclusion also survives unchanged on the
+removed, at a moderated magnitude.  A tuning nuance must be reported: the
+deepest boundary (1.65 mm, wc = 1200 rad/s) tolerates a *saturated limit cycle*
+near the operating depth (tip RMS ~12 um at 150 V -- "stable" under the 50 um
+chatter criterion but unacceptable for surface finish), whereas the
+clean-response tuning (wc = 1800 rad/s: 0.25 um at 29 V at the operating point)
+reaches 1.47 mm.  Honest headline: **+14 % with clean actuation, up to +28 % if
+saturated limit-cycle operation near the boundary is tolerated**; the
+feasibility criterion itself (chatter only) is therefore complemented by the
+saturation-time fraction in the in-process study of Sec. 4.9.  The drift-robustness conclusion also survives unchanged on the
 refined plant at dt = 25 us: at the nominal point ADRC halves the tip vibration
 (0.252 vs 0.508 um, +50 %), and at -20 % drift LQG loses stability (613 um,
 saturated) while ADRC holds 0.322 um at 33 V.
@@ -396,6 +402,59 @@ The methodological lesson mirrors Sec. 4.6: each modelling-fidelity layer
 (patch dynamics -> modal truncation -> sampling/integration resolution) can
 *reverse* a comparison if evaluated carelessly; conclusions are only safe when
 the layer at which they are computed is stated and converged.
+
+### 4.9 In-process material removal: physically-generated varying dynamics
+
+The FEM now models the removal itself (`plate_model.remove_material`): covered
+elements are re-assembled at their reduced thickness (K ~ h^3, M ~ h,
+partial-coverage weighted) under the standard piecewise-frozen assumption, and
+the modal basis, tool-path shapes, sensor rows and actuator projection are
+recomputed per machining state (`experiments/material_removal.py`).
+
+**Single pass (article conditions).**  Removing a_e = 0.1 mm over the top
+0.3 mm strip along the full length shifts every natural frequency by less than
+0.02 % and b0 by 0.1 %.  This is an honest *bounding* result: within one pass
+the constant-dynamics assumption used throughout the production studies is
+justified -- the varying-dynamics challenge of [1] comes from the tool
+*position* and from pass-to-pass stock removal, not from within-pass removal.
+
+**Thin-walling (pass-to-pass).**  Milling the top 20 mm band from 4.0 mm down
+to 3.0 mm in four 0.25 mm passes raises f1 by **+9.5 %** (540.6 -> 592.2 Hz):
+at a cantilever's free edge the removed *mass* dominates the removed
+*stiffness*, so thinning stiffens the apparent fundamental.  The collocated
+coupling strengthens monotonically (b0: -0.744 -> -0.955) and the sign pattern
+stays viable throughout (becoming fully sign-definite from h = 3.25 mm).  This
+is the physically-generated counterpart of the synthetic +/-20 % drift sweep of
+Sec. 4.3 -- with the important difference that the drift is now *upward* in
+frequency and accompanied by consistent mode-shape changes.
+
+**Control through the process (designs frozen at h = 4.0 mm).**  Both
+controllers are designed once at the initial state (dt = 25 us; ADRC with the
+clean-response tuning wc = 1800 and the initial b0) and carried unchanged
+through the five machining states; at each state the linear margin is computed
+by CL-SD on the *current* plant and the 0.3 mm operating point is simulated in
+saturated time domain (Fig. 8):
+
+| band thickness | LQG a_p,crit | ADRC a_p,crit | LQG op. (um / V) | ADRC op. (um / V) |
+|---:|---:|---:|---:|---:|
+| 4.00 mm | 2.32 mm | 2.33 mm | 0.513 / 13 | 0.252 / 29 |
+| 3.75 mm | 2.54 mm | 2.24 mm | 0.514 / 13 | 0.245 / 31 |
+| 3.50 mm | 2.26 mm | 2.23 mm | 0.543 / 14 | 0.240 / 31 |
+| 3.25 mm | 1.82 mm | 2.29 mm | 0.556 / 14 | 0.235 / 32 |
+| 3.00 mm | **1.68 mm** | **2.36 mm** | 0.598 / 14 | 0.228 / 33 |
+
+Honestly stated: *neither* controller fails at the operating point during this
+process -- the physically-generated drift is upward in frequency, which is the
+benign direction for the frozen LQG (its synthetic failure in Sec. 4.3 was at
+-20 %).  The margins, however, tell the practically relevant story: the frozen
+LQG's stability margin erodes monotonically once thinning progresses
+(2.54 -> 1.68 mm, -28 % over the process, with its operating vibration up
++17 %), while the frozen ADRC's margin stays flat and its vibration *improves*
+(0.252 -> 0.228 um, because the collocated coupling b0 strengthens as the wall
+thins).  At the thinnest state -- exactly where finishing passes demand the
+most predictable margin -- ADRC holds 40 % more margin than LQG (2.36 vs
+1.68 mm), without any re-identification or re-tuning.  This is the model-light
+property working on physically-generated, not synthetic, dynamics variation.
 
 ## 5. Discussion
 

@@ -192,8 +192,14 @@ model that the truncated model could never produce.
 - Perfect bond, no adhesive layer, membrane–bending coupling of the one-sided
   patch neglected (Sec. 6) — the +2.2 % residual on mode 2 bounds their joint
   effect.
-- No in-process material removal: at a_e = 0.1 mm off a 4 mm thickness along
-  the top edge, the modal shift over one pass is ≪ the ±15–20 % drift already
-  covered by the robustness study.
+- In-process material removal **is** modelled (`plate_model.remove_material`:
+  element-wise thinning, K ∝ h³, M ∝ h, partial-coverage weighting,
+  piecewise-frozen re-analysis per machining state). Quantified results: a
+  single pass at the article's conditions shifts every frequency by < 0.02 %
+  (bounding result justifying constant dynamics within a pass), while
+  pass-to-pass thin-walling of the top band from 4.0 to 3.0 mm raises f₁ by
+  +9.5 % — the physically-generated counterpart of the synthetic drift sweep
+  (manuscript Sec. 4.9). What remains neglected is only the within-pass
+  transient between the piecewise-frozen states.
 - The eddy-current sensor and amplifier dynamics appear in the realistic piezo
   model (`piezo_actuator.py`) but not in the stability analyses.

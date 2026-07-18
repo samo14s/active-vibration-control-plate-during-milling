@@ -290,11 +290,61 @@ def fig_refinement():
     save(fig, "fig7_refinement")
 
 
+# -------------------- Fig 8: in-process material removal / control through process
+def fig_material_removal():
+    d = load("material_removal.json")
+    th = d["thinning"]; cp = d["control_through_process"]
+    h = [r["h_band_mm"] for r in th]
+    fig, axes = plt.subplots(1, 2, figsize=(13.4, 4.8),
+                             gridspec_kw={"wspace": 0.42})
+    # (a) physically-generated modal drift
+    ax = axes[0]
+    f1 = [r["freq_hz"][0] for r in th]
+    ax.plot(h, f1, "-o", color="#444", lw=1.8, ms=6)
+    for hi, fi in zip(h, f1):
+        ax.annotate(f"{fi:.0f}", (hi, fi), textcoords="offset points",
+                    xytext=(0, 7), ha="center", fontsize=8)
+    ax.invert_xaxis()
+    ax.set_xlabel("wall thickness of the machined band (mm)")
+    ax.set_ylabel(r"$f_1$ (Hz)", color="#444")
+    sp = d["single_pass"]["max_abs_drift_pct"]
+    ax.set_title(f"(a) modal drift from material removal\n"
+                 f"(single pass < {sp:.3f} %; thinning "
+                 f"{(f1[-1]/f1[0]-1)*100:+.1f} %)", fontsize=10)
+    ax2 = ax.twinx()
+    b0 = [r["b0"] for r in th]
+    ax2.plot(h, b0, "--s", color=C_ADRC, lw=1.4, ms=5)
+    ax2.set_ylabel(r"collocated $b_0$", color=C_ADRC)
+    ax2.grid(False)
+    # (b) control through the process
+    ax = axes[1]
+    hc = [r["h_band_mm"] for r in cp]
+    ax.plot(hc, [r["ap_crit_lqg_mm"] for r in cp], "-o", color=C_LQG, lw=1.8,
+            ms=6, label="LQG (design frozen at h=4.0)")
+    ax.plot(hc, [r["ap_crit_adrc_mm"] for r in cp], "-s", color=C_ADRC, lw=1.8,
+            ms=6, label="ADRC (design frozen at h=4.0)")
+    ax.axhline(0.3, color="k", ls=":", lw=1.2)
+    ax.text(hc[0], 0.34, "operating depth 0.3 mm", fontsize=8)
+    for r in cp:                                  # chatter markers at op point
+        if not r["op_lqg"]["stable"]:
+            ax.plot(r["h_band_mm"], 0.3, "x", color=C_LQG, ms=13, mew=3, zorder=6)
+        if not r["op_adrc"]["stable"]:
+            ax.plot(r["h_band_mm"], 0.3, "+", color=C_ADRC, ms=14, mew=3, zorder=6)
+    ax.invert_xaxis()
+    ax.set_xlabel("wall thickness of the machined band (mm)")
+    ax.set_ylabel(r"linear $a_{p,crit}$ (mm)")
+    ax.set_title("(b) frozen designs across the machining process\n"
+                 "(x / + = chatter at the 0.3 mm operating point)", fontsize=10)
+    ax.legend(fontsize=9, framealpha=0.95)
+    save(fig, "fig8_material_removal")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
            ("synthesis.json", fig_authority), ("placement.json", fig_placement),
-           ("refinement.json", fig_refinement)]
+           ("refinement.json", fig_refinement),
+           ("material_removal.json", fig_material_removal)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

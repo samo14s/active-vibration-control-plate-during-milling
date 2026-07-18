@@ -443,6 +443,9 @@ saturated time domain (Fig. 8):
 | 3.25 mm | 1.82 mm | 2.29 mm | 0.556 / 14 | 0.235 / 32 |
 | 3.00 mm | **1.68 mm** | **2.36 mm** | 0.598 / 14 | 0.228 / 33 |
 
+The short (0.4 s) per-state checks above cover only ~2 mm of travel; the
+full-process simulation below removes that limitation.
+
 Honestly stated: *neither* controller fails at the operating point during this
 process -- the physically-generated drift is upward in frequency, which is the
 benign direction for the frozen LQG (its synthetic failure in Sec. 4.3 was at

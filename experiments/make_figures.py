@@ -339,12 +339,41 @@ def fig_material_removal():
     save(fig, "fig8_material_removal")
 
 
+
+# ------------------ Fig 9: full-process simulation (end-to-end, all passes)
+def fig_full_process():
+    dl = load("full_process_lqg.json")
+    da = load("full_process_adrc.json")
+    fig, axes = plt.subplots(1, 2, figsize=(13.4, 4.8), sharey=True)
+    cmap = plt.cm.viridis
+    for ax, d, name, c in [(axes[0], dl, "LQG (frozen design)", C_LQG),
+                           (axes[1], da, "ADRC (frozen design)", C_ADRC)]:
+        for pp in range(1, d["n_pass"] + 1):
+            rows = [r for r in d["segments"] if r["n_pass"] == pp]
+            x = [r["x_mm"] for r in rows]
+            y = [r["y_rms_um"] for r in rows]
+            col = cmap(0.15 + 0.75 * (pp - 1) / max(d["n_pass"] - 1, 1))
+            ax.plot(x, y, "-o", color=col, lw=1.6, ms=3.5,
+                    label=f"pass {pp} (h={4.0 - 0.25 * pp:.2f} mm)")
+        ps = d["pass_summary"]
+        ax.set_title(f"{name}\nper-pass RMS: " +
+                     ", ".join(f"{r['y_rms_um']:.2f}" for r in ps) + " $\\mu$m",
+                     fontsize=10)
+        ax.set_xlabel("tool position x (mm)")
+        ax.legend(fontsize=8, framealpha=0.95)
+    axes[0].set_ylabel(r"segment tip RMS ($\mu$m)")
+    fig.suptitle("Full-process simulation: 4 end-to-end passes, material removed "
+                 "behind the tool (predicted finish map)", fontsize=11, y=1.02)
+    save(fig, "fig9_full_process")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
            ("synthesis.json", fig_authority), ("placement.json", fig_placement),
            ("refinement.json", fig_refinement),
-           ("material_removal.json", fig_material_removal)]
+           ("material_removal.json", fig_material_removal),
+           ("full_process_lqg.json", fig_full_process)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

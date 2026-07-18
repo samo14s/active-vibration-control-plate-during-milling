@@ -56,6 +56,8 @@ src/                       importable modules
   cl_fdm.py                *** closed-loop semi-discretization: controller
                                (+ observer) inside the Floquet monodromy
   adrc_control.py          *** ADRC (extended-state observer + control law)
+  afc_adrc.py              *** AFC-ADRC: + spindle-synchronous adaptive
+                               feedforward comb on the tip sensor (FxLMS)
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
   floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
@@ -89,6 +91,10 @@ python experiments/placement_study.py      # ~3 min: co-design + feasible depths
 python experiments/augmentation_study.py   # ~1 min: negative results
 python experiments/model_refinement.py     # ~3 min: precise-model validation,
                                            #   spillover + sampling endpoint
+python experiments/material_removal.py     # ~3 min: in-process removal
+python experiments/full_process_sim.py --controller lqg   # ~5 min each:
+python experiments/full_process_sim.py --controller adrc  #   continuous 4-pass
+python experiments/full_process_sim.py --controller afc   #   end-to-end process
 ```
 
 The full derivation of the (refined) Kirchhoff model is in

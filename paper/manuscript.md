@@ -22,7 +22,12 @@ idealised static-feedback bound). **(iii)** We design an *active disturbance
 rejection control* (ADRC) with a collocated piezo sensor: it raises the linear
 critical depth to 3.25 mm, reduces tip vibration by ~51 % versus LQG at 25-55 V,
 and -- because it needs only the input gain b0 -- stays robust when the plant
-frequency drifts, whereas LQG loses stability at -20 % drift. **(iv)** The Kirchhoff model itself is refined to *precise* level: the piezo
+frequency drifts, whereas LQG loses stability at -20 % drift; a full-process
+weakness of its single collocated sensor (spatial observability) is then
+removed by AFC-ADRC, a spindle-synchronous adaptive feedforward comb on the
+existing tip sensor that cuts the end-to-end process vibration ~3x below both
+baselines (0.15 vs 0.47-0.53 um) at negligible voltage cost and with the
+fast-loop stability untouched. **(iv)** The Kirchhoff model itself is refined to *precise* level: the piezo
 patch's mass and bending stiffness are added as a composite section with a
 shifted neutral axis, which moves the chatter-dominant mode 1 from -3.5 % error
 to **+0.12 %** against the measured 540 Hz and makes the five-mode mean error
@@ -548,7 +553,25 @@ holds at h = 3.0 (0.126 vs 0.110 um).
 
 **Full-process result** (same 4-pass end-to-end protocol as Sec. 4.9, Fig. 10):
 
-_TBD: results/full_process_afc.json_
+| pass (band ->) | LQG | plain ADRC | **AFC-ADRC** |
+|---|---:|---:|---:|
+| 1 (-> 3.75 mm) | 0.473 um | 0.458 um | **0.145 um** |
+| 2 (-> 3.50 mm) | 0.474 um | 0.489 um | **0.146 um** |
+| 3 (-> 3.25 mm) | 0.484 um | 0.515 um | **0.151 um** |
+| 4 (-> 3.00 mm) | 0.495 um | 0.533 um | **0.160 um** |
+
+AFC-ADRC delivers a ~3x reduction of the process RMS over BOTH baselines and
+resolves the spatial deficit that motivated it: the pass-4 thirds flatten to
+0.12 / 0.14 / 0.21 um (plain ADRC: 0.28 / 0.51 / 0.75; LQG: 0.51 / 0.45 /
+0.53), with the worst segment at 0.24 um versus 0.81 (ADRC) and 0.59 (LQG).
+The cost is negligible: peak voltage 37.8 V (plain ADRC 35.2 V), zero
+saturation anywhere in the 81.6 s process, no new hardware (both sensors exist
+on the rig of [1]), and the fast-loop stability boundaries of Secs. 4.1-4.8
+untouched.  Honest boundary of validity: the comb targets the *periodic*
+component only, its benefit shrinks if the spindle-synchronous assumption
+breaks (e.g. heavy chatter onset -- where the ADRC's margin, not the comb, is
+the relevant defence), and under frequency drift beyond the FxLMS phase
+envelope it degrades to neutrality by design (leakage).
 
 ## 5. Discussion
 
@@ -585,7 +608,14 @@ refined plant at 20 kHz the best ADRC reaches 1.65 mm versus 1.29 mm for the
 best LQG (+28 %), halves the nominal tip vibration, and survives the -20 %
 drift that destabilises LQG; the intermediate fidelity layers were shown to
 reverse comparisons when evaluated carelessly (spillover at 10 kHz sampling).
-Two natural ADRC augmentations were honestly reported as negative results, and
+In-process material removal was modelled and quantified (negligible within a
+pass, f1 +9.5 % across the thin-walling passes), and the continuous end-to-end
+simulation exposed the spatial observability footprint of single-point
+sensing -- which the AFC-ADRC augmentation, a spindle-synchronous adaptive
+comb on the rig's existing tip sensor kept outside the fast loop, then
+removed: full-process vibration ~3x below both baselines (0.15 vs
+0.47-0.53 um) at negligible voltage cost and unchanged fast-loop stability.
+Two in-loop ADRC augmentations were honestly reported as negative results, and
 a two-degree-of-freedom feedforward was shown to help forced vibration but not
 stability.  Every reported number is reproducible from the code.
 

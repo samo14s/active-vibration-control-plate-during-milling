@@ -18,15 +18,20 @@ class LQGController:
         y = C x + v
     """
 
-    def __init__(self, plate, dt: float, verbose: bool = True):
+    def __init__(self, plate, dt: float, verbose: bool = True,
+                 u_max: float = 150.0):
         """
         plate : instance de PlateModel (avec D_obs et H_Pe_modal calculés).
+        u_max : saturation de l'actionneur piezo [V] (physique: +/-150 V).
+                La commande est ecretee dans step(), comme pour les autres
+                controleurs; passer None pour l'ancien comportement non sature.
         """
         self.plate = plate
         self.dt = dt
         self.verbose = verbose
         self.n_modes = plate.n_modes
         self.n_x = 2 * plate.n_modes
+        self.u_max = u_max
 
         self._build_state_space()
         self._design_kalman()
@@ -169,8 +174,10 @@ class LQGController:
 
     # ---------------------------------------------------------------
     def step(self, x_hat_prev, u_prev, y_meas):
-        """Une itération de l'observateur Kalman + commande LQR."""
+        """Une itération de l'observateur Kalman + commande LQR (saturée)."""
         x_hat = self.A_obs_d @ x_hat_prev + self.G_u.flatten() * u_prev \
               + self.G_y.flatten() * y_meas
         u = float(np.squeeze(-self.K_lqr @ x_hat))
+        if self.u_max is not None:
+            u = float(np.clip(u, -self.u_max, self.u_max))
         return x_hat, u

@@ -123,5 +123,5 @@
   "best_delayed_mm": 3.2699218749999996,
   "best_resonant_mm": 3.306640625,
   "conclusion": "Neither augmentation improves the linear boundary materially over the plain delay-tuned ESO (baseline 3.25 mm, best delayed 3.27 mm, best resonant 3.31 mm).",
-  "elapsed_s": 60.00472593307495
+  "elapsed_s": 37.618042945861816
 }

@@ -169,17 +169,37 @@ def stageB(linear_rows, quick=False):
               f"feasible={best['feasible']*1e3:.2f} mm  tune={best['tune']} "
               f"[{time.time()-t0:.0f}s]")
 
-    # LQG baseline feasible depth (original placement, tip sensor)
-    def mk_lqg():
+    # LQG baseline feasible depth (original placement, tip sensor).
+    # Fairness: LQG is saturated at +/-150 V exactly like ADRC, and its weights
+    # are searched UNDER THE FEASIBLE METRIC (same treatment as ADRC's
+    # bandwidth grid), including an aggressive design outside the usual
+    # gain-norm cap -- so the baseline is the best LQG we could find.
+    lqg_weight_grid = [("grid-default", None),
+                       ("w_q=1e12,w_qd=1e8", (1e12, 1e8)),
+                       ("w_q=1e16,w_qd=1e8", (1e16, 1e8))]
+
+    def mk_lqg(weights):
         p = build(0.0, 0.0, sensor_tip=True)
-        l = LQGController(p, dt=DT, verbose=False)
-        l.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
-                           w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
+        l = LQGController(p, dt=DT, verbose=False, u_max=U_MAX)
+        if weights is None:
+            l.optimize_weights(w_q_list=[1e10, 1e12, 1e14, 1e16],
+                               w_qd_list=[1e4, 1e6, 1e8], w_r=1.0)
+        else:
+            l.optimize_weights(w_q_list=[weights[0]], w_qd_list=[weights[1]],
+                               w_r=1.0, gain_norm_max=1e12)
         l.discretize_observer()
         return l
-    f_lqg = feasible_depth(mk_lqg, lambda: build(0.0, 0.0, sensor_tip=True))
-    print(f"  LQG baseline (orig placement): feasible = {f_lqg*1e3:.2f} mm")
-    return out, f_lqg * 1e3
+
+    lqg_rows = []
+    for label, weights in lqg_weight_grid:
+        f = feasible_depth(lambda w=weights: mk_lqg(w),
+                           lambda: build(0.0, 0.0, sensor_tip=True))
+        lqg_rows.append(dict(label=label, feasible_mm=f * 1e3))
+        print(f"  LQG ({label}, saturated): feasible = {f*1e3:.2f} mm")
+    f_lqg = max(r["feasible_mm"] for r in lqg_rows)
+    print(f"  LQG baseline (best of {len(lqg_rows)} weight configs): "
+          f"feasible = {f_lqg:.2f} mm")
+    return out, f_lqg, lqg_rows
 
 
 if __name__ == "__main__":
@@ -188,12 +208,15 @@ if __name__ == "__main__":
     args = ap.parse_args()
     T = time.time()
     rows = stageA(quick=args.quick)
-    feas, f_lqg = stageB(rows, quick=args.quick)
+    feas, f_lqg, lqg_rows = stageB(rows, quick=args.quick)
     result = dict(linear_map=rows, feasible=feas, lqg_feasible_mm=f_lqg,
+                  lqg_weight_search=lqg_rows,
                   u_max=U_MAX, rpm=RPM, patch_size_mm=[PW * 1e3, PH * 1e3],
                   note=("Linear a_p,crit uses CL-SD with the ESO in the monodromy; "
-                        "feasible a_p uses saturated nonlinear time-domain bisection "
-                        "(chatter = divergence or steady tip RMS > 50 um). "
+                        "feasible a_p uses saturated (+/-150 V on BOTH controllers) "
+                        "nonlinear time-domain bisection (chatter = divergence or "
+                        "steady tip RMS > 50 um). LQG weights are searched under "
+                        "the same feasible metric as ADRC's bandwidths. "
                         "The two metrics rank placements differently: design must "
                         "use the feasible metric."))
     json.dump(result, open(os.path.join(RESULTS, "placement.json"), "w"), indent=2)

@@ -178,8 +178,11 @@ therefore evaluate every candidate design with a two-stage metric
 2. **Feasible stage (honest):** the *voltage-feasible critical depth*
    a_p,feas -- the largest depth at which the saturated nonlinear time-domain
    loop stays chatter-free (divergence or steady tip RMS > 50 um counts as
-   chatter) -- found by bisection over full Newmark simulations, with the ADRC
-   bandwidths re-selected under this metric.
+   chatter) -- found by bisection over full Newmark simulations.  The +/-150 V
+   saturation is enforced on *every* controller, and each controller's design
+   parameters are re-selected under this metric: ADRC over a bandwidth grid,
+   and the LQG baseline over a weight grid that includes an aggressive design
+   outside the conventional gain-norm cap.
 
 The co-design study slides the 20 x 60 mm patch (with its collocated corner
 sensor) over a 5 x 3 position grid on the plate and applies both stages.
@@ -236,8 +239,8 @@ adds damping; hence the large, consistent reduction, achieved well within the
 Both controllers are designed on the nominal plant; the real plant's modal
 frequencies are then drifted (Fig. 2). ADRC keeps the tip RMS between 0.21 and
 0.32 um across a +/-20 % drift. LQG stays near 0.5 um for small drifts but **loses
-stability at -20 % (tip RMS 865 um -- chatter)**, because its fixed model is now
-wrong. This is the practical statement of ADRC's model-independence and directly
+stability at -20 % (tip RMS 379 um at the +/-150 V saturation -- chatter)**,
+because its fixed model is now wrong. This is the practical statement of ADRC's model-independence and directly
 addresses the varying-dynamics challenge emphasised by [1].
 
 ### 4.4 Role of the feedforward (2-DOF)
@@ -260,11 +263,14 @@ aid, not an operating envelope.
 
 ### 4.6 Placement co-design: the two metrics rank in opposite order
 
-Of the 15 candidate patch positions, 10 are sign-infeasible for a single-b0 ADRC
-(mixed-sign modal coupling makes the collocated map non-minimum-phase and the
-loop unstabilisable at any tested bandwidth) -- the sign-viability rule alone
-partitions the plate into "allowed" and "forbidden" placement regions (Fig. 6a).
-For the five viable placements the two metrics give (Fig. 6b):
+Of the 15 candidate patch positions, 10 collapse for the single-b0 ADRC at every
+tested bandwidth, and all 10 have mixed-sign modal coupling c_i * H_pe,i
+(Fig. 6a).  The sign structure is a useful *screening heuristic* rather than a
+sufficient rule: one mixed-sign placement (0, 10) remains viable because the
+wrong-signed mode is fast and heavily filtered, and three placements whose first
+two modes are correctly signed still collapse; the operative partition is the
+CL-SD result itself.  For the five viable placements the two metrics give
+(Fig. 6b):
 
 | Patch (x0, z0) mm | linear CL-SD boundary | voltage-feasible depth |
 |---|---:|---:|
@@ -274,7 +280,9 @@ For the five viable placements the two metrics give (Fig. 6b):
 | (0, 0) *(original)* | 3.24 mm (rank 4) | **1.92 mm** (**rank 1**) |
 | (80, 0)  | 2.37 mm (rank 5) | 1.11 mm (rank 4) |
 
-The rankings are anti-correlated (Spearman rho = -0.4).  The mechanism is
+The rankings are descriptively anti-correlated (Spearman rho = -0.4; n = 5, so
+this is reported as an observation on this benchmark, not a significance
+claim).  The mechanism is
 plain: weakly-coupled placements (small |b0|) tolerate the delay well in the
 linear analysis but need proportionally more voltage to reject the same cutting
 disturbance, so the +/-150 V wall arrives much earlier; strongly-coupled
@@ -284,13 +292,16 @@ therefore unsafe, even when the analysis honestly includes the controller and
 its observer.**  Under the honest metric the original placement of [1] is in
 fact near-optimal, and the feasible headline comparison at identical hardware is
 
-| Controller (original placement) | voltage-feasible depth |
+| Controller (original placement, both saturated at +/-150 V) | voltage-feasible depth |
 |---|---:|
-| LQG (tip sensor + Kalman observer) | 1.38 mm |
+| LQG (tip sensor + Kalman observer; best of a weight search under the feasible metric, incl. an aggressive design outside the gain-norm cap) | 1.38 mm |
 | **ADRC (collocated, wc=1800, wo=21600)** | **1.92 mm (+39 %)** |
 
 confirmed by 0.5 s saturated simulations (ADRC stable at 1.8 mm, chatter at
-2.1 mm; LQG stable at 1.3 mm, chatter at 1.5 mm).
+2.1 mm; LQG stable at 1.3 mm at 133 V peak, chatter at 1.5 mm).  With the
+conventional (linearly-tuned) LQG weights the saturated feasible depth is
+1.29 mm, i.e. the +39 % is measured against the *best* saturated LQG found, not
+the default one (+49 % against the default).
 
 ### 4.7 Augmentations: honest negative results
 

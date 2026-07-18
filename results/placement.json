@@ -253,11 +253,25 @@
     }
   ],
   "lqg_feasible_mm": 1.378125,
+  "lqg_weight_search": [
+    {
+      "label": "grid-default",
+      "feasible_mm": 1.2875
+    },
+    {
+      "label": "w_q=1e12,w_qd=1e8",
+      "feasible_mm": 1.015625
+    },
+    {
+      "label": "w_q=1e16,w_qd=1e8",
+      "feasible_mm": 1.378125
+    }
+  ],
   "u_max": 150.0,
   "rpm": 4900,
   "patch_size_mm": [
     20.0,
     60.0
   ],
-  "note": "Linear a_p,crit uses CL-SD with the ESO in the monodromy; feasible a_p uses saturated nonlinear time-domain bisection (chatter = divergence or steady tip RMS > 50 um). The two metrics rank placements differently: design must use the feasible metric."
+  "note": "Linear a_p,crit uses CL-SD with the ESO in the monodromy; feasible a_p uses saturated (+/-150 V on BOTH controllers) nonlinear time-domain bisection (chatter = divergence or steady tip RMS > 50 um). LQG weights are searched under the same feasible metric as ADRC's bandwidths. The two metrics rank placements differently: design must use the feasible metric."
 }

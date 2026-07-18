@@ -193,7 +193,9 @@ class PlateModel:
                         xP1: float, xP2: float,
                         zP1: float, zP2: float,
                         d31: float, h_Pa: float,
-                        E_Pe: float, nu_Pe: float):
+                        E_Pe: float, nu_Pe: float,
+                        rho_Pe: float = 7800.0,
+                        include_dynamics: bool = False):
         """
         Ajoute un patch piézoélectrique et calcule H_Pe_modal :
         force modale induite par 1 V appliqué au patch.
@@ -201,7 +203,17 @@ class PlateModel:
         Modèle de couplage en flexion (Eq. 15) :
             m_piezo = -E_Pe * d31 * (bp + h_Pa) / (2*(1 - nu_Pe))
             H_Pe(x) = m_piezo * ∇²N(x) intégré sur le patch
+
+        include_dynamics=True ajoute en plus la MASSE et la RAIDEUR du patch
+        au modèle EF (couche collée sur une face, section composite avec axe
+        neutre déplacé), puis relance l'analyse modale et les pré-calculs
+        (Dp, observation) qui en dépendent.  rho_Pe : masse volumique du
+        matériau piézo (PZT ~ 7800 kg/m³).  L'inertie rotatoire de la couche
+        déportée est négligée (hypothèse plaque mince standard).
         """
+        if include_dynamics:
+            self._add_patch_dynamics(xP1, xP2, zP1, zP2, h_Pa, E_Pe, nu_Pe, rho_Pe)
+
         m_piezo = -E_Pe * d31 * (self.bp + h_Pa) / (2 * (1 - nu_Pe))
         g_lap = laplace_n_patch(xP1, xP2, zP1, zP2,
                                 self.N1, self.N2,
@@ -211,10 +223,84 @@ class PlateModel:
         H_Pe_phys = m_piezo * g_lap
         self.H_Pe_modal = self.V.T @ H_Pe_phys[self.DOFf]    # (n_modes,)
         self.patch = dict(xP1=xP1, xP2=xP2, zP1=zP1, zP2=zP2,
-                          m_piezo=m_piezo)
+                          m_piezo=m_piezo, include_dynamics=include_dynamics)
 
         if self.verbose:
             print(f"[PlateModel] ||H_Pe_modal|| = {np.linalg.norm(self.H_Pe_modal):.3e} N/V")
+
+    # ---------------------------------------------------------------
+    def _add_patch_dynamics(self, xP1, xP2, zP1, zP2, h_Pa, E_Pe, nu_Pe, rho_Pe):
+        """Masse + raideur de la couche piézo collée sur une face.
+
+        Section composite par unité de surface (plaque [-h/2, h/2], patch
+        [h/2, h/2+hp]) : l'axe neutre se déplace de
+
+            z_bar = E2' hp zc2 / (E1' h + E2' hp),   zc2 = (h+hp)/2,
+
+        avec Ei' = Ei/(1-nu_i²).  L'incrément de rigidité de flexion se
+        décompose en un terme de transport de la plaque (motif de Poisson
+        nu_plaque) et le terme propre du patch (motif nu_patch) :
+
+            dD1 = E1' h z_bar²                (transport plaque)
+            dD2 = E2' (hp³/12 + hp (zc2 - z_bar)²)   (patch autour de l'axe)
+
+        Chaque terme est assemblé via la matrice de raideur élémentaire
+        standard avec un module équivalent E_eq tel que
+        E_eq h³ / 12(1-nu²) = dD.  La masse ajoutée rho_Pe*hp est assemblée
+        avec la matrice de masse cohérente (rho_eq = rho_Pe hp / h).
+        L'analyse modale est ensuite relancée; Dp et l'observation sont
+        recalculés s'ils avaient été définis.
+        """
+        h, hp = self.bp, h_Pa
+        E1p = self.E / (1 - self.nu ** 2)
+        E2p = E_Pe / (1 - nu_Pe ** 2)
+        zc2 = (h + hp) / 2.0
+        z_bar = (E2p * hp * zc2) / (E1p * h + E2p * hp)
+        dD1 = E1p * h * z_bar ** 2
+        dD2 = E2p * (hp ** 3 / 12.0 + hp * (zc2 - z_bar) ** 2)
+
+        E_eq1 = 12.0 * (1 - self.nu ** 2) * dD1 / h ** 3
+        E_eq2 = 12.0 * (1 - nu_Pe ** 2) * dD2 / h ** 3
+        rho_eq = rho_Pe * hp / h
+
+        dKe = (stiffness_matrix_K(E_eq1, self.nu, self.lex, self.ley, h)
+               + stiffness_matrix_K(E_eq2, nu_Pe, self.lex, self.ley, h))
+        dMe = mass_matrix_K(rho_eq, self.lex, self.ley, h)
+
+        # éléments entièrement couverts par le patch (le patch de l'article
+        # est aligné sur la grille; un recouvrement partiel est pondéré par
+        # la fraction de surface couverte)
+        Kg = self.Kg.tolil()
+        Mg = self.Mg.tolil()
+        n1 = self.n1
+        for J in range(1, self.N2 + 1):
+            for I in range(1, self.N1 + 1):
+                xe_lo, xe_hi = (I - 1) * self.lex, I * self.lex
+                ye_lo, ye_hi = (J - 1) * self.ley, J * self.ley
+                dx = max(0.0, min(xe_hi, xP2) - max(xe_lo, xP1))
+                dy = max(0.0, min(ye_hi, zP2) - max(ye_lo, zP1))
+                frac = (dx * dy) / (self.lex * self.ley)
+                if frac < 1e-12:
+                    continue
+                DofE = np.r_[
+                    3 * (J - 1) * n1 + 3 * (I - 1) + np.arange(6),
+                    3 * J * n1 + 3 * (I - 1) + np.arange(3, 6),
+                    3 * J * n1 + 3 * (I - 1) + np.arange(3),
+                ]
+                Kg[np.ix_(DofE, DofE)] += frac * dKe
+                Mg[np.ix_(DofE, DofE)] += frac * dMe
+        self.Kg = Kg.tocsr()
+        self.Mg = Mg.tocsr()
+        self._apply_bc()
+        self._modal_analysis()
+        # recompute anything that depends on the mode shapes
+        if hasattr(self, 'zp_pos'):
+            self.precompute_Dp(self.zp_pos, n_pos=self.Dp_array.shape[1])
+        if hasattr(self, 'x_obs'):
+            self.set_observation(self.x_obs, self.z_obs)
+        if self.verbose:
+            print(f"[PlateModel] patch dynamics added: z_bar={z_bar*1e3:.3f} mm, "
+                  f"dD1={dD1:.2f}, dD2={dD2:.2f} N·m, rho_eq·h={rho_eq*h:.2f} kg/m²")
 
     # ---------------------------------------------------------------
     def get_Dp_at(self, kp: int):

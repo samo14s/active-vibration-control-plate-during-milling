@@ -22,15 +22,22 @@ idealised static-feedback bound). **(iii)** We design an *active disturbance
 rejection control* (ADRC) with a collocated piezo sensor: it raises the linear
 critical depth to 3.25 mm, reduces tip vibration by ~51 % versus LQG at 25-55 V,
 and -- because it needs only the input gain b0 -- stays robust when the plant
-frequency drifts, whereas LQG loses stability at -20 % drift. **(iv)** We
-introduce a *two-stage stability metric*: the linear CL-SD boundary must be
-paired with the **voltage-feasible critical depth** -- the largest depth at which
-the saturated (+/-150 V) nonlinear loop remains chatter-free.  A
+frequency drifts, whereas LQG loses stability at -20 % drift. **(iv)** The Kirchhoff model itself is refined to *precise* level: the piezo
+patch's mass and bending stiffness are added as a composite section with a
+shifted neutral axis, which moves the chatter-dominant mode 1 from -3.5 % error
+to **+0.12 %** against the measured 540 Hz and makes the five-mode mean error
+(1.44 %) smaller than the source article's own theoretical model (1.93 %); mesh
+convergence, density sensitivity, modal-truncation (spillover) and
+sampling-resolution effects are quantified, exposing a ~20 kHz controller-rate
+requirement and moderating the ADRC advantage to +28 % on the refined plant.
+**(v)** We introduce a *two-stage stability metric*: the linear CL-SD boundary
+must be paired with the **voltage-feasible critical depth** -- the largest depth
+at which the saturated (+/-150 V) nonlinear loop remains chatter-free.  A
 transducer-placement co-design study shows the two metrics *rank placements in
 nearly opposite order* (Spearman rho = -0.4 on this benchmark): the placement
 with a 12 mm linear boundary achieves only 0.93 mm feasibly, while the
 strongly-coupled original placement (3.2 mm linear) is the feasible optimum at
-1.92 mm -- 39 % above the LQG baseline (1.38 mm).  **(v)** A phase-aware
+1.92 mm -- 39 % above the LQG baseline (1.38 mm).  **(vi)** A phase-aware
 feedforward in a two-degree-of-freedom controller is shown, analytically and with
 CL-SD, to reduce forced vibration and peak voltage but *not* the stability
 boundary; and two natural ADRC augmentations (a regeneration-aware delayed
@@ -88,6 +95,20 @@ state-space with x = [q; q']:
 Time-domain response uses a Newmark-beta integrator (`newmark_solver.py`) storing
 the delayed state; a realistic piezo model (saturation +/-150 V, slew rate,
 amplifier, hysteresis) is available for actuator-limited runs.
+
+**Model refinement (precise Kirchhoff modelling).**  The source model treated
+the piezo patch only as a *force* (the H_pe vector) and ignored its mass and
+bending stiffness.  We add the bonded 0.7 mm PZT layer as a composite section
+with a shifted neutral axis (derivation and element-level assembly in
+`paper/modeling.md`; implementation `plate_model._add_patch_dynamics`).  The
+refinement is validated against the *measured* natural frequencies of [1]
+(Table 4): it moves the chatter-dominant mode 1 from -3.5 % error to **+0.12 %**,
+and the refined model's mean error over five modes (1.44 %) is lower than the
+article's own theoretical model (1.93 %).  The mesh is convergence-checked
+(30 x 24 indistinguishable from 50 x 40 on f1) and the sensitivity to the
+assumed PZT density is < 0.1 % on f1.  The refined model also reveals that
+modes 4-5 carry *stronger* actuator coupling than modes 1-2, which motivates
+the spillover analysis of Sec. 4.8.
 
 ## 3. Method
 
@@ -317,6 +338,65 @@ the plain bandwidth-parameterised ESO with delay-aware tuning is close to the
 ceiling of single-channel output-feedback laws; the remaining levers are the
 transducer placement (Sec. 4.6) and the actuator budget itself.
 
+### 4.8 Model refinement: validation, spillover, and the honest endpoint
+
+The refined 5-mode plant (patch mass/stiffness included; Sec. 2) is used as the
+"truth model" and every production controller -- all designed on the 3-mode
+bare nominal model -- is re-evaluated on it without modification (Fig. 7).
+
+**Validation.**  Mode 1 error drops from -3.51 % to +0.12 % against the
+measured 540 Hz; the mean five-mode error (1.44 %) beats the article's own
+theoretical model (1.93 %).  Mode 2 worsens slightly (+2.2 %), which bounds the
+neglected glue-layer/membrane effects; we report it rather than tune it away.
+
+**Spillover sensitivity (nominal-tuned designs).**  On the refined plant the
+linear boundaries contract to near-parity (LQG 2.32 mm, ADRC 2.34 mm), and in
+the saturated regime the nominal-tuned ADRC *loses* its advantage
+(voltage-feasible 0.74 mm vs 1.02 mm for LQG).  The mechanism is spillover: the
+refined modes 4-5 carry the largest actuator couplings and the collocated
+coupling of mode 4 is wrong-signed (`---+-`), so ADRC's aggressive disturbance
+cancellation pumps energy into unmodelled dynamics and burns its voltage budget.
+The comparison of Sec. 4.6, taken alone, would therefore overstate ADRC's
+practical margin -- exactly the kind of conclusion the refined model exists to
+test.
+
+**A sampling artifact, diagnosed.**  Before re-tuning, the apparent ADRC
+collapse was traced to its root: the refined closed loop carries a marginally
+damped spillover pair near 3.4 kHz (continuous max Re(eig) = -35 s^-1, both
+with the nominal and refined b0 -- the *continuous* loop is stable).  At the
+production sample time dt = 50 us (10 kHz) the one-sample implementation delay
+(~60-70 deg of phase at 3.4-3.8 kHz) and the Newmark period distortion of
+modes 4-5 (~(w dt)^2/12, up to 14 %) destabilise this pair numerically: the
+unsaturated loop diverges at 3.76 kHz, and under saturation this masquerades as
+a 150 V limit cycle that the feasibility criterion partially tolerates.  At
+dt = 25 us the loop is clean and converged (tip RMS 0.253 um, 29 V; 0.228 um at
+12.5 us).  Hence (i) refined-plant time-domain verdicts must be computed at
+dt <= 25 us, and (ii) a ~20 kHz controller rate is a hardware *requirement* for
+this ADRC on this structure -- a deliverable only the refined model could
+produce.
+
+**Honest endpoint (dt = 25 us, both controllers re-tuned on the refined
+plant).**
+
+| fidelity layer | LQG best | ADRC best | verdict |
+|---|---:|---:|---|
+| 3-mode plant, dt = 50 us (Sec. 4.6) | 1.38 mm | 1.92 mm | ADRC +39 % |
+| refined 5-mode, dt = 50 us | 1.29 mm | 0.74 mm | sampling artifact |
+| **refined 5-mode, dt = 25 us** | **1.29 mm** | **1.65 mm** | **ADRC +28 %** |
+
+The ADRC advantage survives the refined model once the numerical artifact is
+removed, at a moderated magnitude (+28 % instead of +39 %) and with a re-tuned
+bandwidth (wc = 1200 rad/s instead of 1800 -- the refined plant rewards a
+gentler loop).  The drift-robustness conclusion also survives unchanged on the
+refined plant at dt = 25 us: at the nominal point ADRC halves the tip vibration
+(0.252 vs 0.508 um, +50 %), and at -20 % drift LQG loses stability (613 um,
+saturated) while ADRC holds 0.322 um at 33 V.
+
+The methodological lesson mirrors Sec. 4.6: each modelling-fidelity layer
+(patch dynamics -> modal truncation -> sampling/integration resolution) can
+*reverse* a comparison if evaluated carelessly; conclusions are only safe when
+the layer at which they are computed is stated and converged.
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is
@@ -345,10 +425,16 @@ critical depth as the honest design metric and showed, through a
 transducer-placement co-design study, that it ranks placements in nearly the
 opposite order to the linear boundary (12 mm linear can mean 0.93 mm feasible);
 under this metric ADRC delivers 1.92 mm versus 1.38 mm for LQG (+39 %) at
-identical hardware.  Two natural ADRC augmentations were honestly reported as
-negative results, and a two-degree-of-freedom feedforward was shown to help
-forced vibration but not stability.  Every reported number is reproducible from
-the code.
+identical hardware.  Refining the Kirchhoff model to precise level -- patch
+mass/stiffness (mode-1 error +0.12 % vs measurement), five retained modes, and
+converged sampling resolution -- moderates but confirms the verdict: on the
+refined plant at 20 kHz the best ADRC reaches 1.65 mm versus 1.29 mm for the
+best LQG (+28 %), halves the nominal tip vibration, and survives the -20 %
+drift that destabilises LQG; the intermediate fidelity layers were shown to
+reverse comparisons when evaluated carelessly (spillover at 10 kHz sampling).
+Two natural ADRC augmentations were honestly reported as negative results, and
+a two-degree-of-freedom feedforward was shown to help forced vibration but not
+stability.  Every reported number is reproducible from the code.
 
 ## References
 

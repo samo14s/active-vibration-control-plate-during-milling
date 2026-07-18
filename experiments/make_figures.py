@@ -239,10 +239,62 @@ def fig_placement():
     save(fig, "fig6_placement")
 
 
+# ---------------------------- Fig 7: model refinement (validation + spillover)
+def fig_refinement():
+    d = load("refinement.json")
+    v = d["validation"]
+    fig, axes = plt.subplots(1, 2, figsize=(12.8, 4.8))
+    # (a) frequency errors vs measurement
+    ax = axes[0]
+    x = np.arange(5); w = 0.27
+    ax.bar(x - w, v["err_bare_pct"], w, color="#9e9e9e", ec="k",
+           label=f"bare model (mean {v['mean_abs_err_bare']:.2f}%)")
+    ax.bar(x, v["err_refined_pct"], w, color=C_ADRC, ec="k",
+           label=f"refined: + patch dynamics (mean {v['mean_abs_err_refined']:.2f}%)")
+    ax.bar(x + w, v["err_article_pct"], w, color="#e0b040", ec="k",
+           label=f"article's own theory (mean {v['mean_abs_err_article']:.2f}%)")
+    ax.axhline(0, color="k", lw=0.9)
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"mode {k+1}\n{v['measured_hz'][k]:.0f} Hz" for k in range(5)],
+                       fontsize=9)
+    ax.set_ylabel("natural-frequency error vs measured (%)")
+    ax.set_title("(a) validation vs Du et al. Table 4", fontsize=10.5)
+    ax.legend(fontsize=8.5, loc="upper left", framealpha=0.95)
+    # (b) voltage-feasible depth across modelling-fidelity layers
+    ax = axes[1]
+    c = d["control_on_refined"]
+    se = d.get("sampling_endpoint", None)
+    groups = ["3-mode plant\n(dt=50$\\mu$s)", "refined plant\n(dt=50$\\mu$s)",
+              "refined plant\n(dt=25$\\mu$s)"]
+    lqg_v = [1.38, max(r["feasible_mm"] for r in d["retuned_on_refined"]["lqg"])]
+    adrc_v = [1.92, max(r["feasible_mm"] for r in d["retuned_on_refined"]["adrc"])]
+    if se:
+        lqg_v.append(se["best_lqg_mm"]); adrc_v.append(se["best_adrc_mm"])
+    else:
+        groups = groups[:2]
+    x = np.arange(len(groups)); w = 0.38
+    ax.bar(x - w / 2, lqg_v, w, color=C_LQG, ec="k", label="LQG (best tuning)")
+    ax.bar(x + w / 2, adrc_v, w, color=C_ADRC, ec="k", label="ADRC (best tuning)")
+    for xi, vv in zip(x - w / 2, lqg_v):
+        ax.text(xi, vv + 0.03, f"{vv:.2f}", ha="center", fontsize=8.5)
+    for xi, vv in zip(x + w / 2, adrc_v):
+        ax.text(xi, vv + 0.03, f"{vv:.2f}", ha="center", fontsize=8.5, fontweight="bold")
+    if len(groups) == 3:
+        ax.annotate("10 kHz sampling\nartifact", xy=(1 + w / 2, adrc_v[1]),
+                    xytext=(1.25, max(adrc_v) * 0.72), fontsize=8, color=C_ADRC,
+                    arrowprops=dict(arrowstyle="->", color=C_ADRC))
+    ax.set_xticks(x); ax.set_xticklabels(groups, fontsize=8.5)
+    ax.set_ylabel("voltage-feasible depth (mm)")
+    ax.set_title("(b) feasible depth across modelling-fidelity layers", fontsize=10.5)
+    ax.legend(fontsize=9, framealpha=0.95)
+    save(fig, "fig7_refinement")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
-           ("synthesis.json", fig_authority), ("placement.json", fig_placement)]
+           ("synthesis.json", fig_authority), ("placement.json", fig_placement),
+           ("refinement.json", fig_refinement)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

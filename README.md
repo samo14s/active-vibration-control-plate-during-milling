@@ -29,12 +29,18 @@ critical depth** (saturated nonlinear time domain) as the honest design metric
 and show through a **transducer-placement co-design study** that it ranks
 placements in nearly the *opposite* order to the linear boundary (Spearman
 ρ = −0.4; a 12 mm linear boundary can mean 0.93 mm feasible) — under it, ADRC
-achieves **1.92 mm vs 1.38 mm for LQG (+39 %)** at identical hardware; (4) two
-natural ADRC augmentations (regeneration-aware delayed channel, resonant ESO)
-are honestly documented as **negative results** (< 2 % gain); (5) a **phase-aware
-feedforward** (`src/twodof_control.py`) is shown to reduce forced
-vibration/voltage but *not* the stability boundary. All numbers are computed and
-reproducible.
+achieves **1.92 mm vs 1.38 mm for LQG (+39 %)** at identical hardware; (4) the Kirchhoff model is refined to **precise** level
+(`paper/modeling.md`): the patch's mass/stiffness enter the FEM as a composite
+section, dropping the mode-1 error vs the *measured* 540 Hz from −3.5 % to
+**+0.12 %** (five-mode mean 1.44 %, better than the source article's own theory
+at 1.93 %), and the fidelity-layer analysis (truncation → spillover → sampling)
+shows a 10 kHz evaluation *reverses* the verdict spuriously while the converged
+endpoint (refined plant, 20 kHz) confirms **ADRC 1.65 mm vs LQG 1.29 mm
+(+28 %)**; (5) two natural ADRC augmentations (regeneration-aware delayed
+channel, resonant ESO) are honestly documented as **negative results** (< 2 %
+gain); (6) a **phase-aware feedforward** (`src/twodof_control.py`) is shown to
+reduce forced vibration/voltage but *not* the stability boundary. All numbers
+are computed and reproducible.
 
 ## Layout
 
@@ -81,7 +87,12 @@ Use `--quick` for a coarser (faster) SLD grid. Individual stages:
 ```bash
 python experiments/placement_study.py      # ~3 min: co-design + feasible depths
 python experiments/augmentation_study.py   # ~1 min: negative results
+python experiments/model_refinement.py     # ~3 min: precise-model validation,
+                                           #   spillover + sampling endpoint
 ```
+
+The full derivation of the (refined) Kirchhoff model is in
+[`paper/modeling.md`](paper/modeling.md).
 
 ## Physical setup
 

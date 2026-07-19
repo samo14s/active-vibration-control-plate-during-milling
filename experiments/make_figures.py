@@ -488,7 +488,15 @@ def fig_tip_comparison():
     dh = load("hybrid_tip.json")
     tr = np.load(os.path.join(RES, "hybrid_tip_traces.npz"))
     C_HYB = "#7b1fa2"
-    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID, "HYBRID": C_HYB}
+    C_FAD = "#00695c"
+    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID, "HYBRID": C_HYB,
+            "FADRC": C_FAD}
+    dfad = None
+    trf = None
+    p_fad = os.path.join(RES, "fadrc_tip.json")
+    if os.path.exists(p_fad):
+        dfad = load("fadrc_tip.json")
+        trf = np.load(os.path.join(RES, "fadrc_tip_traces.npz"))
     fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.6), layout="constrained")
 
     # (a) voltage-feasible depth on the tip sensor
@@ -496,6 +504,9 @@ def fig_tip_comparison():
     names = ["LQG", "ADRC", "FOPID", "HYBRID"]
     s = dh["summary_tip_feasible_mm"]
     fea = [s[n] for n in names]
+    if dfad is not None:
+        names = names + ["FADRC"]
+        fea = fea + [dfad["FADRC"]["ap_feasible_mm"]]
     x = np.arange(len(names))
     bars = ax.bar(x, fea, 0.55, color=[cols[n] for n in names], ec="k")
     for xi, v in zip(x, fea):
@@ -505,8 +516,11 @@ def fig_tip_comparison():
     ax.text(3.35, s["OL_linear"] + 0.02, f"open loop {s['OL_linear']:.2f} mm",
             color=C_OL, ha="right", fontsize=8)
     ax.set_xticks(x)
-    ax.set_xticklabels(["LQG\n(full model)", "ADRC\n(plain ESO)",
-                        "FOPID\n(model-free)", "HYBRID\n(ESO+FOPID)"], fontsize=9)
+    labels4 = ["LQG\n(full model)", "ADRC\n(plain ESO)",
+               "FOPID\n(model-free)", "HYBRID\n(ESO+FOPID)"]
+    if dfad is not None:
+        labels4 = labels4 + ["FADRC\n(frac. law on\nestimates)"]
+    ax.set_xticklabels(labels4, fontsize=8.5)
     ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
     ax.set_title("(a) feasible depth, all controllers on the article's tip sensor\n"
                  "(non-minimum phase: coupling " + dt_["tip_coupling_signs"] + ")",
@@ -520,6 +534,9 @@ def fig_tip_comparison():
             continue
         ax.plot(tr[f"{k}_t"] * 1e3, tr[f"{k}_y_um"], color=cols[name], lw=0.9,
                 label=name)
+    if trf is not None and "FADRC_0.50_t" in trf:
+        ax.plot(trf["FADRC_0.50_t"] * 1e3, trf["FADRC_0.50_y_um"],
+                color=C_FAD, lw=0.9, label="FADRC")
     ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
     ax.set_title("(b) tip response at $a_p$ = 0.5 mm\n"
                  "diverging traces terminate at the chatter threshold", fontsize=10)
@@ -534,6 +551,10 @@ def fig_tip_comparison():
         rms = dh["trace_summary"][k]["yrms_um"]
         ax.plot(tr[f"{k}_t"] * 1e3, tr[f"{k}_y_um"], color=cols[name], lw=0.9,
                 label=f"{name}  (RMS {rms:.2f} µm)" if rms else name)
+    if trf is not None and "FADRC_0.15_t" in trf:
+        rms = dfad["trace_summary"]["FADRC_0.15"]["yrms_um"]
+        ax.plot(trf["FADRC_0.15_t"] * 1e3, trf["FADRC_0.15_y_um"],
+                color=C_FAD, lw=0.9, label=f"FADRC  (RMS {rms:.2f} µm)")
     ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
     ax.set_title("(c) rejection at $a_p$ = 0.15 mm (all stable)\n"
                  "does the ESO branch improve on plain FOPID?", fontsize=10)
@@ -546,6 +567,10 @@ def fig_tip_comparison():
     for n in ["HYBRID", "LQG", "FOPID"]:
         ax.plot(xx, [rb[t][n] for t in tags], "o-", color=cols[n], lw=2, ms=7,
                 label=n)
+    if dfad is not None:
+        rf = dfad["FADRC"]["drift_feasible_mm"]
+        ax.plot(xx, [rf[t] for t in tags], "s-", color=C_FAD, lw=2.2, ms=8,
+                label="FADRC")
     ax.set_xticks(xx); ax.set_xlabel("plant frequency drift (%)")
     ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
     ax.set_title("(d) robustness: feasible depth under frequency drift\n"
@@ -553,8 +578,8 @@ def fig_tip_comparison():
     ax.legend(fontsize=9)
 
     fig.suptitle("Tip-sensor-only comparison (the article's measurement): "
-                 "LQG / ADRC / FOPID / HYBRID (band-limited ESO + FOPID)",
-                 fontsize=12)
+                 "LQG / ADRC / FOPID / HYBRID / FADRC (fractional law on the "
+                 "ESO estimates)", fontsize=12)
     save(fig, "fig12_tip_comparison")
 
 # ---------------------------- Fig 13: hybrid v2 improvements

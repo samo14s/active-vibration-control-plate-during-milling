@@ -83,6 +83,8 @@ src/                       importable modules
                                feedforward comb on the tip sensor (FxLMS)
   fopid_control.py         *** fractional-order PID (PI^lambda D^mu, Oustaloup)
   hybrid_adrc_fopid.py     *** HYBRID: band-limited ESO + FOPID on the tip sensor
+  fadrc_control.py         *** FADRC: fractional law ON the ESO estimates (best
+                               model-free tip controller: 1.02 mm, 2-sided drift)
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
   floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
@@ -93,6 +95,7 @@ experiments/
   fopid_tip_study.py       tip-sensor baselines: LQG / plain ADRC / plain FOPID
   hybrid_tip_study.py      HYBRID design (2-stage DE) + final tip-only comparison
   hybrid_v2_study.py       hybrid v2: leakage/roll-off/min-max, Pareto, ablation
+  fadrc_plate_study.py     FADRC co-design + tip comparison (closes -20% drift)
   test_hybrid_validation.py  auditable module validation (5 checks)
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)

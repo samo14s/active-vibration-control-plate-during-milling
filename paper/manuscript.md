@@ -69,7 +69,14 @@ repairs the refined-plant linear boundary for the robust design
 +20 % drift headroom 0.29 vs 0.74 mm -- while the -20 % drift weakness
 persists even under a discretization-converged linear min-max certificate on
 the design model: a computed caution that robustness certificates must be
-re-validated on the refined plant.  We also document and correct the fabricated results of the
+re-validated on the refined plant.  Moving the fractional law INSIDE the loop
+-- onto the ESO estimates (**FADRC**, the fractional-ADRC architecture, with
+the same four plate developments) -- then dominates every output-feedback
+variant: 1.02 mm feasible (5x plain FOPID, 79 % of LQG), near-LQG finish
+without a limit cycle, an intact refined-plant linear boundary (1.59 mm), and
+drift robustness on BOTH sides (0.56 / 0.83 mm at -20/+20 %, vs LQG's
+0.65 / 0.56) -- closing the previously open -20 % problem with a model-free
+controller.  We also document and correct the fabricated results of the
 package this work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
@@ -806,13 +813,64 @@ delayed controller channels in this study (cf. Sec. 4.7).
 *Costs and disclosures.*  The finish gains cost margin -- 0.65 vs 0.83 mm
 (-22 %) -- and, notably, +20 % drift headroom: both v2 designs fall to 0.29 mm
 where v1 held 0.74 mm (-61 %), so the "robust" objective bought nothing on
-either drift side of the deployed plant.  The v2 design stage used
+either drift side of the deployed plant.  (Sec. 4.13 shows that moving the
+fractional law INSIDE the loop -- onto the ESO estimates -- succeeds where
+this external min-max objective failed.)  The v2 design stage used
 a_p,ref = 0.8 mm and m_div = 16
 (vs 1.0 mm / 20 for v1) for speed; all reported numbers use the identical
 evaluation machinery (m_div = 30, same bisection), and the ablation above
 carries the attribution.  DE budget (popsize 8, 10 generations, both b0 signs,
 sigma = +1 fixed) is serialized with the results; the gain-scale selections
 landed interior for both designs.
+
+### 4.13 FADRC: the fractional law moved onto the estimates
+
+The hybrid family applies its fractional shaping to the RAW measurement, in
+parallel with the ESO.  The alternative -- historically the original
+fractional-ADRC architecture -- applies the fractional PID to the ESO
+*estimates* inside the loop:
+
+    u = [ -Kp z1 - Ki I^lambda z1 - Kd D^mu z1 - z3 ] / b0_eff,
+
+with the same four plate developments as the hybrid (signed free b0_eff, free
+observer bandwidth, disturbance-state leakage, injection roll-off), realized by
+the same validated Oustaloup machinery, exported as one LTI system into the
+same CL-SD monodromy, co-designed by the same DE-on-spectral-radius procedure
+and feasible-metric selection (`src/fadrc_control.py`,
+`experiments/fadrc_plate_study.py`; export equals the analytic closed form to
+1e-13; boundary independently bracket-checked in time domain).
+
+On the tip sensor this architecture dominates every output-feedback variant in
+the study:
+
+| controller (tip sensor) | feasible a_p | RMS at 0.15 mm | linear (refined) | drift -20 / +20 % |
+|---|---:|---:|---:|---:|
+| plain ADRC | 0.00 mm | -- | 0.01 mm | 0 / 0 |
+| plain FOPID | 0.20 mm | 1.30 um | -- | 0.00 / 0.20 mm |
+| HYBRID v1 / v2-R | 0.83 / 0.65 mm | 37 / 0.29 um | 0.01 / 0.96 mm | 0.00 / 0.74 (v1) |
+| **FADRC** | **1.02 mm** | 0.41 um (10 V) | **1.59 mm** | **0.56 / 0.83 mm** |
+| LQG (reference) | 1.29 mm | 0.23 um (18 V) | -- | 0.65 / 0.56 mm |
+
+The selected design is again physically telling: mode-1-signed gain
+(b0_eff = -0.84), a strongly band-limited observer (wo = 442 rad/s ~ 70 Hz),
+heavy leakage (eps = 258 1/s), roll-off at ~1 kHz, orders lambda = 0.79,
+mu = 0.62, gain scale selected interior (1.0).  Three results follow.
+**(i)** Feasible depth 1.02 mm -- 5x the plain FOPID, 23 % above the best
+parallel hybrid, 79 % of the full-model LQG -- with a refined-plant linear
+boundary (1.59 mm) that, uniquely among the aggressive designs, does NOT
+collapse.  **(ii)** Near-LQG finish without a limit cycle (0.41 um at 10 V at
+0.15 mm; at 0.5 mm its 1.31 um at 47 V is actually below LQG's 6.1 um at
+saturation).  **(iii)** It closes the drift problem that defeated the hybrid
+family: 0.56 mm feasible at -20 % (the open problem of Secs. 4.11-4.12) and
+0.83 mm at +20 %, where LQG holds 0.65 / 0.56 -- i.e. comparable robustness to
+the full-model observer on the low side and better on the high side, from a
+controller that needs no plant model.  The architectural lesson is sharp:
+*where* the fractional shaping acts matters more than whether it is present --
+filtering the estimates inside the disturbance-rejection loop (FADRC) both
+deepens the cut and stabilizes the drift response, while the same operators on
+the raw output (hybrid) buy margin at the cost of drift fragility.  LQG keeps
+the deepest nominal cut and the best low-depth finish; FADRC is the best
+model-free controller on this sensor by every other measure (Fig. 12).
 
 ## 5. Discussion
 
@@ -883,7 +941,12 @@ exposed the margin-vs-finish trade as gain-scale sweeps (non-monotone: the
 limit cycle returns at high gains) -- while honestly reporting the costs
 (nominal margin -22 %, +20 % drift headroom -61 %) and that the -20 % drift
 weakness survives even a discretization-converged linear min-max certificate,
-which the fidelity layers revoke.
+which the fidelity layers revoke.  The decisive architectural step is FADRC --
+the fractional PID moved onto the ESO estimates, with the same four plate
+developments: 1.02 mm feasible (5x plain FOPID, 79 % of LQG), near-LQG finish,
+an intact refined-plant linear boundary, and two-sided drift robustness
+(0.56 / 0.83 mm) that closes the -20 % problem -- establishing that *where*
+the fractional shaping acts matters more than whether it is present.
 The framework accepted every one of these structures without special-casing.
 Every reported number is reproducible from the code.
 

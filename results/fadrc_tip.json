@@ -1,0 +1,201 @@
+{
+  "dt_us": 25.0,
+  "u_max": 150.0,
+  "rpm": 4900,
+  "sensor": "tip only (article's measurement)",
+  "strategy": "chapter-2 ADRC-FOPID developed for the plate",
+  "design_candidates": [
+    {
+      "obj": 0.8632951786467786,
+      "ap_lin_nominal_mm": 1.5895312500000003,
+      "lam": 0.7883683201466003,
+      "mu": 0.6179180662527307,
+      "wo": 441.509820066725,
+      "b0_eff": -0.8352628051468195,
+      "eps_leak": 258.086720699685,
+      "wf": 6563.733027643273
+    },
+    {
+      "obj": 1.1040706920260785,
+      "ap_lin_nominal_mm": 0.6932812500000001,
+      "lam": 0.5721778911438575,
+      "mu": 0.5203629431867528,
+      "wo": 147.4878565755006,
+      "b0_eff": 2.1910826587310006,
+      "eps_leak": 114.36997218732242,
+      "wf": 2503.7326671844694
+    }
+  ],
+  "gain_scale_rows": [
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 0.2,
+      "feasible_mm": 0.0,
+      "rms15_um": null,
+      "umax15_V": null
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 0.25,
+      "feasible_mm": 0.0,
+      "rms15_um": null,
+      "umax15_V": null
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 0.35,
+      "feasible_mm": 0.0,
+      "rms15_um": null,
+      "umax15_V": null
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 0.5,
+      "feasible_mm": 0.0,
+      "rms15_um": null,
+      "umax15_V": null
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 0.75,
+      "feasible_mm": 0.6531250000000001,
+      "rms15_um": 0.3248725425004277,
+      "umax15_V": 6.800855160848634
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 1.0,
+      "feasible_mm": 1.015625,
+      "rms15_um": 0.41188439973656243,
+      "umax15_V": 10.168792068487535
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 1.5,
+      "feasible_mm": 0.47187500000000004,
+      "rms15_um": 7.640087901729025,
+      "umax15_V": 150.0
+    },
+    {
+      "ap_lin_base": 1.5895312500000003,
+      "scale": 2.0,
+      "feasible_mm": 0.38125000000000003,
+      "rms15_um": 8.514873950152635,
+      "umax15_V": 150.0
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 0.2,
+      "feasible_mm": 0.2,
+      "rms15_um": 1.678096741908553,
+      "umax15_V": 0.4213097872752994
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 0.25,
+      "feasible_mm": 0.2,
+      "rms15_um": 1.112799297286086,
+      "umax15_V": 0.35975743842690977
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 0.35,
+      "feasible_mm": 0.2,
+      "rms15_um": 0.6944169117608796,
+      "umax15_V": 0.28203117776718767
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 0.5,
+      "feasible_mm": 0.2,
+      "rms15_um": 0.821213346062846,
+      "umax15_V": 0.3661596449193348
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 0.75,
+      "feasible_mm": 0.2,
+      "rms15_um": 1.5604487094356496,
+      "umax15_V": 1.3201143313277437
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 1.0,
+      "feasible_mm": 0.2,
+      "rms15_um": 3.034816889632298,
+      "umax15_V": 3.645789702097452
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 1.5,
+      "feasible_mm": 0.2,
+      "rms15_um": 30.02608340135613,
+      "umax15_V": 150.0
+    },
+    {
+      "ap_lin_base": 0.6932812500000001,
+      "scale": 2.0,
+      "feasible_mm": 0.0,
+      "rms15_um": null,
+      "umax15_V": null
+    }
+  ],
+  "scale_selected_edge": false,
+  "FADRC": {
+    "design": {
+      "Kp": 5534.943503488545,
+      "Ki": 13566847.216851385,
+      "Kd": 112926.2077884787,
+      "lam": 0.7883683201466003,
+      "mu": 0.6179180662527307,
+      "wo": 441.509820066725,
+      "b0_eff": -0.8352628051468195,
+      "eps_leak": 258.086720699685,
+      "wf": 6563.733027643273,
+      "scale": 1.0
+    },
+    "nz": 18,
+    "ap_feasible_mm": 1.015625,
+    "ap_crit_linear_nominal_mm": 1.5893554687500002,
+    "ap_crit_linear_refined_mm": 1.5928710937500001,
+    "drift_feasible_mm": {
+      "-20%": 0.5625000000000001,
+      "nominal": 1.015625,
+      "+20%": 0.8343750000000001
+    }
+  },
+  "trace_summary": {
+    "FADRC_0.15": {
+      "stable": true,
+      "yrms_um": 0.41188439973656243,
+      "umax_V": 10.168792068487535
+    },
+    "FADRC_0.50": {
+      "stable": true,
+      "yrms_um": 1.3112626222709989,
+      "umax_V": 46.84098687764885
+    }
+  },
+  "baselines_feasible_mm": {
+    "OL_linear": 0.0578515625,
+    "LQG": 1.2875,
+    "ADRC_plain": 0.0,
+    "FOPID_plain": 0.2,
+    "HYBRID_v1": 0.8343750000000001,
+    "HYBRID_v2R": 0.6531250000000001
+  },
+  "de_budget": {
+    "maxiter": 10,
+    "popsize": 8,
+    "tol": 0.01,
+    "init": "sobol",
+    "seed": 0,
+    "b0_signs": [
+      1,
+      -1
+    ],
+    "quick": false
+  },
+  "elapsed_s": 950.7391500473022,
+  "note": "Chapter-2 ADRC-FOPID (fractional law ON THE ESO ESTIMATES) developed for the plate: signed free b0_eff, free wo, leakage, injection roll-off, all co-searched by DE on the CL-SD spectral radius; gain scale selected by the voltage-feasible metric. Deployed step() carries the one-sample ESO u-channel convention (feasibility numbers use step(), conservative); validation in the module docstring and test session."
+}

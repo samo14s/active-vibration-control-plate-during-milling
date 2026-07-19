@@ -2,7 +2,7 @@
 
 ## 3.1. Introduction et positionnement du chapitre
 
-Le chapitre précédent a établi l'intérêt du rejet actif de perturbation d'ordre fractionnaire (ADRC-FOPID) pour la suppression du broutement, sur un modèle de pièce ramené à une dynamique dominante et piloté par un actionneur supposé parfait. Sa conclusion identifiait deux idéalisations à lever : une dynamique de pièce figée et un actionneur sans limites physiques. Le présent chapitre lève ces deux hypothèses sur la configuration la plus exigeante du fraisage de finition : la paroi mince flexible, dont la dynamique est multimodale, variable le long du trajet d'outil, et dont l'actionneur piézoélectrique sature à une tension finie.
+Le chapitre précédent a établi l'intérêt du rejet actif de perturbation d'ordre fractionnaire (ADRC-FOPID) pour la suppression du broutement, sur un modèle de pièce ramené à une dynamique dominante et piloté par un actionneur supposé parfait. Sa conclusion identifiait deux idéalisations à lever : une dynamique de pièce figée et un actionneur sans limites physiques. Le présent chapitre DÉVELOPPE cette même stratégie — l'observateur d'état étendu associé à une loi de commande fractionnaire — et la porte sur la configuration la plus exigeante du fraisage de finition : la paroi mince flexible, dont la dynamique est multimodale, variable le long du trajet d'outil, non minimum de phase depuis le capteur du montage, et dont l'actionneur piézoélectrique sature à une tension finie. On montrera que le portage naïf échoue structurellement, que quatre développements — tous linéaires — sont nécessaires et suffisants, et que l'architecture aboutie (la loi fractionnaire appliquée aux estimées de l'observateur, fidèle au chapitre 2) devient le meilleur correcteur sans modèle de toute l'étude sur ce capteur.
 
 Le banc de référence retenu est celui de Du et al. [Du 2024] : une plaque mince en AL6061 de 100 × 80 × 4 mm, encastrée sur un bord, usinée en périphérie par une fraise trois dents de 10 mm (hélice 35°) à 4900 tr/min, et équipée d'un patch piézoélectrique QDA60-200,7 (±150 V) collé près de l'encastrement. La mesure disponible sur ce montage est le déplacement de l'extrémité libre de la plaque (la « pointe »), et c'est ce capteur — et lui seul — qui est utilisé dans la comparaison des correcteurs de ce chapitre, afin de rester fidèle au système de l'article de référence.
 
@@ -11,8 +11,8 @@ La démarche du chapitre obéit à une règle d'intégrité stricte : chaque val
 - une modélisation de type Kirchhoff dite « précise » de la paroi mince, où la masse et la raideur du patch piézoélectrique entrent dans le modèle éléments finis comme une section composite, validée mode à mode contre les fréquences mesurées de [Du 2024] ;
 - une méthode de semi-discrétisation en boucle fermée (CL-SD) qui insère un correcteur linéaire arbitraire, avec ses états internes (observateur, filtres), dans la matrice de monodromie de Floquet du système à retard périodique : le diagramme des lobes contrôlé qui en résulte est authentique et non asserté ;
 - une métrique de stabilité à deux étages, associant à la frontière linéaire la profondeur de passe « faisable en tension », c'est-à-dire la plus grande profondeur pour laquelle la boucle non linéaire saturée (±150 V) reste exempte de broutement ;
-- une comparaison honnête de quatre classes de correcteurs sur le capteur d'origine du montage, dont le caractère non minimum de phase s'avère décisif : la LQG à modèle complet fonctionne, l'ADRC classique échoue à toutes les bandes passantes, le FOPID seul survit mais faiblement ;
-- un correcteur hybride ADRC–FOPID co-conçu qui rend le rejet de perturbation utilisable sur ce capteur, puis une seconde itération (fuite d'observateur, filtre de roll-off, objectif min-max robuste) qui en corrige les faiblesses calculées — avec les coûts et l'échec résiduel énoncés sans détour.
+- la démonstration calculée que le portage naïf de chaque ingrédient du chapitre 2 échoue sur ce capteur non minimum de phase : l'observateur d'état étendu classique échoue à toutes les bandes passantes, le correcteur fractionnaire seul survit mais faiblement, tandis que la LQG à modèle complet sert de référence exigeante ;
+- les quatre développements (gain effectif signé libre, limitation de bande de l'observateur, fuite de l'état de perturbation, roll-off d'injection) qui rendent la stratégie du chapitre 2 viable sur la paroi mince, explorés d'abord sur une variante parallèle (hybride ADRC–FOPID) puis aboutis sur l'architecture série du chapitre 2 — la loi fractionnaire sur les estimées (FADRC) — qui atteint 1,02 mm de profondeur faisable, un état de surface de classe LQG et une robustesse de dérive bilatérale, fermant le problème resté ouvert sur les variantes intermédiaires.
 
 ## 3.2. Modélisation de type Kirchhoff de la paroi mince
 
@@ -74,13 +74,13 @@ En boucle ouverte, la méthode donne a_p,crit ≈ 0,063 mm à 4900 tr/min sur le
 
 La frontière linéaire ignore la saturation de l'actionneur. Or un correcteur agressif peut afficher une frontière linéaire spectaculaire tout en étant incapable, à ±150 V, de fournir l'effort qu'elle suppose. La métrique retenue est donc à deux étages : (i) l'étage linéaire CL-SD, rapide, sert au réglage et au pré-filtrage ; (ii) l'étage « faisable en tension » mesure, par dichotomie sur des simulations temporelles non linéaires saturées, la plus grande profondeur de passe restant exempte de broutement (divergence ou RMS stationnaire de pointe > 50 μm). C'est l'étage (ii) qui a valeur de verdict ; le chapitre 4 montrera que les deux étages peuvent classer des configurations en ordre quasi inverse.
 
-## 3.6. Comparaison des correcteurs sur le capteur d'origine (pointe)
+## 3.6. Le portage naïf de la stratégie échoue sur le capteur de la paroi
 
 ### 3.6.1. Un capteur non minimum de phase
 
 Sur ce montage, le transfert tension → déplacement de pointe possède des zéros à partie réelle positive : les couplages modaux D_tip·H_pe sont de signes alternés (−, +, −, −, +), avec un gain instantané b₀ = +0,38 mais un couplage du mode 1 négatif. Cette structure non minimum de phase (NMP) borne fondamentalement ce qu'une rétroaction de sortie peut accomplir, et elle décide — comme on va le voir — de la viabilité même des classes de correcteurs.
 
-### 3.6.2. Résultats : une hiérarchie tranchée
+### 3.6.2. Résultats du portage naïf : une hiérarchie tranchée
 
 Quatre correcteurs sont comparés dans des conditions strictement identiques : plante raffinée à cinq modes, Δt = 25 μs, saturation ±150 V, unique mesure de pointe. La LQG conserve son observateur de Kalman à état complet ; l'ADRC classique est réglé sur une grille de bandes passantes (ω_c = 200 à 1800 rad/s) ; le FOPID C(s) = K_p + K_i s^(−λ) + K_d s^(μ) est réalisé par approximation d'Oustaloup (N = 3, bande [5, 8000] Hz maintenue sous le Nyquist pour que la réalisation continue insérée dans la CL-SD et la réalisation discrète déployée coïncident), et ses gains comme ses ordres fractionnaires sont optimisés par évolution différentielle directement sur le rayon spectral de la CL-SD — l'analogue exact de la latitude de réglage accordée aux autres correcteurs — puis sélectionnés par la métrique faisable.
 
@@ -92,13 +92,14 @@ LQG (Kalman + LQR)|modèle d'état complet|1,29 mm|0,23 μm (18 V)
 ADRC classique|b₀ seul|0,00 mm — échec|instable
 FOPID|aucune|0,20 mm|1,30 μm (3,6 V)
 Hybride ADRC–FOPID (§3.7)|b₀_eff, ω_o (recherchés)|0,83 mm|37 μm (saturé)
+FADRC développé (§3.9)|b₀_eff, ω_o (recherchés)|1,02 mm|0,41 μm (10 V)
 [/TAB]
 
 Trois constats, chacun calculé. Premièrement, l'ADRC classique échoue totalement : à toutes les bandes passantes essayées, sa frontière linéaire reste au plancher et la boucle saturée diverge dès 0,2 mm. La cause est structurelle : l'observateur d'état étendu estime une perturbation globale et l'annule en inversant de fait la plante à travers ses zéros à partie réelle positive — un sous-ensemble de modes voit alors une rétroaction positive quelle que soit la bande. Deuxièmement, le FOPID seul survit mais reste faible (0,20 mm, à peine au-dessus de la boucle ouverte) : une structure fixe ne peut fournir assez d'avance de phase à travers les zéros NMP. Troisièmement, la LQG fonctionne (1,29 mm) parce que son observateur de Kalman est construit sur le modèle d'état complet — y compris les contributions modales de signes contraires — qu'il inverse en connaissance de cause. La figure 3-2 montre notamment les trajectoires temporelles à 0,5 mm : la LQG tient la passe, l'ADRC et le FOPID divergent jusqu'au seuil de broutement.
 
-[FIG:figures/fig12_tip_comparison.png|Figure 3-2. Comparaison sur le seul capteur de pointe (mesure d'origine du montage) : (a) profondeurs faisables ; (b) réponses temporelles à 0,5 mm — les trajectoires divergentes s'interrompent au seuil de broutement ; (c) rejet à 0,15 mm ; (d) robustesse à la dérive fréquentielle.]
+[FIG:figures/fig12_tip_comparison.png|Figure 3-2. Comparaison sur le seul capteur de pointe (mesure d'origine du montage), y compris l'architecture aboutie FADRC du §3.9 : (a) profondeurs faisables ; (b) réponses temporelles à 0,5 mm — les trajectoires divergentes s'interrompent au seuil de broutement ; (c) rejet à 0,15 mm ; (d) robustesse à la dérive fréquentielle — le FADRC est robuste des deux côtés.]
 
-## 3.7. Correcteur hybride ADRC–FOPID co-conçu
+## 3.7. Les quatre développements, explorés sur la variante parallèle (hybride)
 
 ### 3.7.1. Structure
 
@@ -116,7 +117,7 @@ La conception est volontairement scindée. L'étape A fige le meilleur FOPID de 
 
 L'hybride v1 paie sa marge trois fois. À faible profondeur, il chevauche un cycle limite saturé d'environ 37 μm RMS — stable, mais très loin des 0,23 μm de la LQG : c'est un extenseur de frontière, pas un correcteur d'état de surface. À −20 % de dérive fréquentielle, sa profondeur faisable s'effondre à zéro. Enfin, sa frontière linéaire sur la plante raffinée à cinq modes tombe au plancher (débordement modal, « spillover », par les modes non modélisés de 3,4–4,1 kHz), la boucle saturée survivant seule — nouvelle illustration du besoin de la métrique à deux étages.
 
-## 3.8. Seconde itération : fuite d'observateur, roll-off d'injection, min-max robuste
+## 3.8. Maturation de la variante parallèle : fuite, roll-off, min-max robuste
 
 Chacune des trois faiblesses reçoit un élément de correction, linéaire lui aussi. Une fuite ε sur l'état de perturbation (ż₃ ← ż₃ − ε z₃) borne l'estimation dont l'intégration sans limite précipitait l'actionneur dans le cycle limite. Un filtre passe-bas du premier ordre de fréquence de coupure ω_f sur l'injection de l'observateur replie l'inversion du mode 1 avant les modes de débordement. Un objectif min-max (v2-R) minimise le pire multiplicateur de Floquet sur les plantes déviées de −20/0/+20 % (pénalité au pire plancher), l'objectif nominal (v2-N) restant en référence. Les dix paramètres sont co-recherchés par la même évolution différentielle, sur les deux signes de gain ; l'attribution des gains est contrôlée par une ablation (éléments retirés, gains conservés).
 
@@ -133,6 +134,30 @@ Le cycle limite est éliminé à faible profondeur : 0,29 μm sous 1,6 V à 0,15
 
 [FIG:figures/fig13_hybrid_v2.png|Figure 3-3. Itération v2 de l'hybride : (a) balayages marge/état de surface (non monotones) ; (b) suppression du cycle limite saturé à 0,15 mm ; (c) robustesse à la dérive — la faiblesse à −20 % persiste malgré le certificat min-max linéaire ; (d) réparation du débordement modal et ablation.]
 
-## 3.9. Conclusion du chapitre
+## 3.9. L'architecture aboutie : la loi fractionnaire sur les estimées (FADRC)
 
-Sur le capteur d'origine du montage — une mesure de pointe non minimum de phase — la hiérarchie des correcteurs est tranchée et entièrement calculée : la LQG à modèle complet est la seule classe pleinement viable (1,29 mm, meilleur état de surface, seule survivante à −20 % de dérive) ; l'ADRC classique échoue structurellement ; le FOPID seul est marginal ; et l'hybride co-conçu — la contribution centrale du chapitre — rend le rejet de perturbation utilisable (0,83 mm, quatre fois la meilleure structure fixe), sa seconde itération ramenant l'état de surface à la classe LQG aux faibles profondeurs au prix d'une marge réduite. Deux règles générales s'en dégagent : la co-conception (et non l'ajout a posteriori) est la condition d'existence d'un observateur de perturbation sur un canal NMP ; et ni une frontière linéaire, ni un certificat de robustesse établi sur le modèle de conception ne doivent être crus avant revalidation sur la plante raffinée saturée. Le chapitre suivant lève la dernière contrainte de ce cadre — le choix imposé du capteur — et porte l'analyse au niveau du procédé complet : co-conception de l'emplacement des transducteurs, capteur colocalisé, enlèvement de matière en cours d'usinage et simulation continue multi-passes.
+### 3.9.1. Retour à l'architecture du chapitre 2
+
+Les variantes précédentes appliquaient le façonnage fractionnaire à la mesure brute, en parallèle de l'observateur. L'architecture du chapitre 2 est différente : la loi fractionnaire y agit sur les ESTIMÉES de l'observateur, à l'intérieur de la boucle de rejet :
+
+[EQ:u = [ −K_p z₁ − K_i I^λ z₁ − K_d D^μ z₁ − z₃ ] / b₀_eff|(3.5)]
+
+C'est cette architecture série qui est ici portée sur la paroi mince, munie des quatre développements du §3.7 (b₀_eff signé libre, bande d'observateur ω_o libre, fuite ε sur z₃, roll-off ω_f sur l'injection). Les opérateurs I^λ et D^μ sont réalisés par la même approximation d'Oustaloup validée ; l'ensemble reste un système linéaire strictement causal qui s'exporte dans la monodromie CL-SD (export vérifié contre la forme analytique à 10⁻¹³ près) ; les neuf paramètres sont co-recherchés par évolution différentielle sur le rayon spectral — la même famille de métaheuristiques que le PSO du chapitre 2, appliquée au vrai critère de broutement — puis l'échelle de gain déployée est sélectionnée par la métrique faisable ; la frontière retenue est contre-vérifiée par encadrement temporel indépendant (stable à 0,95 mm, instable à 1,10 mm).
+
+### 3.9.2. Résultats : le meilleur correcteur sans modèle de l'étude
+
+[TABCAP:Tableau 3-4. L'architecture FADRC développée domine toutes les variantes de rétroaction de sortie (capteur de pointe, plante raffinée, ±150 V).]
+[TAB]
+Correcteur|a_p faisable|RMS à 0,15 mm|Frontière linéaire (plante raffinée)|Dérive −20 % / +20 %
+ADRC classique|0,00 mm|—|0,01 mm|0 / 0
+FOPID seul|0,20 mm|1,30 μm|—|0,00 / 0,20 mm
+Hybride v1 / v2-R|0,83 / 0,65 mm|37 / 0,29 μm|0,01 / 0,96 mm|0,00 / 0,74 (v1)
+FADRC développé|1,02 mm|0,41 μm (10 V)|1,59 mm|0,56 / 0,83 mm
+LQG (référence)|1,29 mm|0,23 μm (18 V)|—|0,65 / 0,56 mm
+[/TAB]
+
+La conception sélectionnée est, une fois encore, physiquement parlante : gain assorti au mode 1 (b₀_eff = −0,84), observateur fortement limité en bande (ω_o = 442 rad/s ≈ 70 Hz), fuite marquée (ε = 258 s⁻¹), roll-off vers 1 kHz, ordres λ = 0,79 et μ = 0,62, échelle de gain sélectionnée à l'intérieur de la grille. Trois résultats en découlent, chacun calculé. Premièrement, la profondeur faisable atteint 1,02 mm — cinq fois le correcteur fractionnaire seul, 23 % au-dessus de la meilleure variante parallèle, 79 % de la LQG à modèle complet — avec une frontière linéaire sur la plante raffinée (1,59 mm) qui, fait unique parmi les conceptions agressives de ce chapitre, ne s'effondre pas : les deux métriques redeviennent cohérentes. Deuxièmement, l'état de surface est de classe LQG sans cycle limite : 0,41 μm sous 10 V à 0,15 mm ; à 0,5 mm, ses 1,31 μm sous 47 V passent même sous les 6,1 μm de la LQG saturée. Troisièmement — le résultat le plus significatif — le FADRC ferme le problème de dérive resté ouvert : 0,56 mm faisable à −20 % et 0,83 mm à +20 %, là où la LQG tient 0,65 / 0,56 mm : une robustesse comparable côté bas et supérieure côté haut, obtenue sans aucun modèle de la plante. La leçon architecturale est nette : le LIEU où agit le façonnage fractionnaire importe davantage que sa présence — filtrer les estimées à l'intérieur de la boucle de rejet approfondit la passe ET stabilise la réponse à la dérive, tandis que les mêmes opérateurs sur la mesure brute achètent de la marge au prix de la fragilité de dérive. La figure 3-2 (barres et panneau de dérive) situe le FADRC dans la comparaison d'ensemble.
+
+## 3.10. Conclusion du chapitre
+
+Ce chapitre a développé la stratégie ADRC-FOPID du chapitre 2 et l'a rendue opérante sur la paroi mince flexible, dans le cadre d'analyse le plus exigeant : correcteur et observateur dans la monodromie de Floquet, saturation ±150 V, capteur d'origine non minimum de phase. Le cheminement est entièrement calculé : le portage naïf échoue (l'ESO classique à toutes les bandes, le fractionnaire seul à 0,20 mm) ; quatre développements linéaires — gain signé libre, bande d'observateur, fuite, roll-off — rendent la stratégie viable, d'abord sur une variante parallèle (0,83 mm, puis 0,65 mm avec un état de surface de classe LQG), enfin sur l'architecture série fidèle au chapitre 2, le FADRC, qui domine toutes les variantes de rétroaction de sortie : 1,02 mm faisable, 0,41 μm d'état de surface, frontière linéaire raffinée intacte, et robustesse de dérive bilatérale (0,56 / 0,83 mm) qui ferme le problème resté ouvert — le tout sans modèle de la plante, à 79 % de la profondeur d'une LQG à modèle complet. Trois règles générales s'en dégagent : sur un canal NMP, un observateur de perturbation doit être limité en bande et assorti en signe à un mode dominant, et co-conçu avec son correcteur compagnon (le retrofit est prouvé impossible) ; le lieu du façonnage fractionnaire — sur les estimées plutôt que sur la mesure — décide à la fois de la profondeur et de la robustesse ; et ni une frontière linéaire ni un certificat de robustesse établis sur le modèle de conception ne doivent être crus avant revalidation sur la plante raffinée saturée. Le chapitre suivant lève la dernière contrainte du cadre — le choix imposé du capteur — et porte l'analyse au niveau du procédé complet : co-conception de l'emplacement des transducteurs, capteur colocalisé, enlèvement de matière en cours d'usinage et simulation continue multi-passes.

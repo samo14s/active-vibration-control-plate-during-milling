@@ -1,0 +1,776 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\graphicspath{{../figures/}}
+
+% ---- headline numbers, auto-filled from results (scripts/fill_numbers.py)
+\input{numbers.tex}
+
+\newcommand{\wc}{w_{\mathrm{c}}}
+\newcommand{\xc}{x_{\mathrm{c}}}
+\newcommand{\TPF}{f_{\mathrm{tp}}}
+
+\title{\textbf{Position-scheduled LQG control with an adaptive tooth-passing
+harmonic internal model for active vibration suppression in thin-walled
+plate milling}}
+
+\author{Sami Soufi$^{a,}$\thanks{Corresponding author.}\\[2pt]
+\small $^a$National Engineering School of Sfax (ENIS), University of Sfax, Tunisia}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Milling of thin-walled workpieces is limited by forced vibration and
+regenerative chatter of the compliant wall, whose dynamics as seen from the
+moving cutter--workpiece engagement point vary continuously along the tool
+path while the sensor and the piezoelectric patch actuator remain fixed.
+The state of the art in workpiece-side active control either freezes the
+design at one (worst-case) configuration or schedules simple
+proportional--derivative gains heuristically, without state estimation,
+optimality, or a stability argument.  This paper develops a
+position-scheduled harmonic linear--quadratic--Gaussian (PSH-LQG)
+controller that addresses the time-space variance structurally.  The key
+observation is that the plate--actuator--sensor plant is time invariant:
+what varies with the cutter position are the disturbance input map and the
+performance output map.  Accordingly, a Kalman predictor with an internal
+model of the periodic milling force---phasor states at the tooth-passing
+frequency and its harmonics, coupled through an exact sinusoid
+discretization---estimates the modal state and the harmonic force content
+from a single fixed accelerometer, while a position-scheduled LQR weights
+the deflection at the moving cutting point and a position-scheduled
+regularized model inversion cancels the estimated harmonics there.
+Actuator saturation, one-sample computation delay, and the analog
+anti-aliasing chain are included in the design model; spillover is bounded
+by a verification-driven per-harmonic gain mask against the full-order
+model.  On a finite-element benchmark reproducing a published experimental
+plate-milling configuration---evaluated on a 20-mode truth model with the
+nonlinear regenerative force loop closed---the proposed controller reduces
+the vibration RMS at the moving cutting point by a factor of
+\RedPSH\ (versus \RedCPD\ for an optimally tuned constant PD and
+\RedVPD\ for the published time-space varying PD given the same tuning
+budget), makes the response nearly uniform along the path, enlarges the
+predicted stability lobes at the nominal speed, and retains its
+performance under $\pm 3\%$ modal-frequency error, $\pm 30\%$ damping
+error, $\pm 20\%$ force-coefficient error, cutter runout, doubled
+computation delay, and in-process material removal.
+\end{abstract}
+
+\noindent\textbf{Keywords:} thin-walled milling; active vibration control;
+piezoelectric actuator; gain scheduling; Kalman filter; internal model
+principle; regenerative chatter
+
+\section{Introduction}
+\label{sec:intro}
+
+Thin-walled components dominate aerospace structures, and their finish
+milling is routinely limited by vibration of the compliant workpiece
+rather than of the machine: forced vibration at the tooth-passing
+frequency (TPF) and its harmonics degrades the machined surface, and the
+regenerative feedback between the wall deflection and the chip thickness
+can escalate into chatter \citep{Altintas2012,Sun2025Review}.  Passive
+remedies (added mass, damping layers, tuned absorbers) are
+configuration-specific, while parameter selection from stability lobe
+diagrams \citep{AltintasBudak1995} is fragile precisely for thin walls,
+whose point dynamics change with every pass.  Workpiece-side \emph{active}
+control with surface-bonded piezoelectric patches is therefore attracting
+sustained attention \citep{Zhang2019,Wan2020,LiJMPT2021,DuJMP2022}.
+
+The specific difficulty of the thin-wall problem is its
+\emph{time-space variance}: the cutter--workpiece engagement point travels
+along the wall, so the transfer behaviour from the cutting force to the
+machined point, and from the fixed actuator and sensor to that point, vary
+continuously during the pass, and the wall itself loses material.
+Wang \emph{et al.}\ \citep{WangSongLiu2019} identified this issue for a
+cantilever plate instrumented with one accelerometer and one piezoelectric
+patch, and proposed a time-space varying PD law (VPD) whose proportional
+gain follows the cutter position through a quintic polynomial fitted to
+31 point-wise tuned values.  This remains, to the best of the authors'
+knowledge, the only published controller scheduled on the in-cut tool
+position; yet it is heuristic on every level: the gains are tuned by
+repeated simulation, there is no state estimation and no optimality
+notion, the schedule is smoothed without re-verifying stability, and the
+periodic structure of the milling force is not exploited.
+
+The broader literature brackets, but does not fill, this gap.  Fixed-gain
+optimal and robust designs---LQG \citep{Parus2013,DuIJMS2022}, sliding
+mode \citep{Wan2020}, LMI-based $H_\infty$ \citep{LiJMPT2021}, modal
+control at the worst-case position \citep{DuJMP2022}, combined time-delay
+control \citep{DuIJMS2024}---treat the plant as time invariant, accepting
+the conservatism that Du \emph{et al.}\ acknowledge explicitly.  LPV
+machining controllers exist for turning, scheduled on the setup-dependent
+boring-bar overhang \citep{CEP2025LPV}, and LPV thin-wall \emph{models}
+including material removal are established
+\citep{Maslo2020,TuysuzAltintas2017,Shi2023}, but have not been closed in
+a loop scheduled on the moving cut.  On the disturbance side, the
+periodicity of the milling force at the spindle-synchronous TPF invites
+internal-model action \citep{FrancisWonham1976,Johnson1971}; existing
+machining implementations, however, are adaptive \emph{feedforward}
+filters without stability certificates \citep{Wang2022FFT}, open-loop
+excitation at tooth-passing-related frequencies \citep{Sallese2017}, or
+comb filters that deliberately \emph{exclude} the harmonics from the
+feedback loop \citep{LiMSSP2021}.  Outside machining, LPV resonant
+observers for periodic disturbances with varying frequency are known
+\citep{Ramos2015,Kinney2011,Bodson1997}, but on LTI plants without a
+regenerative loop, input saturation, or a moving performance point.
+
+\paragraph{Contributions.}  This paper closes the gap with a
+position-scheduled harmonic LQG (PSH-LQG) architecture and a
+correspondingly rigorous evaluation:
+\begin{enumerate}
+\item \emph{Structural treatment of time-space variance.}  We show that
+for a plate milled along a straight path the plant
+(voltage$\,\to\,$accelerometer) is LTI; the cutter position enters only
+through the disturbance input map and the performance output map.  This
+turns the heuristic gain-scheduling problem of \citep{WangSongLiu2019}
+into a well-posed time-varying-weight LQG problem solved by Riccati
+equations on a position grid.
+\item \emph{Adaptive harmonic internal model with exact discretization.}
+The periodic milling force is modelled by phasor states at the TPF
+harmonics (synchronized to the spindle encoder), estimated by a Kalman
+predictor whose coupling matrices are discretized exactly for sinusoidal
+inter-sample behaviour, and cancelled at the \emph{moving} cutting point
+through a position-scheduled, Tikhonov-regularized model inversion with a
+leakage factor that trades a bounded ${\sim}1\%$ cancellation bias for a
+guaranteed contraction budget against model mismatch.
+\item \emph{Implementation realism and spillover control.}  Actuator
+saturation with anti-windup (the predictor is driven by the saturated
+input), one-sample computation delay, and the analog anti-aliasing
+filter are part of the design model; the composite plant (modes + analog
+filter) is discretized jointly so that above-Nyquist modes alias exactly
+as in the sampled hardware.  A verification-driven per-harmonic gain mask
+against the full-order model bounds observation/control spillover
+\citep{Balas1978}.
+\item \emph{Honest baselines and evaluation.}  The published VPD strategy
+is re-derived with the same tuning budget as the proposed method
+(per-position optimization on the true force spectrum, quintic
+parameterization per \citep{WangSongLiu2019}), and we expose a genuine
+hazard of that parameterization: the quintic fit can bridge over local
+dips of the point-wise stabilizing gains and destabilize the loop, which
+we repair by post-fit verification.  All controllers are evaluated on a
+20-mode truth model with the nonlinear regenerative force loop (tooth
+jump-out included), measurement noise, saturation and delay---a stricter
+test than the design-model simulations common in the literature.
+\end{enumerate}
+
+The study is simulation-based by design, but it is anchored to a published
+experimental configuration \citep{WangSongLiu2019}: geometry, materials,
+sensor/actuator placement, drive-chain gains and saturation limits,
+sampling rate, and the actuator authority (calibrated to the measured
+static deflections) are taken from that work, and the observed
+phenomenology---position-dependent vibration severity and near-resonant
+harmonic amplification---is reproduced.  Section~\ref{sec:model} derives
+the model; Section~\ref{sec:control} develops the controller and its
+stability analysis; Section~\ref{sec:baselines} specifies the baselines;
+Section~\ref{sec:results} reports the campaign; Section~\ref{sec:concl}
+concludes.
+
+\section{Modelling of the plate--actuator milling system}
+\label{sec:model}
+
+\subsection{Plate and piezoelectric actuator}
+\label{sec:plate}
+
+The workpiece is a thin cantilever plate (Al--Mg alloy 5052,
+$L\times W\times h_p = \SI{120}{mm}\times\SI{120}{mm}\times\SI{4}{mm}$,
+clamped along $y=0$) with a piezoelectric patch
+($[u_1,u_2]\times[v_1,v_2] =
+[50,70]\times[20,58]\,\si{mm}$, $h_a=\SI{0.4}{mm}$) bonded on one face
+and an accelerometer at $(x_s,y_s)=(60,100)\,\si{mm}$
+\citep{WangSongLiu2019}.  Under Kirchhoff assumptions with the patch
+stiffness and inertia neglected, Hamilton's principle yields
+\begin{equation}
+D\,\nabla^4 w + \rho h_p \ddot w
+ = f(x,y,t)
+ - q\,V(t)\left[\Delta\delta'_u(x)\,\Delta H_v(y)
+ + \Delta H_u(x)\,\Delta\delta'_v(y)\right],
+\label{eq:pde}
+\end{equation}
+where $D = E h_p^3/12(1-\nu^2)$, $\Delta H$ and $\Delta\delta'$ are
+differences of Heaviside and Dirac-derivative distributions locating the
+patch edges, and the electromechanical constant follows the
+Crawley--de Luis thin-patch result \citep{CrawleyDeLuis1987,Preumont2011}
+\begin{equation}
+q=\kappa_a\,\frac{E_p d_{31}(h_p+h_a)}{2(1-\nu_p)} ,
+\label{eq:q}
+\end{equation}
+i.e.\ the energized patch applies the uniform biaxial bending moment
+$m_p = qV$ per unit length along its boundary.  The dimensionless
+authority factor $\kappa_a$ absorbs bonding-layer and effective-constant
+uncertainty; it is identified below from the static deflections measured
+in \citep{WangSongLiu2019}.
+
+Equation~\eqref{eq:pde} is discretized with the 12-DOF nonconforming ACM
+rectangular element (nodal DOFs $w, w_{,x}, w_{,y}$) on a
+$60\times60$ mesh chosen so the patch edges coincide with mesh lines.
+Integrating the distributional actuation term by parts twice gives the
+consistent actuation vector
+\begin{equation}
+B_{a,i} = -q \iint_{\text{patch}}
+\left(\psi_{i,xx}+\psi_{i,yy}\right)\mathrm{d}A ,
+\label{eq:Ba}
+\end{equation}
+evaluated by Gauss quadrature per element, so that
+$\mathbf M\ddot{\mathbf u} + \mathbf K\mathbf u = \mathbf F(t) +
+\mathbf B_a V(t)$.
+The first computed natural frequencies (239.6, 579.6, 1461.6, 1874.8,
+2118.1~Hz) agree with Leissa's cantilever-plate coefficients
+\citep{Leissa1969} to within 1\% (Table~\ref{tab:modes};
+Fig.~\ref{fig:modes}), and mesh convergence is below 0.5\% from the
+$20\times20$ mesh onward.  A uniform modal damping ratio
+$\zeta=3.08\%$ is used, identified from the modal masses, stiffnesses and
+damping coefficients tabulated in \citep{WangSongLiu2019}.  With
+$\kappa_a=6.8$ the static top-edge deflection at \SI{1200}{V} matches the
+measured $\sim\SI{0.56}{mm}$ (Fig.~\ref{fig:static}), grounding the
+actuator authority in the reference experiment.
+
+\begin{table}[tb]
+\centering\small
+\caption{Computed natural frequencies vs.\ Leissa's CFFF coefficients
+($\nu$ difference explains most of the deviation).}
+\label{tab:modes}
+\begin{tabular}{lccccc}
+\toprule
+Mode & 1 & 2 & 3 & 4 & 5\\
+\midrule
+$f$ [Hz] & 239.6 & 579.6 & 1461.6 & 1874.8 & 2118.1\\
+$\lambda^2$ (FEM) & 3.461 & 8.370 & 21.11 & 27.08 & 30.59\\
+$\lambda^2$ \citep{Leissa1969} & 3.492 & 8.525 & 21.43 & 27.33 & 31.11\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_modes.png}
+\caption{First six mode shapes of the plate--actuator system.}
+\label{fig:modes}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.5\linewidth]{fig_static.png}
+\caption{Static top-edge deflection under actuator voltage; the
+identified authority factor reproduces the measurements of
+\citep{WangSongLiu2019} (their Fig.~11).}
+\label{fig:static}
+\end{figure}
+
+Mass-normalized modal truncation yields, for mode $k$,
+\begin{equation}
+\ddot\eta_k + 2\zeta_k\omega_k\dot\eta_k + \omega_k^2\eta_k
+ = b_{a,k} V(t) + \phi_k\!\big(\xc(t)\big)\, F_n(t) ,
+\qquad
+a(t) = \sum_k \phi^{s}_k \ddot\eta_k ,
+\label{eq:modal}
+\end{equation}
+with $b_{a,k}=\bm\Phi_k^{\!\top}\mathbf B_a$, $\phi_k(x)$ the mode shape
+along the cutter path ($y_c=\SI{117}{mm}$), $\phi_k^s$ its value at the
+accelerometer, and $F_n$ the plate-normal cutting force applied at the
+moving position $\xc(t)$.  Equation~\eqref{eq:modal} exhibits the central
+structural fact exploited in Section~\ref{sec:control}: \emph{the pair}
+$(b_a,\phi^s)$ \emph{is constant; only the disturbance input row}
+$\phi(\xc)$ \emph{and the performance output row}
+$\phi(\xc)$ \emph{travel with the cutter}.
+
+\subsection{Milling force with regeneration}
+\label{sec:milling}
+
+The reference process is side milling of the near-free-edge strip: a
+four-flute carbide end mill (diameter \SI{12}{mm}, \SI{7000}{rpm}, feed
+\SI{720}{mm/min}, radial depth $a_e=\SI{0.2}{mm}$, axial band
+$a_p=\SI{3}{mm}$) traverses the path in \SI{10}{s}
+\citep{WangSongLiu2019}.  With tooth angle $\varphi_j$ measured from the
+surface normal and the wall deflection $w$ positive toward the tool, the
+chip thickness and the plate-normal force on the workpiece are
+\begin{equation}
+h_j = \big[f_z\sin\varphi_j + (w(t)-w(t-\tau))\cos\varphi_j
+ + \Delta r_j\big]\, g(\varphi_j),\qquad
+F_n = -\sum_j K_t a_p h_j\,(\sin\varphi_j + K_r\cos\varphi_j),
+\label{eq:force}
+\end{equation}
+with $h_j\le 0$ clipped (tooth jump-out), $g$ the engagement window,
+$\tau$ the tooth period, $\Delta r_j$ optional per-tooth runout, and
+$K_t=\SI{796}{MPa}$, $K_r=0.212$ typical of Al alloys
+\citep{Altintas2012}.  The linearized orientation-averaged regenerative
+gain is negative (force opposes penetration), reproducing classical
+stability behaviour: the critical depth from the direct Nyquist criterion
+on $L(\omega)= a_p (K_t\alpha/2\pi)(1-e^{-j\omega\tau})H(j\omega)$ agrees
+with the growth threshold of the linearized time-domain simulation within
+6\% at half immersion (Sec.~\ref{sec:results:model}).
+
+Two features of the nominal process shape the control problem
+(Fig.~\ref{fig:force}).  First, the force is an impulsive train at
+$\TPF=\SI{466.7}{Hz}$ whose fourth harmonic (\SI{1866.8}{Hz}) falls
+within 0.5\% of mode~4 (\SI{1874.8}{Hz}): the forced response is
+near-resonant, explaining the position-dependent severity observed
+experimentally in \citep{WangSongLiu2019}.  Second, at the path ends the
+open-loop regenerative margin drops below the nominal depth, so the
+uncontrolled process operates in the amplitude-bounded (jump-out
+saturated) chatter regime there---any candidate controller must not
+degrade this margin.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_force.png}
+\caption{Rigid-workpiece milling force: pulse train (left) and its
+harmonic content at TPF multiples (right).}
+\label{fig:force}
+\end{figure}
+
+\subsection{Sensing chain, actuation chain, and truth model}
+\label{sec:chain}
+
+Following the reference hardware, the accelerometer signal passes an
+analog second-order Butterworth low-pass (\SI{2.5}{kHz}) before being
+sampled at $f_s=\SI{10}{kHz}$; the controller output is applied through a
+high-voltage amplifier saturating at $[-500, 1500]\,\si{V}$ with one
+sample of computation delay.  The evaluation ("truth") model retains 20
+modes (up to $\sim\SI{9.6}{kHz}$), integrated by exact per-mode
+zero-order-hold propagation at \SI{50}{kHz} substeps with the nonlinear
+regenerative force \eqref{eq:force} evaluated per substep from a delayed
+ring buffer; the analog filter runs at the substep rate so that
+above-Nyquist modes alias into the sampled measurement exactly as through
+the physical chain; white measurement noise of \SI{0.05}{m/s^2} RMS is
+added at the sampler.  In-process material removal is represented by a
+per-element thickness reduction behind the cutter; over one pass it
+shifts the modal frequencies by at most \RemovalDrift, and is included
+both as a scheduled plant drift in dedicated runs and within the
+robustness envelope of Sec.~\ref{sec:results:robust}.
+
+\section{Position-scheduled harmonic LQG control}
+\label{sec:control}
+
+\subsection{Design model: composite discretization and disturbance
+augmentation}
+\label{sec:design-model}
+
+The design model retains $n_m=6$ modes.  Because the analog filter
+precedes the sampler, the modal equations and the filter are discretized
+\emph{jointly}: with continuous state
+$\mathbf x_{mf}=[\bm\eta;\dot{\bm\eta};\mathbf x_f]$,
+\begin{equation}
+\mathbf x_{mf}[k\!+\!1] = \mathbf A_d\,\mathbf x_{mf}[k]
+ + \mathbf b_V u_a[k] + \mathbf P_d\,\bm\phi(\xc)\,d[k],
+\qquad y[k] = \mathbf c_y^{\!\top}\mathbf x_{mf}[k],
+\label{eq:composite}
+\end{equation}
+where $(\mathbf A_d,\mathbf b_V,\mathbf P_d)$ is the ZOH discretization
+of the composite system at $T_s=1/f_s$, $u_a$ the applied (saturated,
+delayed) voltage, and $d$ the scalar cutting-force disturbance.  The
+periodic force is modelled by the internal-model states
+\begin{equation}
+\mathbf z = [z_0;\; z_{1,1}, z_{1,2};\;\dots;\; z_{H,1}, z_{H,2}],
+\qquad
+\mathbf z_h[k\!+\!1] = \rho\,
+\begin{bmatrix}\cos\theta_h & \sin\theta_h\\
+ -\sin\theta_h & \cos\theta_h\end{bmatrix}\mathbf z_h[k],
+\quad \theta_h = h\,\Omega_{tp} T_s,
+\label{eq:phasors}
+\end{equation}
+with $H=4$ harmonics, a DC state $z_0$ for the mean push-off force, and
+$\Omega_{tp}=2\pi\TPF$ synchronized to the spindle encoder (the
+``adaptive'' element: a speed change re-tunes
+$\theta_h$ directly).  The leakage $\rho=0.99995$ replaces the exact
+marginally stable internal model \citep{FrancisWonham1976} with a
+contraction whose budget $(1-\rho)$ absorbs model mismatch; the induced
+steady cancellation bias is $O(1\%)$, standard practice in repetitive and
+adaptive-feedforward control \citep{Kurniawan2014,Bodson1997}.
+
+Because the intersample behaviour of $d$ is sinusoidal, not
+zero-order-held, the phasor states couple into \eqref{eq:composite}
+through the \emph{exact} sinusoid discretization
+\begin{equation}
+\mathbf M_h(\xc) = \big(e^{j\theta_h}\mathbf I - \mathbf A_d\big)
+\big(j h\Omega_{tp}\mathbf I - \mathbf A\big)^{-1}
+\mathbf P\,\bm\phi(\xc),
+\qquad
+\Delta\mathbf x_{mf} = \operatorname{Re}\mathbf M_h\, z_{h,1}
+ + \operatorname{Im}\mathbf M_h\, z_{h,2},
+\label{eq:sincoupling}
+\end{equation}
+which matters at the higher harmonics where a ZOH approximation rotates
+the phase by tens of degrees per sample.  The augmented state
+$\hat{\mathbf x} = [\mathbf x_{mf};\mathbf z;u_{\mathrm{prev}}]$ (the
+delay state completes the model) has dimension $2n_m{+}2{+}(2H{+}1){+}1=24$.
+
+\subsection{Estimation, scheduled feedback, and scheduled harmonic
+cancellation}
+\label{sec:law}
+
+A steady-state Kalman predictor is designed on a grid of 31 cutter
+positions (the position enters only the disturbance coupling columns),
+with process noise on the modal velocities and on the phasor states and
+the measured-noise variance of the sensing chain; on-circle internal
+models make the standard DARE solvers fail, so the Riccati difference
+equation is iterated to stationarity.  At runtime the predictor uses the
+position-continuous model matrices and gains interpolated from the grid,
+and is driven by the \emph{saturated} control (anti-windup):
+\begin{equation}
+\hat{\mathbf x}[k\!+\!1] = \mathbf A(\xc)\hat{\mathbf x}[k]
+ + \mathbf b\,\operatorname{sat}(u[k])
+ + \mathbf L(\xc)\big(y[k] - \mathbf c^{\!\top}(\xc)\hat{\mathbf x}[k]\big).
+\label{eq:kf}
+\end{equation}
+
+The control combines a position-scheduled LQR on the controllable
+subsystem $[\mathbf x_{mf};u_{\mathrm{prev}}]$ with cost
+\begin{equation}
+J = \sum_k \big(\bm\phi(\xc[k])^{\!\top}\hat{\bm\eta}[k]\big)^2
+ + r_u\, u[k]^2 ,
+\label{eq:lqr}
+\end{equation}
+i.e.\ the deflection at the \emph{moving cutting point} is weighted---the
+rigorous form of the idea approximated by heuristic gain scheduling in
+\citep{WangSongLiu2019}---and a disturbance-accommodating harmonic
+cancellation \citep{Johnson1971}: with
+$G_u(z)$ and $G_{d,h}(z)$ the design-model transfers from the (delayed)
+control and from harmonic $h$ to the cutting-point deflection, the
+cancelling phasor gain is the Tikhonov-regularized inversion
+\begin{equation}
+\Lambda_h(\xc) = \frac{G_{d,h}\,\overline{G_u}}
+ {|G_u|^2+\varepsilon^2},\qquad
+u_{\mathrm{ff}} = -\operatorname{Re}\Lambda_0\, \hat z_0
+ - \sum_{h=1}^{H}\big(\operatorname{Re}\Lambda_h\,\hat z_{h,1}
+ + \operatorname{Im}\Lambda_h\,\hat z_{h,2}\big),
+\label{eq:ff}
+\end{equation}
+all evaluated at $z_h=e^{j\theta_h}$ and scheduled on $\xc$.  The total
+command is $u = -\mathbf K(\xc)\,[\hat{\mathbf x}_{mf};
+\hat u_{\mathrm{prev}}] + u_{\mathrm{ff}}$, saturated by the amplifier.
+The LQR weight $r_u$ is auto-tuned: a bisection finds the most aggressive
+weight whose frozen closed loop against the \emph{full 20-mode} model
+keeps all structural eigenvalues below $0.997$ and all internal-model
+eigenvalues within half the leakage budget along the whole path, backed
+off by a factor of 3.
+
+\subsection{Spillover verification and masking}
+\label{sec:spillover}
+
+The inversion \eqref{eq:ff} is computed on the reduced model; at
+positions where the actuation authority at a harmonic is carried by a
+small difference of modal tails (e.g.\ the second harmonic near the path
+midpoint, which falls between modes~2 and~3 while mode~2 decouples from
+the $x$-symmetric patch), residual-mode truncation can flip its phase and
+push the corresponding internal-model pole outside the unit circle---a
+harmonic-specific observation/control spillover \citep{Balas1978}.  A
+verification loop against the full-order model therefore checks the
+frozen internal-model poles along the path and locally backs off the
+offending $\Lambda_h$ until the whole path verifies (converged in three
+iterations here, masking only the weak-authority second harmonic around
+mid-path, where its contribution to the response is correspondingly
+small).
+
+\subsection{Stability argument}
+\label{sec:stability}
+
+Three complementary layers support closed-loop stability claims:
+(i)~\emph{frozen-position analysis}: the exact discrete closed loop
+(20-mode composite plant, delay, filter, full controller) has spectral
+radius $\le 0.99995$ at every point of a dense path grid
+(Fig.~\ref{fig:frozen}), the bound being attained only by the
+internal-model pole cluster at its leakage budget;
+(ii)~\emph{slow variation}: the schedule traverses the path in
+\SI{10}{s}, i.e.\ the scheduling parameter moves by one grid cell per
+$\sim$3300 control samples, orders of magnitude slower than the
+millisecond loop dynamics, so frozen-point conclusions carry over by
+standard slowly-varying-systems arguments; the KF/LQR gains vary smoothly
+along the grid (Fig.~\ref{fig:gains} shows the baselines' gains; the
+scheduled Riccati gains are smoother still);
+(iii)~\emph{a posteriori verification}: all reported closed-loop passes,
+including the Monte-Carlo perturbations, are full nonlinear time-domain
+simulations of the time-varying loop with the regenerative delay closed;
+no run exhibits divergence or persistent saturation.  The regenerative
+loop itself is assessed by the stability-lobe analysis of
+Sec.~\ref{sec:results:sld} using the frozen \emph{closed-loop} FRFs.
+
+\section{Baseline controllers}
+\label{sec:baselines}
+
+\textbf{CPD.}  A constant PD on the filtered acceleration,
+$u=-(k_p y + k_d\Delta y)$, with $(k_p,k_d)$ selected by a signed
+log-grid search minimizing the worst-case response to the actual force
+harmonics over five path positions, subject to (a)~frozen stability,
+(b)~non-degradation of the regenerative margin
+($a_{\mathrm{crit}}^{\mathrm{cl}} \ge
+\min(0.9\,a_{\mathrm{crit}}^{\mathrm{ol}},\,1.3\,a_p)$), and
+(c)~final verification by nonlinear simulation.  This gives the constant
+law of \citep{WangSongLiu2019} a considerably stronger tuning than in the
+original work.
+
+\textbf{VPD.}  The published time-space varying PD, re-derived with the
+same budget: per-position optimization of $(k_p(x),k_d(x))$ (seeded with
+the CPD optimum), followed by the quintic-polynomial smoothing of
+\citep{WangSongLiu2019}.  We found that the smoothing step is not
+benign: at mid-path the point-wise stabilizing gains dip (the local
+stability limit is lower), the quintic bridges over the dip, and the
+fitted profile destabilizes the loop---an instability that frozen
+eigenvalue analysis confirms and that frequency-domain chatter checks
+alone miss because the nominal speed sits in a phase-sensitive stability
+pocket of the interrupted-cutting regenerative loop.  The baseline
+therefore includes a post-fit verification that shrinks the profiles
+until frozen, regenerative, and nonlinear-simulation checks all pass.
+This safeguard is itself one of the paper's findings: the published VPD
+parameterization requires re-verification after smoothing.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_gains.png}
+\caption{Tuned baseline gain profiles: VPD position-varying gains
+(quintic-parameterized, post-verified) vs.\ the constant CPD gains.}
+\label{fig:gains}
+\end{figure}
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Model validation}
+\label{sec:results:model}
+
+Frequencies, mode shapes, actuator statics and the force model were
+validated in Sec.~\ref{sec:model} (Table~\ref{tab:modes},
+Figs.~\ref{fig:modes}--\ref{fig:force}); the regenerative implementation
+was cross-validated against the direct Nyquist criterion (6\% agreement
+of the critical depth at half immersion, where the zero-order averaging
+is reliable).  The complete parameter set is listed in
+Appendix~\ref{app:params}; the repository accompanying the paper
+regenerates every figure from source.
+
+\subsection{Milling-pass comparison}
+\label{sec:results:passes}
+
+Figure~\ref{fig:passes} shows the deflection at the moving cutting point
+over the full \SI{10}{s} pass for no control, CPD, VPD, and PSH-LQG;
+Fig.~\ref{fig:p159} shows the fixed monitoring points 1, 5, 9 of
+\citep{WangSongLiu2019}; Fig.~\ref{fig:path} condenses the pass into the
+along-path AC-RMS profile and the surface profile proxy (deflection
+sampled at the surface-generation instants, i.e.\ the tooth passages
+through the surface tangent).  Table~\ref{tab:metrics} and
+Fig.~\ref{fig:bars} summarize.
+
+The uncontrolled response varies strongly along the path (near-resonant
+fourth-harmonic amplification, marginal regenerative behaviour at the
+ends).  CPD attenuates broadly but unevenly; VPD, honestly tuned and
+safeguarded, is comparable to CPD (its published advantage over CPD
+stemmed largely from a weakly tuned constant baseline).  PSH-LQG reduces
+the cutting-point AC RMS by \RedPSH\ (vs.\ \RedCPD\ for CPD and
+\RedVPD\ for VPD), flattens the along-path profile (uniformity
+coefficient \UnifPSH\ vs.\ \UnifOpen\ uncontrolled), suppresses the
+harmonic lines by 20--40~dB (Fig.~\ref{fig:volt}, right), and does so
+with moderate voltage (RMS \VrmsPSH, no saturation in the nominal pass;
+Fig.~\ref{fig:volt}, left).  The surface-proxy standard deviation drops
+by a factor of \SurfPSH.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.92\linewidth]{fig_passes_time.png}
+\caption{Deflection at the moving cutting point during the full pass.}
+\label{fig:passes}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.92\linewidth]{fig_points_159.png}
+\caption{Deflection at fixed monitoring points 1, 5, 9 (cf.\ Figs.~15--17
+of \citep{WangSongLiu2019}).}
+\label{fig:p159}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_along_path.png}
+\caption{Along-path AC-RMS of the cutting-point deflection (left, log
+scale) and surface profile proxy (right).}
+\label{fig:path}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_voltage_spectra.png}
+\caption{Actuator voltage histories (left) and mid-pass spectra of the
+cutting-point deflection (right; vertical lines mark TPF harmonics).}
+\label{fig:volt}
+\end{figure}
+
+\begin{table}[tb]
+\centering\small
+\caption{Pass metrics (0.5--10\,s window). \InsertMetricsTable}
+\label{tab:metrics}
+\end{table}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_bars.png}
+\caption{Summary metrics of the pass comparison.}
+\label{fig:bars}
+\end{figure}
+
+\subsection{Frozen stability and stability lobes}
+\label{sec:results:sld}
+
+Figure~\ref{fig:frozen} confirms the frozen spectral radii along the
+path.  Figure~\ref{fig:sld} shows the stability lobes computed by the
+direct Nyquist criterion on the frozen closed-loop FRFs at points 1, 5,
+9: PSH-LQG raises the critical depth at the nominal speed at the
+path-end points where the open loop is marginal, while the PD baselines
+mainly preserve it.  (Zero-order averaging at 1.7\% immersion is
+conservative in absolute terms; the comparison across controllers, which
+share the same force model, is the meaningful content.)
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.5\linewidth]{fig_frozen.png}
+\caption{Frozen closed-loop spectral radius along the cutter path.}
+\label{fig:frozen}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_sld.png}
+\caption{Stability lobes from frozen closed-loop FRFs at points 1, 5, 9;
+dotted lines mark the nominal $a_p$ and spindle speed.}
+\label{fig:sld}
+\end{figure}
+
+\subsection{Robustness}
+\label{sec:results:robust}
+
+Twelve Monte-Carlo passes perturb simultaneously the truth-model
+frequencies ($\pm3\%$, covering both identification error and the
+material-removal drift), damping ($\pm30\%$), force level ($\pm20\%$),
+per-tooth runout (0--\SI{5}{\micro m}, which injects spindle-frequency
+lines \emph{not} present in the internal model), and the computation
+delay (doubled in 30\% of runs), with the controller kept at its nominal
+design.  Figure~\ref{fig:robust} shows the distribution of RMS reduction
+factors: PSH-LQG retains a median reduction of \MCmedPSH\ (worst case
+\MCminPSH), degrading gracefully, and never destabilizes nor saturates
+persistently.  A dedicated pass against the drifting-frequency plant
+(scheduled material removal) matches the nominal performance within
+\RemovalPerf.  Under spindle-speed changes (Fig.~\ref{fig:rpm}), the
+encoder-synchronized internal model retains its performance at 6000 and
+8000~rpm, while a detuned internal model (left at the 7000-rpm TPF)
+loses most of the harmonic-rejection benefit---quantifying the value of
+the adaptive element and the caveat of \citep{Kinney2011}.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.42\linewidth]{fig_robust.png}
+\caption{Monte-Carlo robustness: RMS reduction factors under combined
+plant/force/delay/runout perturbations.}
+\label{fig:robust}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.45\linewidth]{fig_rpm.png}
+\caption{Spindle-speed sweep: encoder-adaptive vs.\ detuned internal
+model.}
+\label{fig:rpm}
+\end{figure}
+
+\subsection{Discussion and limitations}
+\label{sec:results:disc}
+
+The comparison isolates \emph{where} the advantage of PSH-LQG comes
+from: (i)~the Kalman predictor turns the single non-collocated
+accelerometer into an estimate of the full modal state \emph{and} of the
+harmonic force content, where PD acts on the raw local signal;
+(ii)~the internal model concentrates actuation authority exactly on the
+force lines that dominate the surface error, where PD spends authority
+broadband; (iii)~the scheduled weights aim that authority at the moving
+cutting point, which is the rigorous version of the VPD intuition.  The
+architecture inherits LQG's lack of guaranteed margins; that is mitigated
+here operationally (auto-tuned $r_u$ against the full-order model,
+spillover masking, leakage budget) and verified a posteriori, but a
+scheduled $H_\infty$/LMI synthesis with certified parameter-rate bounds
+is a natural extension.  The study is simulation-based; the simulator is
+deliberately harsher than the design model (order, nonlinearity, noise,
+saturation, delay, drift), and every hardware parameter is anchored to
+the published experiment, yet cutting tests remain the necessary next
+step.  Piezo hysteresis and amplifier bandwidth are not modelled
+\citep{Sun2025Review}; the scheduling map is offline-FEM-derived, and
+coupling it to online model updating \citep{Shi2023,TuysuzAltintas2017}
+is a promising direction.
+
+\section{Conclusions}
+\label{sec:concl}
+
+A position-scheduled harmonic LQG architecture was developed for active
+vibration suppression in thin-walled plate milling with a fixed
+piezoelectric patch and a single fixed accelerometer.  The formulation
+recognizes that the plant is LTI while the disturbance input and the
+performance output travel with the cutter, and therefore schedules the
+Kalman disturbance coupling, the LQR performance weight, and a
+regularized harmonic-cancellation inversion on the cutter position, with
+an encoder-adaptive internal model of the tooth-passing force harmonics.
+Implementation realism (saturation with anti-windup, computation delay,
+analog anti-aliasing, spillover masking against the full-order model) is
+part of the design, and the evaluation closes the nonlinear regenerative
+loop on a 20-mode truth model.  Against honestly tuned PD baselines---
+including a faithful, safeguarded re-derivation of the published VPD
+strategy, whose quintic gain smoothing is shown to require post-fit
+stability verification---the proposed controller delivers an
+order-of-magnitude, nearly position-uniform reduction of the
+cutting-point vibration, enlarges the predicted stability envelope where
+the process is marginal, and is robust to plant, force, delay, runout,
+spindle-speed and material-removal perturbations.  The complete model,
+controllers, and campaign are released as an open repository to serve as
+a reproducible benchmark for time-space varying machining control.
+
+\appendix
+
+\section{Parameters}
+\label{app:params}
+\begin{table}[h]
+\centering\small
+\caption{Complete parameter set (SI units except as noted).}
+\begin{tabular}{llll}
+\toprule
+Plate & $120\times120\times4$ mm, clamped at $y{=}0$ &
+$E$ & \SI{70.3}{GPa}\\
+$\nu$, $\rho$ & 0.33, \SI{2680}{kg/m^3} & $\zeta$ & 3.08\%\\
+Patch & $[50,70]\times[20,58]$ mm, $h_a{=}\SI{0.4}{mm}$ &
+$E_p$, $\nu_p$, $d_{31}$ & \SI{61}{GPa}, 0.35, \SI{-274}{pm/V}\\
+Authority $\kappa_a$ & 6.8 (identified) &
+Accelerometer & $(60,100)$ mm\\
+Mill & 4 flutes, \diameter\SI{12}{mm}, up-milling &
+$n$, feed & \SI{7000}{rpm}, \SI{720}{mm/min}\\
+$a_e$, $a_p$ & 0.2, \SI{3}{mm} & $K_t$, $K_r$ & \SI{796}{MPa}, 0.212\\
+Path & $y_c{=}\SI{117}{mm}$, 0--\SI{120}{mm} in \SI{10}{s} &
+$f_s$, delay & \SI{10}{kHz}, 1 sample\\
+Filter & Butterworth 2nd order, \SI{2.5}{kHz} &
+Saturation & $[-500,1500]$ V\\
+Design model & $n_m{=}6$, $H{=}4$, $\rho{=}0.99995$ &
+Truth model & 20 modes, \SI{50}{kHz} substeps\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Exact sinusoid discretization}
+\label{app:sindisc}
+For $\dot{\mathbf x} = \mathbf A\mathbf x + \mathbf B d$ with
+$d(t)=\operatorname{Re}\{a_k e^{j\omega (t-kT_s)}\}$ on
+$[kT_s,(k{+}1)T_s)$,
+\[
+\mathbf x[k\!+\!1] = e^{\mathbf A T_s}\mathbf x[k]
+ + \operatorname{Re}\big\{\big(e^{j\omega T_s}\mathbf I -
+ e^{\mathbf A T_s}\big)(j\omega\mathbf I-\mathbf A)^{-1}\mathbf B\,
+ a_k\big\},
+\]
+which follows from evaluating
+$\int_0^{T_s} e^{\mathbf A (T_s-s)}\mathbf B e^{j\omega s}\,\mathrm{d}s$
+in closed form.  The phasor $a_k=\hat z_{h,1}-j\hat z_{h,2}$ links to the
+rotation states \eqref{eq:phasors}.
+
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

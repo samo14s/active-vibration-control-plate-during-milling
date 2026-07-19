@@ -308,8 +308,12 @@ class PshlqgConfig:
     q_perf: float = 1.0         # weight on cutting-point deflection^2
     r_u: float = 1e-14          # weight on voltage^2 (sets authority usage)
     q_modal: float = 1e-8       # process noise, modal accelerations
-    q_dist: float = 1e-2        # process noise, harmonic force states [N^2/step]
-    q_dc: float = 1e-2
+    q_dist: float = 1e-3        # process noise, harmonic force states [N^2/step]
+    q_dc: float = 1.0           # broadband (random-walk) force state: large
+                                # enough to track the sub-harmonic content of
+                                # amplitude-bounded chatter in the
+                                # quasi-static band below mode 1, where the
+                                # static inversion phase is reliable
     r_meas: float = 2.5e-3      # measurement noise variance [(m/s^2)^2]
     reg_ff: float = 0.05        # Tikhonov regularization of harmonic inversion
     rho_dist: float = 0.99995   # internal-model leakage: trades an O(0.01)

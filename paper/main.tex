@@ -51,17 +51,22 @@ regularized model inversion cancels the estimated harmonics there.
 Actuator saturation, one-sample computation delay, and the analog
 anti-aliasing chain are included in the design model; spillover is bounded
 by a verification-driven per-harmonic gain mask against the full-order
-model.  On a finite-element benchmark reproducing a published experimental
-plate-milling configuration---evaluated on a 20-mode truth model with the
-nonlinear regenerative force loop closed---the proposed controller reduces
-the vibration RMS at the moving cutting point by a factor of
-\RedPSH\ (versus \RedCPD\ for an optimally tuned constant PD and
-\RedVPD\ for the published time-space varying PD given the same tuning
-budget), makes the response nearly uniform along the path, enlarges the
-predicted stability lobes at the nominal speed, and retains its
-performance under $\pm 3\%$ modal-frequency error, $\pm 30\%$ damping
-error, $\pm 20\%$ force-coefficient error, cutter runout, doubled
-computation delay, and in-process material removal.
+model.  A broadband random-walk force state complements the harmonic model where
+amplitude-bounded chatter concentrates sub-harmonic content below the
+first plate mode.  On a finite-element benchmark reproducing a published
+experimental plate-milling configuration---evaluated on a 20-mode truth
+model with the nonlinear regenerative force loop closed, including the
+multi-delay surface-memory mechanism that bounds supercritical
+chatter---the proposed controller reduces the vibration RMS at the
+moving cutting point by a factor of \RedPSH\ over the pass (versus
+\RedCPD\ for an optimally tuned constant PD and \RedVPD\ for the
+published time-space varying PD given the same tuning budget),
+approaching an order of magnitude in the forced-vibration regime that
+dominates the path, nearly doubles the critical depth of cut predicted
+from the closed-loop frequency functions, and retains its performance
+under $\pm 3\%$ modal-frequency error, $\pm 30\%$ damping error,
+$\pm 20\%$ force-coefficient error, cutter runout, doubled computation
+delay, and in-process material removal.
 \end{abstract}
 
 \noindent\textbf{Keywords:} thin-walled milling; active vibration control;
@@ -300,10 +305,21 @@ F_n = -\sum_j K_t a_p h_j\,(\sin\varphi_j + K_r\cos\varphi_j),
 with $h_j\le 0$ clipped (tooth jump-out), $g$ the engagement window,
 $\tau$ the tooth period, $\Delta r_j$ optional per-tooth runout, and
 $K_t=\SI{796}{MPa}$, $K_r=0.212$ typical of Al alloys
-\citep{Altintas2012}.  The linearized orientation-averaged regenerative
-gain is negative (force opposes penetration), reproducing classical
-stability behaviour: the critical depth from the direct Nyquist criterion
-on $L(\omega)= a_p (K_t\alpha/2\pi)(1-e^{-j\omega\tau})H(j\omega)$ agrees
+\citep{Altintas2012}.  Beyond the linear stability limit the amplitude
+is bounded by two physical mechanisms that a single-delay model lacks:
+\emph{surface memory}---a tooth that jumps out leaves the surface of an
+older pass, so the effective delay and the accumulated feed become
+$m\tau$ and $m f_z$ with $m$ the consecutive missed passes
+\citep{Insperger2004}---and the finite radially available material,
+which caps the chip thickness.  Both are implemented in the simulator
+(consecutive-miss counter per engagement window, $m\le 8$; chip cap
+$a_e + m_{\max}f_z$); without them, strongly supercritical cuts diverge
+unphysically instead of settling into the finite-amplitude
+(``saturated'') chatter observed experimentally.  The linearized
+orientation-averaged regenerative gain is negative (force opposes
+penetration), reproducing classical stability behaviour: the critical
+depth from the direct Nyquist criterion on
+$L(\omega)= a_p (K_t\alpha/2\pi)(1-e^{-j\omega\tau})H(j\omega)$ agrees
 with the growth threshold of the linearized time-domain simulation within
 6\% at half immersion (Sec.~\ref{sec:results:model}).
 
@@ -376,10 +392,16 @@ periodic force is modelled by the internal-model states
 \quad \theta_h = h\,\Omega_{tp} T_s,
 \label{eq:phasors}
 \end{equation}
-with $H=4$ harmonics, a DC state $z_0$ for the mean push-off force, and
-$\Omega_{tp}=2\pi\TPF$ synchronized to the spindle encoder (the
-``adaptive'' element: a speed change re-tunes
-$\theta_h$ directly).  The leakage $\rho=0.99995$ replaces the exact
+with $H=4$ harmonics and $\Omega_{tp}=2\pi\TPF$ synchronized to the
+spindle encoder (the ``adaptive'' element: a speed change re-tunes
+$\theta_h$ directly).  The state $z_0$ is a \emph{broadband random-walk
+force state}: with its process noise set well above that of the phasor
+states, the Kalman filter uses it to track the slowly varying and
+sub-harmonic force content that does not fit the harmonic model---in
+particular the amplitude-bounded chatter of supercritical path regions,
+whose limit-cycle spectrum concentrates near $\TPF/m$ \emph{below} the
+first plate mode, i.e.\ in the quasi-static band where the static
+inversion phase used for its cancellation is reliable.  The leakage $\rho=0.99995$ replaces the exact
 marginally stable internal model \citep{FrancisWonham1976} with a
 contraction whose budget $(1-\rho)$ absorbs model mismatch; the induced
 steady cancellation bias is $O(1\%)$, standard practice in repetitive and
@@ -556,18 +578,26 @@ sampled at the surface-generation instants, i.e.\ the tooth passages
 through the surface tangent).  Table~\ref{tab:metrics} and
 Fig.~\ref{fig:bars} summarize.
 
-The uncontrolled response varies strongly along the path (near-resonant
-fourth-harmonic amplification, marginal regenerative behaviour at the
-ends).  CPD attenuates broadly but unevenly; VPD, honestly tuned and
-safeguarded, is comparable to CPD (its published advantage over CPD
-stemmed largely from a weakly tuned constant baseline).  PSH-LQG reduces
-the cutting-point AC RMS by \RedPSH\ (vs.\ \RedCPD\ for CPD and
-\RedVPD\ for VPD), flattens the along-path profile (uniformity
-coefficient \UnifPSH\ vs.\ \UnifOpen\ uncontrolled), suppresses the
-harmonic lines by 20--40~dB (Fig.~\ref{fig:volt}, right), and does so
-with moderate voltage (RMS \VrmsPSH, no saturation in the nominal pass;
-Fig.~\ref{fig:volt}, left).  The surface-proxy standard deviation drops
-by a factor of \SurfPSH.
+The uncontrolled pass splits into two regimes.  Where the cut is
+regeneratively stable or mildly supercritical (most of the path), the
+response is forced vibration at the TPF harmonics with the near-resonant
+fourth-harmonic amplification; at the very compliant path ends the cut is
+far beyond the linear limit and settles into finite-amplitude chatter
+whose sub-harmonic limit cycle ($\sim\TPF/m$) is set by the jump-out
+geometry (feed per tooth), not by linear damping.  This regime split
+governs what any controller of this configuration can achieve: in the
+forced-vibration regime PSH-LQG suppresses the response by close to an
+order of magnitude (harmonic lines down 20--40~dB,
+Fig.~\ref{fig:volt} right), while in the saturated-chatter regions the
+achievable reduction is bounded for every controller---there PSH-LQG's
+broadband force state recovers the direct-damping benefit of the PD
+family.  Over the whole pass, PSH-LQG reduces the cutting-point AC RMS
+by \RedPSH\ (vs.\ \RedCPD\ for CPD and \RedVPD\ for VPD), with moderate
+voltage (RMS \VrmsPSH, no saturation; Fig.~\ref{fig:volt} left), and
+reduces the surface-proxy standard deviation by \SurfPSH; CPD and VPD,
+honestly tuned and safeguarded, are close to each other (the published
+advantage of VPD over CPD stemmed largely from a weakly tuned constant
+baseline).
 
 \begin{figure}[tb]
 \centering
@@ -682,11 +712,22 @@ model.}
 The comparison isolates \emph{where} the advantage of PSH-LQG comes
 from: (i)~the Kalman predictor turns the single non-collocated
 accelerometer into an estimate of the full modal state \emph{and} of the
-harmonic force content, where PD acts on the raw local signal;
+force content, where PD acts on the raw local signal;
 (ii)~the internal model concentrates actuation authority exactly on the
 force lines that dominate the surface error, where PD spends authority
 broadband; (iii)~the scheduled weights aim that authority at the moving
-cutting point, which is the rigorous version of the VPD intuition.  The
+cutting point, which is the rigorous version of the VPD intuition.
+Equally important is where the advantage \emph{ends}: in path regions cut
+far beyond the linear regenerative limit, the vibration amplitude is a
+geometric property of the jump-out limit cycle (of the order of the feed
+per tooth) that no controller of this actuator/sensor configuration can
+substantially lower---the honest engineering conclusion is that active
+control of the present kind complements, and does not replace,
+process-parameter selection in those regions.  The failed-variant record
+is also instructive: over-widened estimator bandwidths (large
+$q_{\mathrm{modal}}$ or $q_{\mathrm{dc}}$) are immediately flagged by
+the frozen-stability map before any simulation is run, illustrating the
+value of keeping the full-order verification inside the design loop.  The
 architecture inherits LQG's lack of guaranteed margins; that is mitigated
 here operationally (auto-tuned $r_u$ against the full-order model,
 spillover masking, leakage budget) and verified a posteriori, but a

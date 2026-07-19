@@ -91,6 +91,7 @@ class MillingForce:
         phis = np.mod(self.tooth_angles(t), 2.0 * np.pi)
         F = 0.0
         in_window = False
+        h_cap = m.ae + self._max_miss * m.fz   # radially available material
         for j, phi in enumerate(phis):
             if not (self.phi_st <= phi <= self.phi_ex):
                 continue
@@ -101,7 +102,7 @@ class MillingForce:
             if h <= 0.0:
                 continue
             self._cut_in_window = True
-            dFt = m.Kt * ap * h
+            dFt = m.Kt * ap * min(h, h_cap)
             F += -(dFt * np.sin(phi) + m.Kr * dFt * np.cos(phi))
         if self._in_window_prev and not in_window:
             # engagement window just ended: update the surface memory

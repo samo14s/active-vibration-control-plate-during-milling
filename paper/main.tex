@@ -62,8 +62,9 @@ moving cutting point by a factor of \RedPSH\ over the pass (versus
 \RedCPD\ for an optimally tuned constant PD and \RedVPD\ for the
 published time-space varying PD given the same tuning budget),
 approaching an order of magnitude in the forced-vibration regime that
-dominates the path, nearly doubles the critical depth of cut predicted
-from the closed-loop frequency functions, and retains its performance
+dominates the path, raises the critical depth of cut predicted from the
+closed-loop frequency functions by $2.8\times$ at mid-path and
+$4\times$ at the compliant path ends, and retains its performance
 under $\pm 3\%$ modal-frequency error, $\pm 30\%$ damping error,
 $\pm 20\%$ force-coefficient error, cutter runout, doubled computation
 delay, and in-process material removal.
@@ -632,8 +633,9 @@ cutting-point deflection (right; vertical lines mark TPF harmonics).}
 
 \begin{table}[tb]
 \centering\small
-\caption{Pass metrics (0.5--10\,s window). \InsertMetricsTable}
+\caption{Pass metrics (0.5--10\,s window).}
 \label{tab:metrics}
+\InsertMetricsTable
 \end{table}
 
 \begin{figure}[tb]
@@ -684,11 +686,17 @@ factors: PSH-LQG retains a median reduction of \MCmedPSH\ (worst case
 \MCminPSH), degrading gracefully, and never destabilizes nor saturates
 persistently.  A dedicated pass against the drifting-frequency plant
 (scheduled material removal) matches the nominal performance within
-\RemovalPerf.  Under spindle-speed changes (Fig.~\ref{fig:rpm}), the
-encoder-synchronized internal model retains its performance at 6000 and
-8000~rpm, while a detuned internal model (left at the 7000-rpm TPF)
-loses most of the harmonic-rejection benefit---quantifying the value of
-the adaptive element and the caveat of \citep{Kinney2011}.
+\RemovalPerf.  Under spindle-speed changes (Fig.~\ref{fig:rpm}), where the open-loop
+response grows by more than an order of magnitude (the harmonic comb
+sweeps across the plate resonances), the encoder-synchronized controller
+retains full performance ($53\times$ at 6000~rpm, $290\times$ at
+8000~rpm where the second harmonic sits near mode~2).  Notably, a
+controller with the internal model left detuned at the 7000-rpm TPF
+degrades only mildly (by 4--17\%): the scheduled LQR and the broadband
+force state carry most of the benefit, and the spindle-synchronous
+phasors provide the final refinement.  The architecture is thus robust
+to TPF misinformation rather than reliant on it---addressing the
+frequency-mismatch caveat of \citep{Kinney2011} by construction.
 
 \begin{figure}[tb]
 \centering
@@ -782,7 +790,7 @@ Patch & $[50,70]\times[20,58]$ mm, $h_a{=}\SI{0.4}{mm}$ &
 $E_p$, $\nu_p$, $d_{31}$ & \SI{61}{GPa}, 0.35, \SI{-274}{pm/V}\\
 Authority $\kappa_a$ & 6.8 (identified) &
 Accelerometer & $(60,100)$ mm\\
-Mill & 4 flutes, \diameter\SI{12}{mm}, up-milling &
+Mill & 4 flutes, $\varnothing$\,\SI{12}{mm}, up-milling &
 $n$, feed & \SI{7000}{rpm}, \SI{720}{mm/min}\\
 $a_e$, $a_p$ & 0.2, \SI{3}{mm} & $K_t$, $K_r$ & \SI{796}{MPa}, 0.212\\
 Path & $y_c{=}\SI{117}{mm}$, 0--\SI{120}{mm} in \SI{10}{s} &

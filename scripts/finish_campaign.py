@@ -60,35 +60,38 @@ def _mc_case(i: int) -> dict:
 
 
 def _build_psh_for_speed(sp, model, r_u0, f_dist):
-    """Per-speed design with a regenerative-margin gate: the closed loop
-    must not degrade the chatter limit at that speed's regenerative
-    delay; if it does, feedback authority is reduced and the design
-    re-verified."""
-    from avcp import PshlqgController, PshlqgConfig, MillingForce
-    from avcp.stability import closed_loop_frf_nn
-    mf = MillingForce(sp.milling)
-    r_u = r_u0
-    for _ in range(4):
-        ctl = PshlqgController(sp, model, PshlqgConfig(r_u=r_u),
+    """Per-speed design with simulation-validated authority selection:
+    frozen margins and the chatter limit do not predict closed-loop
+    AMPLITUDE in the finite-amplitude regenerative regime, so (as for
+    the PD baselines) the feedback-authority level is selected from a
+    small candidate set by short nonlinear simulations, with the
+    open-loop response as the fallback bar."""
+    from avcp import PshlqgController, PshlqgConfig, simulate
+    from avcp.metrics import summarize
+    T = 3.0
+    spf = copy.deepcopy(sp)
+    spf.milling.x_start, spf.milling.x_end = 0.055, 0.065
+    spf.milling.pass_time = T
+    ref = summarize(simulate(spf, model, controller=None, T=T, seed=3),
+                    T, settle=0.5)["rms_ac_wc"]
+    best, best_c = None, np.inf
+    for mult in (1.0, 10.0, 100.0):
+        ctl = PshlqgController(sp, model, PshlqgConfig(r_u=r_u0 * mult),
                                f_dist=f_dist)
         if not ctl.spillover_mask(model):
-            r_u *= 10.0
             continue
-        ok = True
-        for xp in (0.012, 0.06, 0.108):
-            a_ol = mf.a_crit_nyquist(
-                lambda w: closed_loop_frf_nn(sp, model, None, xp, w),
-                sp.milling.rpm, nf=12000)
-            a_cl = mf.a_crit_nyquist(
-                lambda w: closed_loop_frf_nn(sp, model, ctl, xp, w),
-                sp.milling.rpm, nf=12000)
-            if a_cl < 0.9 * a_ol:
-                ok = False
-                break
-        if ok:
-            return ctl
-        r_u *= 10.0
-    return ctl
+        r = simulate(spf, model, controller=ctl, T=T, seed=3)
+        s = summarize(r, T, settle=0.5)
+        c = s["rms_ac_wc"] / max(ref, 1e-12)
+        if s["sat_frac"] > 0.01:
+            c *= 10.0
+        if c < best_c:
+            best_c = c
+            best = PshlqgController(sp, model,
+                                    PshlqgConfig(r_u=r_u0 * mult),
+                                    f_dist=f_dist)
+            best.spillover_mask(model)
+    return best
 
 
 def _rpm_case(args) -> tuple[str, dict]:

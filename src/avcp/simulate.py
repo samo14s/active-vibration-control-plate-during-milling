@@ -119,7 +119,11 @@ def simulate(sys: SystemParams, model: ModalModel, controller=None,
     etad = np.zeros(n)
 
     # delayed command queue (computation delay)
-    cmd_queue = [0.0] * max(1, ctl.delay_steps)
+    if ctl.delay_steps < 1:
+        raise ValueError("delay_steps must be >= 1: the loop structure "
+                         "senses at the interval start, so a zero-delay "
+                         "controller cannot be represented")
+    cmd_queue = [0.0] * ctl.delay_steps
 
     t_out = np.arange(N) * Ts
     x_out = np.empty(N)
@@ -214,10 +218,18 @@ def simulate(sys: SystemParams, model: ModalModel, controller=None,
             bptr += 1
 
         if in_pass:
+            # surface imprint at the tooth-crossing instant tc: interpolate
+            # the substep-resolution deflection history (wbuf holds w at
+            # every substep; the last write corresponds to time tk + Ts)
+            t_end = tk + Ts
             for tc in surface_crossings(tk, tk + Ts):
+                idx = bptr - 1 - (t_end - tc) / dtp
+                i0 = int(np.floor(idx)) % buf_len
+                i1 = (i0 + 1) % buf_len
+                frac = idx - np.floor(idx)
                 surf_t.append(tc)
                 surf_x.append(mil.cutter_x(tc))
-                surf_w.append(float(phi_c @ eta))
+                surf_w.append((1.0 - frac) * wbuf[i0] + frac * wbuf[i1])
 
     return SimResult(t=t_out, x_cut=x_out, w_cut=wc_out, w_points=wp_out,
                      acc=acc_out, V=V_out, F=F_out,

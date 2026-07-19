@@ -25,7 +25,7 @@ def _mc_case(i: int) -> dict:
     _sys.path.insert(0, str(ROOT / "scripts"))
     rng = np.random.default_rng(7)
     perts = []
-    for _ in range(12):
+    for _ in range(20):
         perts.append({
             "df": float(rng.uniform(-0.03, 0.03)),
             "dz": float(rng.uniform(-0.3, 0.3)),
@@ -49,7 +49,7 @@ def _mc_case(i: int) -> dict:
     r = simulate(sp, pm, controller=None, T=T, seed=100 + i,
                  force_scale=1.0 + pert["dF"])
     row["open"] = summarize(r, sp.milling.pass_time)["rms_ac_wc"]
-    for name in ("cpd", "pshlqg"):
+    for name in ("cpd", "vpd", "pshlqg"):
         ctl = make_controllers(sys_p, model, tuning)[name]
         rc = simulate(sp, pm, controller=ctl, T=T, seed=100 + i,
                       force_scale=1.0 + pert["dF"])
@@ -89,11 +89,11 @@ def main():
     _sys.path.insert(0, str(ROOT / "scripts"))
     t0 = time.time()
     with ProcessPoolExecutor(max_workers=4) as ex:
-        mc_rows = list(ex.map(_mc_case, range(12)))
+        mc_rows = list(ex.map(_mc_case, range(20)))
     (RES / "robust.json").write_text(json.dumps(mc_rows, indent=1))
     for i, r in enumerate(mc_rows):
         print(f"mc{i}: open={r['open']:.2e} cpd={r['cpd']:.2e} "
-              f"pshlqg={r['pshlqg']:.2e}", flush=True)
+              f"vpd={r['vpd']:.2e} pshlqg={r['pshlqg']:.2e}", flush=True)
     print(f"MC done in {time.time()-t0:.0f}s", flush=True)
 
     t0 = time.time()

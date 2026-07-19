@@ -195,10 +195,12 @@ def stage_sld(sys_p, model, tuning):
     w_dense = 2 * np.pi * f_dense
     ctls = make_controllers(sys_p, model, tuning)
     out = {"rpm": rpms.tolist()}
+    sens = {"f": f_dense}
     for name, ctl in [("open", None)] + list(ctls.items()):
         out[name] = {}
         for xp in POINTS_159:
             H = closed_loop_frf_nn(sys_p, model, ctl, xp, w_dense)
+            sens[f"{name}_{xp*1e3:.0f}"] = np.abs(H)
             frf = lambda w: np.interp(w, w_dense, H.real) \
                 + 1j * np.interp(w, w_dense, H.imag)
             a = mf.a_crit_sweep(frf, rpms, nf=30000)
@@ -207,6 +209,7 @@ def stage_sld(sys_p, model, tuning):
         log(f"  {name}: a_crit@7000rpm x=60mm = "
             f"{out[name]['60'][np.argmin(np.abs(rpms-7000))]*1e3:.2f} mm")
     (RES / "sld.json").write_text(json.dumps(out, indent=1))
+    np.savez_compressed(RES / "frf_sens.npz", **sens)
 
 
 # ----------------------------------------------------------------- stage 6

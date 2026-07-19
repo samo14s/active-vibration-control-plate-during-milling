@@ -102,6 +102,31 @@ def closed_loop_matrix(sys: SystemParams, model: ModalModel, controller,
     return Acl
 
 
+def classified_eigs(sys: SystemParams, model: ModalModel, controller,
+                    xc: float) -> tuple[np.ndarray, np.ndarray]:
+    """Closed-loop eigenvalues and an internal-model membership mask.
+
+    An eigenvalue is classified as internal-model type when more than
+    half of its (unit-normalized) eigenvector energy lives in the
+    controller's disturbance (phasor + DC) states — a structural
+    criterion that, unlike frequency-window classification, cannot
+    mistake a plate mode lying near a tooth-passing harmonic (e.g. mode 4
+    at 1874.8 Hz vs the 4th harmonic at 1866.8 Hz) for an internal-model
+    pole."""
+    from .controllers import PshlqgController
+    Acl = closed_loop_matrix(sys, model, controller, xc)
+    ev, V = np.linalg.eig(Acl)
+    if not isinstance(controller, PshlqgController):
+        return ev, np.zeros(len(ev), dtype=bool)
+    p = controller.plant
+    ct = CompositeCt(model, sys)
+    npx = ct.nx + 1
+    zi = np.arange(npx + p.zoff, npx + p.zoff + p.nz)
+    Vn = V / np.linalg.norm(V, axis=0, keepdims=True)
+    frac = np.sum(np.abs(Vn[zi, :]) ** 2, axis=0)
+    return ev, frac > 0.5
+
+
 def frozen_stability_map(sys: SystemParams, model: ModalModel, controller,
                          x_grid: np.ndarray) -> np.ndarray:
     """Max |eig| of the frozen closed loop along the path."""

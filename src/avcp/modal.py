@@ -141,6 +141,7 @@ def removal_thickness_map(sys: SystemParams, x_cut: float) -> np.ndarray:
             continue
         for j in range(cfg.ny):
             yc = (j + 0.5) * by
-            if abs(yc - mil.y_path) <= mil.ap / 2.0:
+            # element counted if its y-extent intersects the machined band
+            if abs(yc - mil.y_path) <= mil.ap / 2.0 + by / 2.0:
                 tm[i, j] = scale
     return tm

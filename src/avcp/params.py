@@ -94,8 +94,12 @@ class MillingParams:
     n_teeth: int = 4
     diameter: float = 0.012
     rpm: float = 7000.0
-    feed_mm_min: float = 720.0
-    ae: float = 0.0002          # radial depth of cut [m]
+    feed_mm_min: float = 1440.0  # semi-finishing feed (fz = 51 um/tooth);
+                                 # DECLARED deviation from the reference
+                                 # paper's 720 mm/min: with the corrected
+                                 # force projection the reference feed
+                                 # leaves a near-quiescent process
+    ae: float = 0.0003          # radial depth of cut [m] (reference: 0.2 mm)
     ap: float = 0.003           # axial depth of cut (band height) [m]
     Kt: float = 796.0e6         # tangential cutting coefficient [Pa]
     Kr: float = 0.212           # radial/tangential ratio
@@ -104,7 +108,10 @@ class MillingParams:
     x_start: float = 0.0
     x_end: float = 0.120
     pass_time: float = 10.0     # s, "10 s to move from point 0 to point 10"
-    runout: float = 0.0         # optional per-tooth radial runout [m]
+    runout: float = 2.5e-6      # per-tooth radial runout [m], typical of
+                                # carbide end mills in ER collets; seeds the
+                                # regenerative loop and adds spindle-
+                                # frequency force lines as in real cutting
 
     @property
     def omega_spindle(self) -> float:

@@ -236,18 +236,37 @@ def fig_sld():
 
 def fig_robust():
     rows = json.loads((RES / "robust.json").read_text())
-    red_c = [r["open"] / r["cpd"] for r in rows]
-    red_p = [r["open"] / r["pshlqg"] for r in rows]
+    data = [[r["open"] / r[k] for r in rows] for k in ("cpd", "vpd", "pshlqg")]
     fig, ax = plt.subplots(figsize=(3.4, 2.6))
-    bp = ax.boxplot([red_c, red_p], tick_labels=["CPD", "PSH-LQG"],
+    bp = ax.boxplot(data, tick_labels=["CPD", "VPD", "PSH-LQG"],
                     widths=0.5, patch_artist=True)
-    for patch, c in zip(bp["boxes"], [CLR["cpd"], CLR["pshlqg"]]):
+    for patch, c in zip(bp["boxes"], [CLR["cpd"], CLR["vpd"], CLR["pshlqg"]]):
         patch.set_facecolor(c)
         patch.set_alpha(0.5)
     ax.axhline(1.0, color="k", ls=":", lw=0.8)
+    ax.set_yscale("log")
     ax.set_ylabel("RMS reduction factor (open / controlled)")
-    ax.grid(alpha=0.3)
+    ax.grid(alpha=0.3, which="both")
     fig.savefig(FIG / "fig_robust.png")
+    plt.close(fig)
+
+
+def fig_sensitivity():
+    d = np.load(RES / "frf_sens.npz")
+    f = d["f"]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(6.6, 2.6), sharey=True)
+    for ax, pt in ((a1, "60"), (a2, "12")):
+        ratio = d[f"pshlqg_{pt}"] / d[f"open_{pt}"]
+        ax.semilogy(f, ratio, color=CLR["pshlqg"], lw=0.8)
+        ax.axhline(1.0, color="k", ls=":", lw=0.8)
+        for k in range(1, 6):
+            ax.axvline(466.67 * k, color="0.85", lw=0.5, zorder=0)
+        ax.set_xlim(30, 2600)
+        ax.set_xlabel("frequency [Hz]")
+        ax.set_title(f"x = {pt} mm")
+        ax.grid(alpha=0.3, which="both")
+    a1.set_ylabel("|closed / open| FRF ratio")
+    fig.savefig(FIG / "fig_sensitivity.png")
     plt.close(fig)
 
 
@@ -299,7 +318,7 @@ ALL = {
     "gains": fig_gains, "passes": fig_passes_time, "p159": fig_points_159,
     "path": fig_along_path, "volt": fig_voltage_spectra,
     "frozen": fig_frozen, "sld": fig_sld, "robust": fig_robust,
-    "rpm": fig_rpm, "bars": fig_bars,
+    "rpm": fig_rpm, "bars": fig_bars, "sens": fig_sensitivity,
 }
 
 if __name__ == "__main__":

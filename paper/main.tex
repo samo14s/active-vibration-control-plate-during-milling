@@ -17,7 +17,7 @@
 \newcommand{\xc}{x_{\mathrm{c}}}
 \newcommand{\TPF}{f_{\mathrm{tp}}}
 
-\title{\textbf{Position-scheduled LQG control with an adaptive tooth-passing
+\title{\textbf{Position-scheduled LQG control with a spindle-synchronized
 harmonic internal model for active vibration suppression in thin-walled
 plate milling}}
 
@@ -61,10 +61,10 @@ chatter---the proposed controller reduces the vibration RMS at the
 moving cutting point by a factor of \RedPSH\ over the pass (versus
 \RedCPD\ for an optimally tuned constant PD and \RedVPD\ for the
 published time-space varying PD given the same tuning budget),
-approaching an order of magnitude in the forced-vibration regime that
-dominates the path, raises the critical depth of cut predicted from the
-closed-loop frequency functions by $2.8\times$ at mid-path and
-$4\times$ at the compliant path ends, and retains its performance
+approaching an order of magnitude at the most compliant path region,
+raises the critical depth of cut predicted from the closed-loop
+frequency functions by \AcritMid\ at mid-path and \AcritEnd\ at the
+path ends, and retains its performance
 under $\pm 3\%$ modal-frequency error, $\pm 30\%$ damping error,
 $\pm 20\%$ force-coefficient error, cutter runout, doubled computation
 delay, and in-process material removal.
@@ -88,7 +88,11 @@ configuration-specific, while parameter selection from stability lobe
 diagrams \citep{AltintasBudak1995} is fragile precisely for thin walls,
 whose point dynamics change with every pass.  Workpiece-side \emph{active}
 control with surface-bonded piezoelectric patches is therefore attracting
-sustained attention \citep{Zhang2019,Wan2020,LiJMPT2021,DuJMP2022}.
+sustained attention \citep{Zhang2019,Wan2020,LiJMPT2021,DuJMP2022},
+recently including learning-based controllers \citep{Nasiri2025} whose
+very existence signals the community's dissatisfaction with fixed-gain
+designs---though without the stability certificates that a
+model-based synthesis can offer.
 
 The specific difficulty of the thin-wall problem is its
 \emph{time-space variance}: the cutter--workpiece engagement point travels
@@ -99,9 +103,10 @@ Wang \emph{et al.}\ \citep{WangSongLiu2019} identified this issue for a
 cantilever plate instrumented with one accelerometer and one piezoelectric
 patch, and proposed a time-space varying PD law (VPD) whose proportional
 gain follows the cutter position through a quintic polynomial fitted to
-31 point-wise tuned values.  This remains, to the best of the authors'
-knowledge, the only published controller scheduled on the in-cut tool
-position; yet it is heuristic on every level: the gains are tuned by
+31 point-wise tuned values.  This remains, to the best of the author's
+knowledge (based on the literature search documented in the
+accompanying repository), the only published controller scheduled on
+the in-cut tool position; yet it is heuristic on every level: the gains are tuned by
 repeated simulation, there is no state estimation and no optimality
 notion, the schedule is smoothed without re-verifying stability, and the
 periodic structure of the milling force is not exploited.
@@ -214,6 +219,10 @@ authority factor $\kappa_a$ absorbs bonding-layer and effective-constant
 uncertainty; it is identified below from the static deflections measured
 in \citep{WangSongLiu2019}.
 
+The saturation limits of the drive chain are treated as hard
+constraints throughout, with anti-windup by construction (the estimator
+is driven by the saturated command), in line with recent treatments of
+actuator limits in active damping \citep{Bayoumi2024Saturation}.
 Equation~\eqref{eq:pde} is discretized with the 12-DOF nonconforming ACM
 rectangular element (nodal DOFs $w, w_{,x}, w_{,y}$) on a
 $60\times60$ mesh chosen so the patch edges coincide with mesh lines.
@@ -233,10 +242,25 @@ The first computed natural frequencies (239.6, 579.6, 1461.6, 1874.8,
 Fig.~\ref{fig:modes}), and mesh convergence is below 0.5\% from the
 $20\times20$ mesh onward.  A uniform modal damping ratio
 $\zeta=3.08\%$ is used, identified from the modal masses, stiffnesses and
-damping coefficients tabulated in \citep{WangSongLiu2019}.  With
-$\kappa_a=6.8$ the static top-edge deflection at \SI{1200}{V} matches the
-measured $\sim\SI{0.56}{mm}$ (Fig.~\ref{fig:static}), grounding the
-actuator authority in the reference experiment.
+damping coefficients tabulated in \citep{WangSongLiu2019}.
+
+The identified authority factor deserves explicit discussion, because
+it is large: $\kappa_a=6.8$ multiplies the first-principles
+Crawley--de Luis constant so that the static top-edge deflection at
+\SI{1200}{V} matches the measured $\sim\SI{0.56}{mm}$
+(Fig.~\ref{fig:static}).  The reference paper does not report the patch
+material or its constants; our nominal $E_p d_{31}$ assumes a plain
+PZT-5H wafer, whereas the deflections reported there are consistent
+with a substantially stronger effective coupling (e.g.\ a stack or
+interdigitated-electrode construction, or simply larger effective
+constants), which $\kappa_a$ absorbs together with bonding-layer
+effects.  What matters for the conclusions is the calibrated
+\emph{authority level}, anchored to measured deflections; the reported
+voltage usage scales inversely with it, and the Monte-Carlo force-level
+perturbations ($\pm20\%$) cover residual uncertainty.  Similarly, the
+cutting coefficients $K_t, K_r$ are literature values for Al alloys
+rather than identified from the reference cut, and are perturbed
+$\pm20\%$ in the robustness study.
 
 \begin{table}[tb]
 \centering\small
@@ -291,18 +315,46 @@ $\phi(\xc)$ \emph{travel with the cutter}.
 \label{sec:milling}
 
 The reference process is side milling of the near-free-edge strip: a
-four-flute carbide end mill (diameter \SI{12}{mm}, \SI{7000}{rpm}, feed
-\SI{720}{mm/min}, radial depth $a_e=\SI{0.2}{mm}$, axial band
-$a_p=\SI{3}{mm}$) traverses the path in \SI{10}{s}
-\citep{WangSongLiu2019}.  With tooth angle $\varphi_j$ measured from the
+four-flute carbide end mill (diameter \SI{12}{mm}, \SI{7000}{rpm}) with
+axial band $a_p=\SI{3}{mm}$ traverses the path in \SI{10}{s}
+\citep{WangSongLiu2019}.  The reference feed and radial depth
+(\SI{720}{mm/min}, $a_e=\SI{0.2}{mm}$) are retained for model
+validation; for the \emph{control benchmark} the severity is raised to a
+declared semi-finishing condition---feed \SI{1440}{mm/min}
+($f_z=\SI{51}{\micro m}$/tooth), $a_e=\SI{0.3}{mm}$, and a typical
+per-tooth radial runout of \SI{2.5}{\micro m}---because with the
+corrected force projection the reference condition leaves the plate
+nearly quiescent (sub-micron response), whereas the reference
+experiments themselves report substantial vibration and chatter marks;
+their own stability diagram places their process near or beyond its
+limit, indicating an effective severity that literature force
+coefficients at the printed parameters do not reproduce.  At the
+benchmark condition the computed critical depths
+($a_{p,\mathrm{crit}}\approx$ 1.7--2.0~mm $< a_p$) put the pass in the
+finite-amplitude regenerative regime with 10--20~\si{\micro m} RMS
+vibration at the most compliant path region, matching the order of
+magnitude observed experimentally.  With tooth angle $\varphi_j$ measured from the
 surface normal and the wall deflection $w$ positive toward the tool, the
 chip thickness and the plate-normal force on the workpiece are
 \begin{equation}
 h_j = \big[f_z\sin\varphi_j + (w(t)-w(t-\tau))\cos\varphi_j
  + \Delta r_j\big]\, g(\varphi_j),\qquad
-F_n = -\sum_j K_t a_p h_j\,(\sin\varphi_j + K_r\cos\varphi_j),
+F_n = \sum_j K_t a_p h_j\,(\sin\varphi_j - K_r\cos\varphi_j),
 \label{eq:force}
 \end{equation}
+where the projection follows from the tool-center frame (tooth at
+$R(\sin\varphi,-\cos\varphi)$, cutting velocity along
+$(\cos\varphi,\sin\varphi)$): the tangential force drags the wall
+material toward the tool ($+\sin\varphi_j$) while the radial ploughing
+pushes it away ($-K_r\cos\varphi_j$).  The two contributions cancel at
+$\tan\varphi=K_r$ \emph{inside} typical low-immersion engagement windows,
+so the net normal force and the orientation-averaged regenerative gain
+$\alpha = N\big[\tfrac12\sin^2\varphi
+ - K_r(\tfrac{\varphi}{2}+\tfrac{\sin 2\varphi}{4})\big]_{\varphi_{st}}
+^{\varphi_{ex}}$
+are both small at the reference paper's finishing condition---an
+observation with a practical consequence for benchmark design discussed
+below,
 with $h_j\le 0$ clipped (tooth jump-out), $g$ the engagement window,
 $\tau$ the tooth period, $\Delta r_j$ optional per-tooth runout, and
 $K_t=\SI{796}{MPa}$, $K_r=0.212$ typical of Al alloys
@@ -324,16 +376,17 @@ $L(\omega)= a_p (K_t\alpha/2\pi)(1-e^{-j\omega\tau})H(j\omega)$ agrees
 with the growth threshold of the linearized time-domain simulation within
 6\% at half immersion (Sec.~\ref{sec:results:model}).
 
-Two features of the nominal process shape the control problem
+Three features of the benchmark process shape the control problem
 (Fig.~\ref{fig:force}).  First, the force is an impulsive train at
 $\TPF=\SI{466.7}{Hz}$ whose fourth harmonic (\SI{1866.8}{Hz}) falls
-within 0.5\% of mode~4 (\SI{1874.8}{Hz}): the forced response is
-near-resonant, explaining the position-dependent severity observed
-experimentally in \citep{WangSongLiu2019}.  Second, at the path ends the
-open-loop regenerative margin drops below the nominal depth, so the
-uncontrolled process operates in the amplitude-bounded (jump-out
-saturated) chatter regime there---any candidate controller must not
-degrade this margin.
+within 0.5\% of mode~4 (\SI{1874.8}{Hz}).  Second, the runout adds
+force lines at ALL spindle-frequency multiples (\SI{116.7}{Hz}
+spacing), not only at the tooth-passing multiples, as in real cutting.
+Third, the regenerative margin is below the axial band along the whole
+path, so the uncontrolled pass operates in the finite-amplitude
+(jump-out saturated) regime---any candidate controller must not degrade
+this margin, and beyond it the vibration amplitude is governed by the
+jump-out geometry rather than by linear damping.
 
 \begin{figure}[tb]
 \centering
@@ -394,15 +447,24 @@ periodic force is modelled by the internal-model states
 \label{eq:phasors}
 \end{equation}
 with $H=4$ harmonics and $\Omega_{tp}=2\pi\TPF$ synchronized to the
-spindle encoder (the ``adaptive'' element: a speed change re-tunes
-$\theta_h$ directly).  The state $z_0$ is a \emph{broadband random-walk
+spindle speed, which is known from the CNC/encoder; a speed change
+re-tunes $\theta_h$ and the associated design quantities.  (We refer to
+this as spindle-\emph{synchronized} rather than adaptive: in this study
+the schedule is recomputed per operating speed at design time, and the
+speed-sweep experiment of Sec.~\ref{sec:results:robust} quantifies both
+the synchronized and the deliberately detuned behaviour; online
+adaptation during speed transients \citep{Kinney2011,Kurniawan2014} is
+not claimed.)  The state $z_0$ is a \emph{broadband random-walk
 force state}: with its process noise set well above that of the phasor
 states, the Kalman filter uses it to track the slowly varying and
 sub-harmonic force content that does not fit the harmonic model---in
-particular the amplitude-bounded chatter of supercritical path regions,
-whose limit-cycle spectrum concentrates near $\TPF/m$ \emph{below} the
-first plate mode, i.e.\ in the quasi-static band where the static
-inversion phase used for its cancellation is reliable.  The leakage $\rho=0.99995$ replaces the exact
+particular the finite-amplitude regenerative content of supercritical
+path regions, whose limit-cycle spectrum concentrates near $\TPF/m$,
+at and below the first plate mode.  Its cancellation uses the static
+inversion $\Lambda_0$, whose phase is reliable in the quasi-static band;
+content close to mode~1 is shared between $z_0$ and the modal-state
+estimates, where the LQR handles it, so the split is soft rather than
+frequency-gated.  The leakage $\rho=0.99995$ replaces the exact
 marginally stable internal model \citep{FrancisWonham1976} with a
 contraction whose budget $(1-\rho)$ absorbs model mismatch; the induced
 steady cancellation bias is $O(1\%)$, standard practice in repetitive and
@@ -440,9 +502,13 @@ and is driven by the \emph{saturated} control (anti-windup):
 \begin{equation}
 \hat{\mathbf x}[k\!+\!1] = \mathbf A(\xc)\hat{\mathbf x}[k]
  + \mathbf b\,\operatorname{sat}(u[k])
- + \mathbf L(\xc)\big(y[k] - \mathbf c^{\!\top}(\xc)\hat{\mathbf x}[k]\big).
+ + \mathbf L(\xc)\big(y[k] - \mathbf c^{\!\top}\hat{\mathbf x}[k]\big).
 \label{eq:kf}
 \end{equation}
+Note that the output map $\mathbf c$ is \emph{constant} (the
+accelerometer is fixed---the structural fact of
+Sec.~\ref{sec:plate}); the position enters only through the disturbance
+coupling columns of $\mathbf A(\xc)$ and through the scheduled gains.
 
 The control combines a position-scheduled LQR on the controllable
 subsystem $[\mathbf x_{mf};u_{\mathrm{prev}}]$ with cost
@@ -455,18 +521,31 @@ i.e.\ the deflection at the \emph{moving cutting point} is weighted---the
 rigorous form of the idea approximated by heuristic gain scheduling in
 \citep{WangSongLiu2019}---and a disturbance-accommodating harmonic
 cancellation \citep{Johnson1971}: with
-$G_u(z)$ and $G_{d,h}(z)$ the design-model transfers from the (delayed)
-control and from harmonic $h$ to the cutting-point deflection, the
-cancelling phasor gain is the Tikhonov-regularized inversion
+$G^K_u(z)$ and $G^K_{d,h}(z)$ the design-model transfers from the
+(delayed) control and from harmonic $h$ to the cutting-point deflection
+evaluated \emph{with the LQR loop closed} (the state feedback also
+responds to the disturbance-driven states, so inverting the open-loop
+ratio would leave a systematic residual), the cancelling phasor gain is
+the regularized inversion
 \begin{equation}
-\Lambda_h(\xc) = \frac{G_{d,h}\,\overline{G_u}}
- {|G_u|^2+\varepsilon^2},\qquad
+\Lambda_h(\xc) = \frac{G^K_{d,h}\,\overline{G^K_u}}
+ {|G^K_u|^2+\varepsilon_h^2},\qquad
+\varepsilon_h = \epsilon_r \max_{x\in\text{path}}\big|G^K_u(e^{j\theta_h};x)\big|,
+\label{eq:ffgain}
+\end{equation}
+\begin{equation}
 u_{\mathrm{ff}} = -\operatorname{Re}\Lambda_0\, \hat z_0
  - \sum_{h=1}^{H}\big(\operatorname{Re}\Lambda_h\,\hat z_{h,1}
  + \operatorname{Im}\Lambda_h\,\hat z_{h,2}\big),
 \label{eq:ff}
 \end{equation}
-all evaluated at $z_h=e^{j\theta_h}$ and scheduled on $\xc$.  The total
+all evaluated at $z_h=e^{j\theta_h}$ and scheduled on $\xc$.  The
+regularization floor $\varepsilon_h$ is \emph{absolute} per harmonic
+(a fraction $\epsilon_r=0.05$ of the path-maximum authority), so the
+inversion gain is genuinely bounded at positions where the local
+authority collapses---e.g.\ the second harmonic near mid-path, which
+falls between modes~2 and~3 while mode~2 decouples from the
+$x$-symmetric patch.  The total
 command is $u = -\mathbf K(\xc)\,[\hat{\mathbf x}_{mf};
 \hat u_{\mathrm{prev}}] + u_{\mathrm{ff}}$, saturated by the amplifier.
 The LQR weight $r_u$ is auto-tuned: a bisection finds the most aggressive
@@ -486,11 +565,23 @@ the $x$-symmetric patch), residual-mode truncation can flip its phase and
 push the corresponding internal-model pole outside the unit circle---a
 harmonic-specific observation/control spillover \citep{Balas1978}.  A
 verification loop against the full-order model therefore checks the
-frozen internal-model poles along the path and locally backs off the
-offending $\Lambda_h$ until the whole path verifies (converged in three
-iterations here, masking only the weak-authority second harmonic around
-mid-path, where its contribution to the response is correspondingly
-small).
+frozen poles in a $\pm\SI{30}{Hz}$ band around each harmonic along the
+path and locally backs off the offending $\Lambda_h$ until the whole
+path verifies.  One ambiguity deserves explicit treatment: a
+\emph{plate} pole can fall inside a harmonic band (here mode~4 at
+\SI{1874.8}{Hz} vs.\ the 4th harmonic at \SI{1866.8}{Hz}), and no
+frequency criterion can distinguish it from an internal-model pole.
+The design resolves this by attribution-through-damping: backing off
+$\Lambda_h$ can only stabilize poles that belong to the internal-model
+mechanism, so a structural pole destabilized inside a band fails the
+masking loop and forces the $r_u$ auto-tuner to a weaker feedback---
+in-band poles of either origin end up subject to the same explicit
+budget $|\lambda| \le 1-(1-\rho)/2$, and the strict structural margin
+(0.997) is guaranteed outside the bands.  The estimation-side
+counterpart of the weak-authority problem (reduced observability of a
+harmonic's phasor when $\bm\phi(\xc)$ nearly annihilates the modes
+carrying it) is handled by the same masking, which attenuates exactly
+those position--harmonic pairs.
 
 \subsection{Stability argument}
 \label{sec:stability}
@@ -499,15 +590,19 @@ Three complementary layers support closed-loop stability claims:
 (i)~\emph{frozen-position analysis}: the exact discrete closed loop
 (20-mode composite plant, delay, filter, full controller) has spectral
 radius $\le 0.99995$ at every point of a dense path grid
-(Fig.~\ref{fig:frozen}), the bound being attained only by the
-internal-model pole cluster at its leakage budget;
-(ii)~\emph{slow variation}: the schedule traverses the path in
-\SI{10}{s}, i.e.\ the scheduling parameter moves by one grid cell per
-$\sim$3300 control samples, orders of magnitude slower than the
-millisecond loop dynamics, so frozen-point conclusions carry over by
-standard slowly-varying-systems arguments; the KF/LQR gains vary smoothly
-along the grid (Fig.~\ref{fig:gains} shows the baselines' gains; the
-scheduled Riccati gains are smoother still);
+(Fig.~\ref{fig:frozen}), the bound being attained by the in-band pole
+cluster at its explicit budget $1-(1-\rho)/2$;
+(ii)~\emph{slow variation, stated with its limits}: the schedule
+traverses the path in \SI{10}{s}, i.e.\ one grid cell per $\sim$3300
+control samples.  For the structural dynamics (decay times of
+milliseconds to tens of milliseconds) this is orders of magnitude slower
+than the loop, and frozen-point conclusions carry over by standard
+slowly-varying-systems arguments.  The internal-model pole cluster,
+however, is deliberately slow (leakage time constant
+$T_s/(1-\rho)\approx\SI{2}{s}$, the same order as the traversal), so the
+frozen argument is NOT invoked for it; its stability rests on the
+uniform contraction budget $1-\rho$ enforced along the entire path by
+the design criterion, which holds for arbitrary parameter rates;
 (iii)~\emph{a posteriori verification}: all reported closed-loop passes,
 including the Monte-Carlo perturbations, are full nonlinear time-domain
 simulations of the time-varying loop with the regenerative delay closed;
@@ -519,28 +614,35 @@ Sec.~\ref{sec:results:sld} using the frozen \emph{closed-loop} FRFs.
 \label{sec:baselines}
 
 \textbf{CPD.}  A constant PD on the filtered acceleration,
-$u=-(k_p y + k_d\Delta y)$, with $(k_p,k_d)$ selected by a signed
-log-grid search minimizing the worst-case response to the actual force
-harmonics over five path positions, subject to (a)~frozen stability,
-(b)~non-degradation of the regenerative margin
+$u=-(k_p y + k_d\Delta y)$.  Tuning is three-staged and fully disclosed:
+a signed log-grid of candidates is pre-filtered by (a)~frozen stability
+and (b)~non-degradation of the regenerative margin
 ($a_{\mathrm{crit}}^{\mathrm{cl}} \ge
-\min(0.9\,a_{\mathrm{crit}}^{\mathrm{ol}},\,1.3\,a_p)$), and
-(c)~final verification by nonlinear simulation.  This gives the constant
-law of \citep{WangSongLiu2019} a considerably stronger tuning than in the
-original work.
+\min(0.9\,a_{\mathrm{crit}}^{\mathrm{ol}},\,1.3\,a_p)$), ranked by a
+frequency-domain surrogate (response to the rigid-force harmonics with
+a soft actuator-voltage budget and a broadband waterbed guard
+$\le 1.2\times$ the open-loop FRF peak), and the leading candidates are
+then \emph{scored by nonlinear time-domain simulation} at three path
+positions---necessary because in the finite-amplitude regenerative
+regime the linear surrogates rank candidates incorrectly.  The winner
+is verified once more by simulation before use.  This gives the constant
+law of \citep{WangSongLiu2019} a considerably stronger tuning than in
+the original work.
 
-\textbf{VPD.}  The published time-space varying PD, re-derived with the
-same budget: per-position optimization of $(k_p(x),k_d(x))$ (seeded with
-the CPD optimum), followed by the quintic-polynomial smoothing of
-\citep{WangSongLiu2019}.  We found that the smoothing step is not
-benign: at mid-path the point-wise stabilizing gains dip (the local
-stability limit is lower), the quintic bridges over the dip, and the
-fitted profile destabilizes the loop---an instability that frozen
-eigenvalue analysis confirms and that frequency-domain chatter checks
-alone miss because the nominal speed sits in a phase-sensitive stability
-pocket of the interrupted-cutting regenerative loop.  The baseline
-therefore includes a post-fit verification that shrinks the profiles
-until frozen, regenerative, and nonlinear-simulation checks all pass.
+\textbf{VPD.}  The published time-space varying PD, re-derived
+simulation-truthfully: the CPD winner anchors the gain shape, a
+position-dependent intensity $s(x)\in[0.5,2.2]$ is selected at each of
+31 grid points by short nonlinear simulations at that point, and the
+resulting profiles are smoothed by the quintic-polynomial
+parameterization of \citep{WangSongLiu2019} (their Eq.~26).  We found
+that the smoothing step is not benign: the quintic can bridge over
+local dips of the point-wise stabilizing gains and destabilize the
+loop---an effect that frozen eigenvalue analysis confirms and that
+frequency-domain chatter checks alone can miss near phase-sensitive
+stability pockets of the interrupted-cutting regenerative loop.  The
+baseline therefore verifies the fitted profile (frozen, regenerative,
+and nonlinear-simulation checks) and shrinks it until every check
+passes, erroring out rather than returning an unverified profile.
 This safeguard is itself one of the paper's findings: the published VPD
 parameterization requires re-verification after smoothing.
 
@@ -579,26 +681,26 @@ sampled at the surface-generation instants, i.e.\ the tooth passages
 through the surface tangent).  Table~\ref{tab:metrics} and
 Fig.~\ref{fig:bars} summarize.
 
-The uncontrolled pass splits into two regimes.  Where the cut is
-regeneratively stable or mildly supercritical (most of the path), the
-response is forced vibration at the TPF harmonics with the near-resonant
-fourth-harmonic amplification; at the very compliant path ends the cut is
-far beyond the linear limit and settles into finite-amplitude chatter
-whose sub-harmonic limit cycle ($\sim\TPF/m$) is set by the jump-out
-geometry (feed per tooth), not by linear damping.  This regime split
-governs what any controller of this configuration can achieve: in the
-forced-vibration regime PSH-LQG suppresses the response by close to an
-order of magnitude (harmonic lines down 20--40~dB,
-Fig.~\ref{fig:volt} right), while in the saturated-chatter regions the
-achievable reduction is bounded for every controller---there PSH-LQG's
-broadband force state recovers the direct-damping benefit of the PD
-family.  Over the whole pass, PSH-LQG reduces the cutting-point AC RMS
-by \RedPSH\ (vs.\ \RedCPD\ for CPD and \RedVPD\ for VPD), with moderate
-voltage (RMS \VrmsPSH, no saturation; Fig.~\ref{fig:volt} left), and
-reduces the surface-proxy standard deviation by \SurfPSH; CPD and VPD,
-honestly tuned and safeguarded, are close to each other (the published
-advantage of VPD over CPD stemmed largely from a weakly tuned constant
-baseline).
+The benchmark pass operates beyond the linear regenerative limit along
+the whole path, in the finite-amplitude (jump-out) regime.  The
+uncontrolled response concentrates where the regenerative margin is
+lowest and the plate most compliant (around mid-path), with a mixed
+spectrum of spindle/TPF force lines and sub-harmonic limit-cycle
+content near $\TPF/m$; toward the path ends the response falls to the
+micron scale.  This structure governs what any controller of the
+configuration can achieve: at the hot region PSH-LQG suppresses the
+response by close to an order of magnitude with a few tens of volts
+(harmonic lines down 20--40~dB, Fig.~\ref{fig:volt} right), while at
+the near-quiescent path regions all controllers are limited by the
+signal scale itself.  Over the whole pass, PSH-LQG reduces the
+cutting-point AC RMS by \RedPSH\ (vs.\ \RedCPD\ for CPD and \RedVPD\
+for VPD), with moderate voltage (RMS \VrmsPSH, no saturation;
+Fig.~\ref{fig:volt} left), and reduces the surface-proxy standard
+deviation by \SurfPSH; CPD and VPD, honestly tuned and safeguarded, are
+close to each other (the published advantage of VPD over CPD stemmed
+largely from a weakly tuned constant baseline), and their best action
+is derivative (direct damping), consistent with the
+regeneration-dominated physics.
 
 \begin{figure}[tb]
 \centering
@@ -672,31 +774,57 @@ dotted lines mark the nominal $a_p$ and spindle speed.}
 \label{fig:sld}
 \end{figure}
 
+\paragraph{Sensitivity and the waterbed.}  A controller that cuts deep
+notches at discrete force lines with near-unit-circle internal models
+necessarily amplifies somewhere in between (Bode's sensitivity
+integral); a design that ignored this could pay for harmonic rejection
+with an eroded chatter margin, since regenerative instability picks its
+own frequency wherever the closed-loop FRF is most favourable to it.
+Figure~\ref{fig:sens} therefore shows the closed-to-open FRF magnitude
+ratio at the cutting point: the harmonic notches are visible, the
+inter-harmonic amplification stays moderate, and---the operationally
+decisive check---the closed-loop stability lobes of
+Fig.~\ref{fig:sld}, computed from these same FRFs over a dense
+frequency grid, confirm that the margin is enlarged, not eroded.  The
+PD baselines' tuning includes the corresponding broadband guard
+explicitly (Sec.~\ref{sec:baselines}).
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=.95\linewidth]{fig_sensitivity.png}
+\caption{Closed-to-open FRF magnitude ratio (force at the cutting point
+to deflection at the cutting point) for PSH-LQG; vertical lines mark
+the TPF harmonics.}
+\label{fig:sens}
+\end{figure}
+
 \subsection{Robustness}
 \label{sec:results:robust}
 
-Twelve Monte-Carlo passes perturb simultaneously the truth-model
+Twenty Monte-Carlo passes perturb simultaneously the truth-model
 frequencies ($\pm3\%$, covering both identification error and the
 material-removal drift), damping ($\pm30\%$), force level ($\pm20\%$),
-per-tooth runout (0--\SI{5}{\micro m}, which injects spindle-frequency
-lines \emph{not} present in the internal model), and the computation
-delay (doubled in 30\% of runs), with the controller kept at its nominal
-design.  Figure~\ref{fig:robust} shows the distribution of RMS reduction
-factors: PSH-LQG retains a median reduction of \MCmedPSH\ (worst case
-\MCminPSH), degrading gracefully, and never destabilizes nor saturates
-persistently.  A dedicated pass against the drifting-frequency plant
-(scheduled material removal) matches the nominal performance within
-\RemovalPerf.  Under spindle-speed changes (Fig.~\ref{fig:rpm}), where the open-loop
-response grows by more than an order of magnitude (the harmonic comb
-sweeps across the plate resonances), the encoder-synchronized controller
-retains full performance ($53\times$ at 6000~rpm, $290\times$ at
-8000~rpm where the second harmonic sits near mode~2).  Notably, a
-controller with the internal model left detuned at the 7000-rpm TPF
-degrades only mildly (by 4--17\%): the scheduled LQR and the broadband
-force state carry most of the benefit, and the spindle-synchronous
-phasors provide the final refinement.  The architecture is thus robust
-to TPF misinformation rather than reliant on it---addressing the
-frequency-mismatch caveat of \citep{Kinney2011} by construction.
+per-tooth runout (0--\SI{5}{\micro m}), and the computation delay
+(doubled in 30\% of runs), with all three controllers kept at their
+nominal designs.  Figure~\ref{fig:robust} shows the distributions of
+RMS reduction factors: PSH-LQG retains a median reduction of
+\MCmedPSH\ (interquartile range \MCiqrPSH, worst case \MCminPSH),
+degrading gracefully, and never destabilizes nor saturates
+persistently; the sample size (20) supports order statistics, not
+tail-probability claims, which we do not make.  A dedicated pass
+against the drifting-frequency plant (scheduled material removal)
+matches the nominal performance within \RemovalPerf.  Under
+spindle-speed changes (Fig.~\ref{fig:rpm}), where the open-loop
+response changes strongly as the spindle-harmonic comb moves relative
+to the plate resonances, the spindle-synchronized controller retains
+full performance (\RpmSixty\ at 6000~rpm, \RpmEighty\ at 8000~rpm).
+Notably, a controller with the internal model left detuned at the
+7000-rpm TPF degrades only mildly (by \DetunedRange): the scheduled LQR
+and the broadband force state carry most of the benefit, and the
+spindle-synchronous phasors provide the final refinement.  The
+architecture is thus robust to TPF misinformation rather than reliant
+on it---addressing the frequency-mismatch caveat of \citep{Kinney2011}
+by construction.
 
 \begin{figure}[tb]
 \centering
@@ -709,7 +837,7 @@ plant/force/delay/runout perturbations.}
 \begin{figure}[tb]
 \centering
 \includegraphics[width=.45\linewidth]{fig_rpm.png}
-\caption{Spindle-speed sweep: encoder-adaptive vs.\ detuned internal
+\caption{Spindle-speed sweep: spindle-synchronized vs.\ detuned internal
 model.}
 \label{fig:rpm}
 \end{figure}
@@ -759,7 +887,8 @@ recognizes that the plant is LTI while the disturbance input and the
 performance output travel with the cutter, and therefore schedules the
 Kalman disturbance coupling, the LQR performance weight, and a
 regularized harmonic-cancellation inversion on the cutter position, with
-an encoder-adaptive internal model of the tooth-passing force harmonics.
+a spindle-synchronized internal model of the tooth-passing force
+harmonics complemented by a broadband force state.
 Implementation realism (saturation with anti-windup, computation delay,
 analog anti-aliasing, spillover masking against the full-order model) is
 part of the design, and the evaluation closes the nonlinear regenerative
@@ -791,14 +920,18 @@ $E_p$, $\nu_p$, $d_{31}$ & \SI{61}{GPa}, 0.35, \SI{-274}{pm/V}\\
 Authority $\kappa_a$ & 6.8 (identified) &
 Accelerometer & $(60,100)$ mm\\
 Mill & 4 flutes, $\varnothing$\,\SI{12}{mm}, up-milling &
-$n$, feed & \SI{7000}{rpm}, \SI{720}{mm/min}\\
-$a_e$, $a_p$ & 0.2, \SI{3}{mm} & $K_t$, $K_r$ & \SI{796}{MPa}, 0.212\\
-Path & $y_c{=}\SI{117}{mm}$, 0--\SI{120}{mm} in \SI{10}{s} &
-$f_s$, delay & \SI{10}{kHz}, 1 sample\\
-Filter & Butterworth 2nd order, \SI{2.5}{kHz} &
-Saturation & $[-500,1500]$ V\\
-Design model & $n_m{=}6$, $H{=}4$, $\rho{=}0.99995$ &
-Truth model & 20 modes, \SI{50}{kHz} substeps\\
+$n$, feed & \SI{7000}{rpm}, \SI{1440}{mm/min}\\
+$a_e$, $a_p$ & 0.3, \SI{3}{mm} & $K_t$, $K_r$ & \SI{796}{MPa}, 0.212\\
+Runout & \SI{2.5}{\micro m} &
+Path & $y_c{=}\SI{117}{mm}$, 0--\SI{120}{mm} in \SI{10}{s}\\
+$f_s$, delay & \SI{10}{kHz}, 1 sample &
+Filter & Butterworth 2nd order, \SI{2.5}{kHz}\\
+Saturation & $[-500,1500]$ V &
+Design model & $n_m{=}6$, $H{=}4$, $\rho{=}0.99995$\\
+Truth model & 20 modes, \SI{50}{kHz} substeps &
+KF noises & $q_m{=}10^{-8}$, $q_z{=}10^{-3}$, $q_0{=}1$, $r{=}2.5\!\cdot\!10^{-3}$\\
+Inversion & $\epsilon_r{=}0.05$, mask backoff 0.6 &
+LQR & $r_u$ auto-tuned (Sec.~\ref{sec:law}), margins 0.997 / $1{-}\frac{1-\rho}{2}$\\
 \bottomrule
 \end{tabular}
 \end{table}

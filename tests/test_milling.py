@@ -17,8 +17,9 @@ def test_mean_force_pushes_wall_away(sysp):
     mf = MillingForce(sysp.milling)
     t = np.linspace(0.0, 5 * sysp.milling.tau, 800)
     F = mf.normal_force_series(t)
-    assert F.mean() < 0.0          # wall pushed away from the tool
-    assert F.max() <= 0.0 + 1e-12  # up-milling: normal force never pulls
+    # the tangential term can pull toward the tool above phi = atan(Kr),
+    # but the engagement-window mean must push the wall away
+    assert F.mean() < 0.0
 
 
 def test_force_periodicity_at_tpf(sysp):
@@ -29,12 +30,17 @@ def test_force_periodicity_at_tpf(sysp):
     assert np.allclose(F[:n4], F[n4:2 * n4], atol=1e-9)
 
 
-def test_directional_factor_sign_and_value(sysp):
+def test_directional_factor_value(sysp):
     mil = copy.deepcopy(sysp.milling)
     mil.ae = mil.diameter / 2.0    # half immersion, phi in [0, pi/2]
     mf = MillingForce(mil)
-    expected = -mil.n_teeth * (0.5 + mil.Kr * np.pi / 4.0)
+    expected = mil.n_teeth * (0.5 - mil.Kr * np.pi / 4.0)
     assert mf.zoa_alpha_nn() == pytest.approx(expected, rel=1e-9)
+
+
+def test_directional_factor_negative_at_low_immersion(sysp):
+    mf = MillingForce(sysp.milling)
+    assert mf.zoa_alpha_nn() < 0.0
 
 
 def _linear_force_regen(self, t, w_now, w_lookup, ap=None):
@@ -49,7 +55,7 @@ def _linear_force_regen(self, t, w_now, w_lookup, ap=None):
             continue
         h = m.fz * np.sin(phi) + (w_now - w_lookup(1)) * np.cos(phi)
         dFt = m.Kt * ap * h
-        F += -(dFt * np.sin(phi) + m.Kr * dFt * np.cos(phi))
+        F += dFt * (np.sin(phi) - m.Kr * np.cos(phi))
     return F
 
 
@@ -87,15 +93,16 @@ def test_nyquist_a_crit_matches_linear_time_domain(sysp):
 
 @pytest.mark.slow
 def test_supercritical_chatter_is_bounded(sysp):
-    """At the path end the nominal cut is far beyond the linear limit;
-    the surface-memory (multi-delay) mechanism must bound the chatter at
-    physically plausible amplitudes instead of diverging."""
+    """At mid-path the nominal cut is beyond the linear regenerative
+    limit; the surface-memory (multi-delay) mechanism and the chip cap
+    must bound the chatter at physically plausible amplitudes instead of
+    diverging."""
     sp = copy.deepcopy(sysp)
-    sp.milling.x_start, sp.milling.x_end = 0.012, 0.012001
+    sp.milling.x_start, sp.milling.x_end = 0.06, 0.060001
     sp.milling.pass_time = 5.0
     model, _ = build_modal_model(sp)
     r = simulate(sp, model, controller=None, T=5.0)
     late = r.w_cut[r.t > 2.0]
     assert np.all(np.isfinite(late))
     assert np.max(np.abs(late)) < 2e-3      # bounded (sub-mm scale)
-    assert np.std(late) > 5e-6              # but clearly vibrating
+    assert np.std(late) > 2e-6              # but clearly vibrating

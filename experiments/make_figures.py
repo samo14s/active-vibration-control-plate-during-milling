@@ -17,6 +17,7 @@ Output: 300-dpi PNG + PDF in ``figures/``.
   fig10_afc          AFC-ADRC vs baselines (finish map + per-pass RMS)
   fig11_timeseries   full 81.6 s tip time response of all controllers
   fig11b_waveform    full-rate waveform snapshot at the worst region
+  fig12_fopid        fractional-order PID (FOPID) vs LQG / ADRC (identical metrics)
 """
 import os, json
 import numpy as np
@@ -33,6 +34,7 @@ os.makedirs(FIG, exist_ok=True)
 plt.rcParams.update({"font.size": 11, "axes.grid": True, "grid.alpha": 0.3,
                      "figure.dpi": 110, "savefig.bbox": "tight"})
 C_OL, C_LQG, C_2D, C_ADRC = "#7f7f7f", "#2E8B57", "#c62828", "#1f4e8c"
+C_FOPID = "#d9760a"
 RPM_OP, AP_OP = 4900, 0.3
 
 
@@ -479,6 +481,93 @@ def fig_timeseries():
         save(fig, "fig11b_waveform")
 
 
+# ---------------------------- Fig 12: FOPID comparison
+def fig_fopid():
+    d = load("fopid.json")
+    tr = np.load(os.path.join(RES, "fopid_traces.npz"))
+    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID}
+    fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.8), layout="constrained")
+
+    # (a) linear boundary (nominal model) vs voltage-feasible depth
+    ax = axes[0, 0]
+    names = ["LQG", "ADRC", "FOPID"]
+    lin = [d["linear_nominal_mm"][n] for n in names]
+    fea = [d[n]["ap_feasible_mm"] for n in names]
+    x = np.arange(len(names)); w = 0.38
+    ax.bar(x - w / 2, lin, w, color="#cccccc", ec="k",
+           label="linear boundary (nominal model)")
+    ax.bar(x + w / 2, fea, w, color=[cols[n] for n in names], ec="k",
+           label="voltage-feasible (150 V)")
+    for xi, v in zip(x - w / 2, lin):
+        ax.text(xi, v + 0.06, f"{v:.2f}", ha="center", fontsize=8.5)
+    for xi, v in zip(x + w / 2, fea):
+        ax.text(xi, v + 0.06, f"{v:.2f}", ha="center", fontsize=8.5, fontweight="bold")
+    ax.axhline(d["linear_nominal_mm"]["OL"], color=C_OL, ls=":", lw=1.5)
+    ax.text(2.45, d["linear_nominal_mm"]["OL"] + 0.05,
+            f"open loop {d['linear_nominal_mm']['OL']:.2f} mm", color=C_OL,
+            ha="right", fontsize=8)
+    # LQG on the collocated sensor: same feasible depth as FOPID -> sensor, not model
+    lqg_col = d["LQG"].get("ap_feasible_collocated_mm")
+    if lqg_col:
+        ax.plot([0 + w / 2, 2 + w / 2], [lqg_col, lqg_col], color=C_LQG, ls="--", lw=1.6)
+        ax.text(1.0, lqg_col + 0.06, f"LQG on collocated sensor = {lqg_col:.2f} mm "
+                "(= FOPID: the sensor, not the model)", color=C_LQG, ha="center",
+                fontsize=7.6)
+    ax.set_xticks(x); ax.set_xticklabels(names)
+    ax.set_ylim(0, max(lin) * 1.22)
+    ax.set_ylabel(r"critical depth $a_p$ (mm)")
+    ax.set_title("(a) linear boundary (nominal) vs voltage-feasible depth\n"
+                 "FOPID = LQG on equal sensing; the voltage wall caps the linear boundary",
+                 fontsize=10)
+    ax.legend(fontsize=9, loc="upper right")
+
+    # (b) robustness: voltage-feasible depth under +/-20% frequency drift
+    ax = axes[0, 1]
+    rb = d["robustness_feasible_mm"]
+    tags, xx = ["-20%", "nominal", "+20%"], [-20, 0, 20]
+    for n in ["FOPID", "ADRC", "LQG"]:
+        ax.plot(xx, [rb[t][n] for t in tags], "o-", color=cols[n], lw=2, ms=7, label=n)
+    ax.set_xticks(xx); ax.set_xlabel("plant frequency drift (%)")
+    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_title("(b) robustness: feasible depth under frequency drift\n"
+                 "collocated FOPID/ADRC hold; model-based LQG collapses",
+                 fontsize=10)
+    ax.legend(fontsize=9)
+
+    # (c) designed FOPID controller Bode (fractional character)
+    ax = axes[1, 0]
+    b = d["fopid_bode"]
+    f = np.array(b["w"]) / 2 / np.pi
+    ax.semilogx(f, b["mag_db"], color=C_FOPID, lw=2)
+    ax.set_xlabel("frequency (Hz)")
+    ax.set_ylabel(r"$|C(j\omega)|$ (dB)", color=C_FOPID)
+    ax.tick_params(axis="y", labelcolor=C_FOPID)
+    ax2 = ax.twinx()
+    ax2.semilogx(f, b["phase_deg"], color="#555", lw=1.5, ls="--")
+    ax2.set_ylabel("phase (deg)", color="#555"); ax2.grid(False)
+    de = d["FOPID"]["design"]
+    ax.set_title("(c) designed FOPID  "
+                 rf"$C(s)=K_p+K_i\,s^{{-{de['lam']:.2f}}}+K_d\,s^{{{de['mu']:.2f}}}$"
+                 "\n(dashed = phase; fractional slopes)", fontsize=10)
+
+    # (d) tip time response at a common depth
+    ax = axes[1, 1]
+    apc = d["traces_common_depth_mm"]
+    for n in ["ADRC", "FOPID", "LQG"]:
+        t, y = tr[f"{n}_t"], tr[f"{n}_y_um"]
+        rms = np.sqrt(np.mean(y[len(y) // 2:] ** 2))
+        ax.plot(t * 1e3, y, color=cols[n], lw=0.9,
+                label=f"{n}  (RMS {rms:.2f} µm)")
+    ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
+    ax.set_title(f"(d) tip response at $a_p$ = {apc:.1f} mm\n"
+                 "ADRC rejects; FOPID stabilises but ~10× more residual", fontsize=10)
+    ax.legend(fontsize=9)
+
+    fig.suptitle("Fractional-order PID (FOPID) vs LQG / ADRC — identical plant, "
+                 "sensors, saturation and metrics", fontsize=12)
+    save(fig, "fig12_fopid")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
@@ -487,7 +576,8 @@ if __name__ == "__main__":
            ("material_removal.json", fig_material_removal),
            ("full_process_lqg.json", fig_full_process),
            ("full_process_afc.json", fig_afc),
-           ("full_process_afc_traces.npz", fig_timeseries)]
+           ("full_process_afc_traces.npz", fig_timeseries),
+           ("fopid.json", fig_fopid)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

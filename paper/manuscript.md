@@ -47,8 +47,17 @@ feedforward in a two-degree-of-freedom controller is shown, analytically and wit
 CL-SD, to reduce forced vibration and peak voltage but *not* the stability
 boundary; and two natural ADRC augmentations (a regeneration-aware delayed
 channel and a resonant ESO) are honestly reported as *negative results* (< 2 %
-gain).  We also document and correct the fabricated results of the package this
-work started from (`CORRECTIONS.md`).
+gain).  **(vii)** To place the observer-based designs against the cheapest
+realistic alternative, a *fractional-order PID* (FOPID, PI^lambda D^mu, Oustaloup
+realization) is dropped into the same CL-SD monodromy and two-stage metric: being
+model-free and observer-free it still reaches a voltage-feasible depth of 1.56 mm
+-- equal to a full LQG on the *same* collocated sensor and 95 % of ADRC's
+1.65 mm, showing the state model buys nothing here beyond what the sensor already
+provides -- and it is as drift-tolerant as ADRC; but, lacking a disturbance
+estimator, it only *stabilises* chatter and rejects vibration ~14x worse than
+ADRC (13.4 vs 0.98 um at 1.2 mm), a clean separation of "stabiliser" from
+"suppressor".  We also document and correct the fabricated results of the package
+this work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
 
@@ -221,6 +230,40 @@ channel* u_tau = g [y(t-tau) - y(t)] exploiting the exactly-known tooth-passing
 delay (the monodromy supports controller delayed-output terms), and a *resonant
 ESO* embedding an internal model at/near the dominant mode.  Both are reported
 in Sec. 4.7.
+
+### 3.7 Fractional-order PID controller (FOPID)
+
+To place the observer-based designs against the cheapest realistic alternative we
+add a *fractional-order PID* (`src/fopid_control.py`), a model-free,
+observer-free output-feedback law
+
+    C(s) = Kp + Ki s^{-lambda} + Kd s^{mu},     0 < lambda, mu < 1,     u = -sigma C(s) y,
+
+whose two extra knobs (the fractional orders lambda, mu) give independent
+low- and high-frequency phase shaping.  The irrational operators are realized by
+the Oustaloup recursive approximation over [5, 20 000] Hz (order N = 3, i.e.
+2N+1 = 7 biproper first-order sections per branch, built as a well-conditioned
+series cascade rather than a companion form); the individual operators track
+s^alpha to within ~2 % magnitude and <=~15 deg phase across the mode band.  The
+resulting controller is a strictly-causal LTI system z' = Ac z + Bc y,
+u = Cc z + Dc y (Dc != 0, the operators are biproper), so it embeds in the CL-SD
+monodromy through the *same* `rho_dynamic` interface as ADRC and LQG -- its
+stability-lobe diagram is genuine, not asserted.  It reads the collocated
+(minimum-phase) piezo-corner sensor, like ADRC.
+
+The FOPID is designed against the true chatter metric: for each loop sign the
+gains and orders are chosen by differential evolution to *minimize the dominant
+Floquet multiplier* of the closed-loop semi-discretization at a reference depth
+(the analogue of ADRC's bandwidth grid), then selected by the voltage-feasible
+metric of Sec. 3.5 -- the same latitude LQG (weights) and ADRC (bandwidth)
+receive.  As a computed control (not an assertion), we also design a
+*damping-optimal* FOPID -- maximizing the minimum closed-loop modal damping (no
+cutting) -- and evaluate its chatter boundary: it comes out below the
+chatter-optimal design on both metrics (Sec. 4.11), confirming that modal damping
+is a proxy, not the objective, since the regenerative limit is set by the loop
+phase at the chatter frequency; on this benchmark the gap is modest (~20-30 %).
+Realized with N = 3 over [5, 8 kHz] (kept below the 20 kHz Nyquist so the CL-SD
+and ZOH realizations coincide).  Results in Sec. 4.11.
 
 ## 4. Results
 
@@ -577,6 +620,89 @@ breaks (e.g. heavy chatter onset -- where the ADRC's margin, not the comb, is
 the relevant defence), and under frequency drift beyond the FxLMS phase
 envelope it degrades to neutrality by design (leakage).
 
+### 4.11 A model-free alternative: fractional-order PID (FOPID)
+
+How much of the observer-based controllers' advantage survives against a
+model-free, observer-free law?  We designed a FOPID (Sec. 3.7) and compared it
+with LQG and ADRC under *identical* conditions -- refined 5-mode plant,
+dt = 25 us, +/-150 V saturation on all, collocated sensor for FOPID/ADRC and tip
+for LQG, performance read at the tip (`experiments/fopid_study.py`).  The
+chatter-optimal design was sigma = -1, lambda = 0.94, mu = 0.92.
+
+| controller | model | sensor | linear a_p,crit (nominal / refined) | voltage-feasible a_p | tip RMS at 1.2 mm |
+|---|---|---|---:|---:|---:|
+| open loop | -- | -- | 0.06 / 0.06 mm | -- | (chatter) |
+| LQG | full state | tip | 4.00 / **0.01** mm | 1.29 mm | 12.0 um |
+| LQG | full state | collocated | -- | **1.56 mm** | -- |
+| **FOPID** | **none** | collocated | 4.33 / 3.31 mm | **1.56 mm** | 13.4 um |
+| ADRC | b0 only | collocated | 2.95 / 2.90 mm | **1.65 mm** | **0.98 um** |
+
+Five findings, each computed.
+
+**(i) On feasible depth FOPID matches a full LQG -- and the gap over the
+tip-sensor LQG is the sensor, not the model.**  The model-free FOPID reaches
+1.56 mm, above the tip-sensor LQG (1.29 mm) and 95 % of ADRC (1.65 mm).  But an
+LQG driven by the *same collocated sensor* also reaches exactly 1.56 mm: once the
+sensor is equalized, the full state model and Kalman observer buy LQG **nothing**
+in feasible depth -- the collocated minimum-phase measurement is worth +0.27 mm,
+the model ~0.  For stability alone, a two-extra-parameter PID on a good sensor is
+as good as a full LQG.
+
+**(ii) The linear boundary is deceptive -- symmetrically.**  On the nominal design
+model FOPID posts the *highest* linear boundary (4.33 mm, above LQG's 4.00 and
+ADRC's 2.95), yet its feasible depth (1.56) is far below: the voltage wall, the
+inversion of Sec. 4.6 now visible within one controller.  And the *deployed*
+LQG's linear boundary is the most illusory of all -- 4.00 mm on the design model
+collapses to 0.01 mm on the refined 5-mode plant (observer spillover through the
+un-modelled 3.4-4.1 kHz modes), while the collocated FOPID and ADRC keep
+well-posed refined-plant boundaries (3.31 and 2.90 mm).  Only the feasible metric
+ranks all three sensibly.
+
+**(iii) FOPID stabilises but does not suppress.**  At a_p = 1.2 mm its residual
+tip RMS is 13.4 um (saturating at 150 V), ~14x ADRC's 0.98 um and on par with
+LQG's 12.0 um (Fig. 12d).  FOPID only shapes loop gain and phase; with no
+disturbance estimator it cannot cancel the regenerative/forced force the way the
+ESO does.  This -- not the stability boundary -- is where ADRC's active
+disturbance estimate earns its place.
+
+**(iv) Robustness favours the collocated controllers.**  Under +/-20 % plant-
+frequency drift the feasible depth of FOPID and ADRC stays high while the
+model-based LQG loses about half its depth at either extreme:
+
+| drift | FOPID | ADRC | LQG (tip) |
+|---|---:|---:|---:|
+| -20 % | 1.38 mm | 1.29 mm | 0.65 mm |
+| nominal | 1.56 mm | 1.65 mm | 1.29 mm |
+| +20 % | 2.65 mm | 1.92 mm | 0.56 mm |
+
+Both collocated controllers retain >= 1.29 mm across +/-20 % (FOPID is in fact the
+more drift-tolerant of the two here); the fixed-model LQG collapses -- the
+expected penalty of committing to a nominal model.
+
+**(v) Modal damping is the wrong design objective.**  Designing the FOPID to
+maximize closed-loop modal damping (3.87 %, no cutting) instead of the chatter
+margin gives a lower boundary on both metrics -- 2.54 vs 3.03 mm linear (nominal)
+and 1.20 vs 1.56 mm feasible -- confirming that the regenerative limit is set by
+loop phase at the chatter frequency, not by raw damping; on this benchmark the
+gap is modest (~20-30 %), not dramatic.
+
+*Honest limitations.*  The FOPID's gain-scale selection saturated the low edge of
+its grid (best at scale 0.25), so 1.56 mm is a robust value across the 0.25-2.0
+range (feasible stayed 1.2-1.56 mm) but not a proven global optimum; and because
+only the scalar gain scale -- not the orders/relative gains -- is feasible-selected
+(the core search targets the linear metric), the reported FOPID feasible depth is,
+if anything, conservative.  The Oustaloup band [5, 8 kHz], order N = 3, is kept
+below the 20 kHz Nyquist so the CL-SD (continuous) and time-domain (ZOH)
+realizations coincide.
+
+The verdict: a well-designed FOPID is a cheap, robust chatter *stabiliser* --
+model-free, as good as a full LQG on equal sensing, and drift-tolerant -- but not
+a chatter *suppressor*; for surface finish the active disturbance estimate of ADRC
+(and, above it, the AFC-ADRC comb) remains decisive.  The comparison also shows
+the CL-SD framework's generality: an arbitrary fixed-structure fractional
+controller drops into the same Floquet analysis and two-stage metric with no
+special-casing (Fig. 12).
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is
@@ -621,7 +747,14 @@ removed: full-process vibration ~3x below both baselines (0.15 vs
 0.47-0.53 um) at negligible voltage cost and unchanged fast-loop stability.
 Two in-loop ADRC augmentations were honestly reported as negative results, and
 a two-degree-of-freedom feedforward was shown to help forced vibration but not
-stability.  Every reported number is reproducible from the code.
+stability.  Finally, a model-free, observer-free fractional-order PID was dropped
+into the same CL-SD framework and two-stage metric: it reaches a feasible depth
+of 1.56 mm -- equal to a full LQG on the same collocated sensor (so the state
+model buys nothing beyond the sensor here) and 95 % of ADRC -- and is as
+drift-tolerant as ADRC, yet rejects vibration ~14x worse, cleanly separating a
+chatter *stabiliser* from a *suppressor* and demonstrating that the framework
+accepts an arbitrary fixed-structure controller without special-casing.  Every
+reported number is reproducible from the code.
 
 ## References
 
@@ -641,3 +774,13 @@ on Industrial Electronics* 56 (2009) 900-906.
 
 [5] Z. Gao. Scaling and bandwidth-parameterization based controller tuning.
 *Proc. American Control Conference* (2003) 4989-4996.
+
+[6] I. Podlubny. Fractional-order systems and PI^lambda D^mu controllers.
+*IEEE Transactions on Automatic Control* 44 (1999) 208-214.
+
+[7] A. Oustaloup, F. Levron, B. Mathieu, F. M. Nanot. Frequency-band complex
+noninteger differentiator: characterization and synthesis. *IEEE Transactions on
+Circuits and Systems I* 47 (2000) 25-39.
+
+[8] C. A. Monje, Y. Q. Chen, B. M. Vinagre, D. Xue, V. Feliu. *Fractional-order
+Systems and Controls: Fundamentals and Applications*. Springer, 2010.

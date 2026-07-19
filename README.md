@@ -39,8 +39,14 @@ endpoint (refined plant, 20 kHz) confirms **ADRC 1.65 mm vs LQG 1.29 mm
 (+28 %)**; (5) two natural ADRC augmentations (regeneration-aware delayed
 channel, resonant ESO) are honestly documented as **negative results** (< 2 %
 gain); (6) a **phase-aware feedforward** (`src/twodof_control.py`) is shown to
-reduce forced vibration/voltage but *not* the stability boundary. All numbers
-are computed and reproducible.
+reduce forced vibration/voltage but *not* the stability boundary; and (7) a
+model-free, observer-free **fractional-order PID** (`src/fopid_control.py`,
+Oustaloup realization) is dropped into the *same* CL-SD monodromy and two-stage
+metric, where it reaches the same voltage-feasible depth as a full LQG on equal
+(collocated) sensing (**1.56 mm**, vs 1.29 mm for tip-sensor LQG — the sensor,
+not the state model, drives that gap) and is as drift-tolerant as ADRC, but
+rejects vibration ~14x worse (no disturbance estimator) — a clean separation of
+chatter *stabiliser* from *suppressor*. All numbers are computed and reproducible.
 
 ## Layout
 
@@ -58,12 +64,14 @@ src/                       importable modules
   adrc_control.py          *** ADRC (extended-state observer + control law)
   afc_adrc.py              *** AFC-ADRC: + spindle-synchronous adaptive
                                feedforward comb on the tip sensor (FxLMS)
+  fopid_control.py         *** fractional-order PID (PI^lambda D^mu, Oustaloup)
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
   floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
   run_all.py               reproduces every core result -> results/
   placement_study.py       transducer-placement co-design (linear + feasible)
   augmentation_study.py    negative results: delayed channel & resonant ESO
+  fopid_study.py           FOPID design + comparison vs OL/LQG/ADRC (same metrics)
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)
 figures/                   publication figures (created by make_figures.py)
@@ -95,6 +103,9 @@ python experiments/material_removal.py     # ~3 min: in-process removal
 python experiments/full_process_sim.py --controller lqg   # ~5 min each:
 python experiments/full_process_sim.py --controller adrc  #   continuous 4-pass
 python experiments/full_process_sim.py --controller afc   #   end-to-end process
+python experiments/fopid_study.py          # ~18 min: FOPID design + comparison
+                                           #   (linear nominal+refined, feasible,
+                                           #    drift robustness, damping contrast)
 ```
 
 The full derivation of the (refined) Kirchhoff model is in

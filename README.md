@@ -54,7 +54,16 @@ costs are stated plainly (saturated ~37 µm limit cycle at low depth, −20% dri
 fragility), and the design rule is computed, not asserted: the ESO must be
 band-limited and sign-matched to the mode-1 subplant with the companion
 controller co-designed around it — a retrofit is provably impossible (stage-A
-search finds none). All numbers are computed and reproducible.
+search finds none). A **v2 iteration** (`experiments/hybrid_v2_study.py`: ESO
+leakage + injection roll-off + robust min-max co-design, all LTI, validated in
+`experiments/test_hybrid_validation.py`) removes the saturated low-depth limit
+cycle (**37 → 0.29 µm** at 0.15 mm, LQG-class there, at 1.6 V), repairs the
+refined-plant linear boundary for the robust design (**0.01 → 0.96 mm**), and
+proves the added elements jointly load-bearing by ablation — at disclosed
+costs (nominal margin 0.65 vs 0.83 mm; +20% drift headroom 0.29 vs 0.74 mm)
+and with an honest negative: the −20% drift weakness survives even a
+discretization-converged linear ±20% min-max certificate on the design model,
+which the fidelity layers revoke. All numbers are computed and reproducible.
 
 ## Layout
 
@@ -83,6 +92,8 @@ experiments/
   fopid_study.py           FOPID design library (DE tuning, metrics, drift)
   fopid_tip_study.py       tip-sensor baselines: LQG / plain ADRC / plain FOPID
   hybrid_tip_study.py      HYBRID design (2-stage DE) + final tip-only comparison
+  hybrid_v2_study.py       hybrid v2: leakage/roll-off/min-max, Pareto, ablation
+  test_hybrid_validation.py  auditable module validation (5 checks)
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)
 figures/                   publication figures (created by make_figures.py)
@@ -119,6 +130,9 @@ python experiments/fopid_tip_study.py      # ~11 min: tip-sensor baselines
                                            #    plain FOPID weak)
 python experiments/hybrid_tip_study.py     # ~10 min: HYBRID ADRC-FOPID design
                                            #   + final tip-only comparison
+python experiments/hybrid_v2_study.py      # ~57 min: v2 improvements (leakage,
+                                           #   roll-off, robust min-max, Pareto,
+                                           #   ablation, delayed-channel test)
 ```
 
 The full derivation of the (refined) Kirchhoff model is in

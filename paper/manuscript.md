@@ -61,8 +61,16 @@ subplant (b0_eff = -0.55, band ~ 487 Hz) and reaches **0.83 mm -- 4x the best
 fixed-structure law** -- making disturbance-rejection control usable at all on
 this sensor, at honestly-stated costs (saturated ~37 um limit cycle at low
 depth, -20 % drift fragility) that keep LQG the best overall tip-sensor
-controller.  We also document and correct the fabricated results of the package
-this work started from (`CORRECTIONS.md`).
+controller.  A second iteration (ESO leakage + injection roll-off + robust
+min-max co-design, all LTI) then removes the saturated low-depth limit cycle
+(37 um at 150 V -> 0.29 um at 1.6 V at 0.15 mm, ~125x, LQG-class there) and
+repairs the refined-plant linear boundary for the robust design
+(0.01 -> 0.96 mm), at disclosed costs -- nominal margin 0.65 vs 0.83 mm and
++20 % drift headroom 0.29 vs 0.74 mm -- while the -20 % drift weakness
+persists even under a discretization-converged linear min-max certificate on
+the design model: a computed caution that robustness certificates must be
+re-validated on the refined plant.  We also document and correct the fabricated results of the
+package this work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
 
@@ -726,7 +734,85 @@ the same CL-SD monodromy and two-stage metric with no special-casing (Fig. 12).
 (its winning sign as a standalone tip controller) and used a disclosed DE budget
 (popsize 8, 10 generations per b0 sign); the gain-scale feasible selection
 landed interior (0.35).  The hybrid numbers are therefore lower bounds from a
-bounded search, not proven optima.
+bounded search, not proven optima.  (The limit-cycle and spillover weaknesses
+quantified above are substantially repaired in Sec. 4.12, at a margin cost;
+the -20 % drift weakness is not.)
+
+### 4.12 Improving the hybrid: ESO leakage, injection roll-off, robust co-design
+
+The v1 hybrid earned its margin with three computed weaknesses: a saturated
+~37 um limit cycle at low depth (W2), a refined-plant linear boundary at the
+floor (spillover, W3), and a -20 % drift collapse (W1).  Version 2
+(`experiments/hybrid_v2_study.py`) adds one LTI element per weakness and
+re-runs the whole honest pipeline: **ESO leakage** eps_leak (z3' += -eps z3,
+i.e. A_o[2,2] = -eps -- the unbounded disturbance integral is what rams the
+actuator into the limit cycle), a **first-order roll-off** wf on the ESO
+injection (one extra exported state -- the mode-1 inversion is rolled off
+before the 3.4-4.1 kHz spillover modes), and a **robust min-max objective**
+(v2-R minimizes the WORST CL-SD multiplier over the -20/0/+20 % drifted design
+plants, with a worst-floor penalty; v2-N keeps the nominal objective).  Both
+new parameters are searched by the same DE alongside the eight v1 parameters,
+both ESO gain signs; module validation is a committed test file
+(`experiments/test_hybrid_validation.py`: v2 defaults reproduce v1 bit-exactly;
+the v2 export equals the analytic (LP G_y + F)/(1 - LP G_u) form to 5e-15).
+
+| design | feasible a_p | tip RMS at 0.15 mm | linear a_p (refined plant) | drift -20 % / +20 % |
+|---|---:|---:|---:|---:|
+| v1 hybrid | **0.83 mm** | 37 um (saturated, 150 V) | 0.01 mm (floor) | 0.00 / 0.74 mm |
+| v2-N | 0.47 mm | 0.39 um (2.4 V) | 0.24 mm | 0.00 / 0.29 mm |
+| v2-R | 0.65 mm | **0.29 um (1.6 V)** | **0.96 mm** | 0.00 / 0.29 mm |
+| LQG (ref.) | 1.29 mm | 0.23 um (18 V) | -- | 0.65 / 0.56 mm |
+
+**W2 is fixed at low depth.**  The leakage removes the saturated limit cycle:
+at 0.15 mm the v2-R residual is 0.29 um at 1.6 V versus v1's 37 um at 150 V --
+a ~125x ratio whose magnitude is set by v1 riding the saturation ceiling --
+and essentially LQG-class there (0.23 um); v2-R holds 78 % of v1's margin.
+The improvement narrows with depth: at 0.5 mm v2-R is stable at 20.9 um /
+111 V (v1: 32.3 um saturated; LQG: 6.1 um), and v2-N -- whose feasible depth
+is 0.47 mm -- no longer holds the 0.5 mm cut that Sec. 4.11 showcased for v1.
+The gain-scale sweeps (Fig. 13a) expose the margin-vs-finish trade, with an
+honest caveat: the dial is NOT monotone.  For v2-N it works only up to scale
+~0.75; beyond that the saturated limit cycle returns (RMS 6.5-32 um) while the
+feasible depth *falls* -- the high-scale points are strictly dominated.
+**W3 is fixed for the robust design.**  The roll-off restores a meaningful
+linear boundary on the refined 5-mode plant for v2-R: 0.01 -> 0.96 mm, so the
+linear and feasible metrics again agree in order of magnitude; v2-N improves
+only to 0.24 mm, still below its own 0.47 mm feasible depth -- the repair is
+design-dependent, not automatic.  **The added elements are jointly
+load-bearing** (attribution ablation; both stripped together, gains
+unchanged): v2-R collapses from 0.65 mm to 0.00 and v2-N from 0.47 to 0.29 --
+the improvements are not an artifact of the re-search.  (Per-element
+attribution was not run.)
+
+**W1 is honestly NOT fixed -- and the failure is instructive.**  The min-max
+search did find a design whose worst linear multiplier over the three-point
+{-20, 0, +20 %} drift set is 0.922 at 0.8 mm on the 3-mode design model --
+and this value is discretization-converged (identical at m_div = 16 and 30),
+so it is a real linear certificate of the design model, not a numerical
+artifact.  It does not transfer: on the refined 5-mode saturated plant the
+-20 % feasible depth is 0.00 at every gain tested (including the certificate's
+own g = 1.0, where +20 % reaches 0.47 mm).  The certificate is issued by the
+design model and revoked by the fidelity layers (the un-modelled modes and the
+voltage saturation) -- the same lesson as Sec. 4.8, now for robustness claims:
+*a drift certificate computed on the design model must be re-validated on the
+refined plant before it is believed.*
+A tip-sensor LTI hybrid that survives -20 % drift remains an open problem
+(LQG holds 0.65 mm there).  Separately, the regeneration-aware delayed channel
+u_tau = g[y(t-tau) - y(t)] was re-tested on the selected v2 with the ESO-aware
+realization (Bc_tau in the monodromy): its effect is exactly zero at every
+gain (0.552 mm throughout, both realizations) -- the third negative result for
+delayed controller channels in this study (cf. Sec. 4.7).
+
+*Costs and disclosures.*  The finish gains cost margin -- 0.65 vs 0.83 mm
+(-22 %) -- and, notably, +20 % drift headroom: both v2 designs fall to 0.29 mm
+where v1 held 0.74 mm (-61 %), so the "robust" objective bought nothing on
+either drift side of the deployed plant.  The v2 design stage used
+a_p,ref = 0.8 mm and m_div = 16
+(vs 1.0 mm / 20 for v1) for speed; all reported numbers use the identical
+evaluation machinery (m_div = 30, same bisection), and the ablation above
+carries the attribution.  DE budget (popsize 8, 10 generations, both b0 signs,
+sigma = +1 fixed) is serialized with the results; the gain-scale selections
+landed interior for both designs.
 
 ## 5. Discussion
 
@@ -787,9 +873,19 @@ plain ADRC fails at every bandwidth, and a HYBRID that merges the two
 (saturated low-depth limit cycle, -20 % drift fragility).  The hybrid's design
 rule is itself a result: on an NMP channel a lumped-disturbance observer must be
 band-limited and sign-matched to one dominant mode and its companion controller
-co-designed around it (a retrofit is provably impossible); and the framework
-accepted every one of these structures without special-casing.  Every reported
-number is reproducible from the code.
+co-designed around it (a retrofit is provably impossible).  A second iteration
+added ESO leakage, an injection roll-off and a robust min-max objective (all
+LTI): it removed the saturated low-depth limit cycle (37 -> 0.29 um at
+0.15 mm, LQG-class there), repaired the refined-plant linear boundary for the
+robust design (0.01 -> 0.96 mm), proved the added elements jointly
+load-bearing by ablation (stripping both collapses 0.65 -> 0.00 mm), and
+exposed the margin-vs-finish trade as gain-scale sweeps (non-monotone: the
+limit cycle returns at high gains) -- while honestly reporting the costs
+(nominal margin -22 %, +20 % drift headroom -61 %) and that the -20 % drift
+weakness survives even a discretization-converged linear min-max certificate,
+which the fidelity layers revoke.
+The framework accepted every one of these structures without special-casing.
+Every reported number is reproducible from the code.
 
 ## References
 

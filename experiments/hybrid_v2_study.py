@@ -224,6 +224,32 @@ def run(quick=False):
               flush=True)
     out["designs"] = res_designs
 
+    # ---------- min-max certificate check at its own design gain ----------
+    # Feasible selection may pick a scale != 1.0; the +/-20% linear certificate
+    # was issued at the design gain (g = 1.0), so test the drifted feasible
+    # depths there too before concluding on W1.
+    print("=== v2R min-max certificate check at g=0.75/1.0 ===")
+    desR = res_designs["v2R"]["design"]; gsel = desR.get("scale", 1.0)
+    baseR = {k: desR[k] for k in ("sign", "lam", "mu", "wc", "wo", "b0_eff",
+                                  "eps_leak", "wf")}
+    K0R = dict(Kp=desR["Kp"] / gsel, Ki=desR["Ki"] / gsel, Kd=desR["Kd"] / gsel)
+    cert = {}
+    for g in (0.75, 1.0):
+        Hg = dict(baseR); Hg.update(Kp=K0R["Kp"] * g, Ki=K0R["Ki"] * g,
+                                    Kd=K0R["Kd"] * g, scale=g)
+        row = {}
+        for s, dtag in ((0.8, "-20%"), (1.2, "+20%")):
+            dtip = lambda s=s: drift_plate(build(5, include_dynamics=True,
+                                                 sensor="tip"), s)
+            row[dtag] = _feasible(lambda: _SelfStateWrapper(
+                make_v2(eval_tip(), Hg), NX5, NX5), dtip) * 1e3
+        cert[str(g)] = row
+        print(f"  v2R @ g={g}: drift feasible {row}", flush=True)
+    out["drift_cert_check_v2R"] = dict(
+        note=("min-max certificate issued at design gain g=1.0; drifted "
+              "feasible depths re-evaluated at g=0.75/1.0 on the refined "
+              "plant"), rows=cert)
+
     # ---------- in-run v1 baseline + attribution ablation ----------
     print("=== v1 baseline in-pipeline + stripped-elements ablation ===")
     H1 = dict(v1["HYBRID"]["design"]); H1.setdefault("eps_leak", 0.0)

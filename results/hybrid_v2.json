@@ -1,0 +1,333 @@
+{
+  "dt_us": 25.0,
+  "u_max": 150.0,
+  "rpm": 4900,
+  "sensor": "tip only",
+  "v1_design": {
+    "sign": 1.0,
+    "lam": 0.596007248879562,
+    "mu": 0.3007812158148492,
+    "Kp": 1791.8220019411733,
+    "Ki": 61757.852091475535,
+    "Kd": 2835.400663856083,
+    "wc": 561.5086465948532,
+    "wo": 3058.1703389440167,
+    "b0_eff": -0.546898410685226,
+    "scale": 0.35
+  },
+  "v1_feasible_mm": 0.8343750000000001,
+  "robust_band_pct": 20,
+  "obj_v2N": 0.8401878940103176,
+  "obj_v2R": 0.9223736924335795,
+  "pareto_v2N": [
+    {
+      "scale": 0.2,
+      "feasible_mm": 0.290625,
+      "rms15_um": 0.31843729340722965,
+      "umax15_V": 0.7478180396087839
+    },
+    {
+      "scale": 0.25,
+      "feasible_mm": 0.290625,
+      "rms15_um": 0.32667861711825036,
+      "umax15_V": 0.9656168266263798
+    },
+    {
+      "scale": 0.35,
+      "feasible_mm": 0.38125000000000003,
+      "rms15_um": 0.3449688090981374,
+      "umax15_V": 1.4020121893896094
+    },
+    {
+      "scale": 0.5,
+      "feasible_mm": 0.47187500000000004,
+      "rms15_um": 0.38995915613521853,
+      "umax15_V": 2.4065229851714647
+    },
+    {
+      "scale": 0.75,
+      "feasible_mm": 0.47187500000000004,
+      "rms15_um": 0.5340652501428407,
+      "umax15_V": 4.738861564466546
+    },
+    {
+      "scale": 1.0,
+      "feasible_mm": 0.290625,
+      "rms15_um": 6.514321059957439,
+      "umax15_V": 150.0
+    },
+    {
+      "scale": 1.5,
+      "feasible_mm": 0.2,
+      "rms15_um": 31.426920818812103,
+      "umax15_V": 150.0
+    },
+    {
+      "scale": 2.0,
+      "feasible_mm": 0.2,
+      "rms15_um": 32.30721541001417,
+      "umax15_V": 150.0
+    }
+  ],
+  "pareto_v2R": [
+    {
+      "scale": 0.2,
+      "feasible_mm": 0.2,
+      "rms15_um": 5.827616287199496,
+      "umax15_V": 14.971499547498135
+    },
+    {
+      "scale": 0.25,
+      "feasible_mm": 0.2,
+      "rms15_um": 1.9368696236522398,
+      "umax15_V": 4.093947828196885
+    },
+    {
+      "scale": 0.35,
+      "feasible_mm": 0.290625,
+      "rms15_um": 0.3805799439752636,
+      "umax15_V": 1.6595768035130203
+    },
+    {
+      "scale": 0.5,
+      "feasible_mm": 0.6531250000000001,
+      "rms15_um": 0.2946526699114176,
+      "umax15_V": 1.6381776555856915
+    },
+    {
+      "scale": 0.75,
+      "feasible_mm": 0.6531250000000001,
+      "rms15_um": 0.30082963757721404,
+      "umax15_V": 1.7638919015609602
+    },
+    {
+      "scale": 1.0,
+      "feasible_mm": 0.6531250000000001,
+      "rms15_um": 0.30948806824952557,
+      "umax15_V": 2.0781447995902838
+    },
+    {
+      "scale": 1.5,
+      "feasible_mm": 0.6531250000000001,
+      "rms15_um": 0.3348919931358363,
+      "umax15_V": 2.8781455174631376
+    },
+    {
+      "scale": 2.0,
+      "feasible_mm": 0.5625000000000001,
+      "rms15_um": 0.37702903272892035,
+      "umax15_V": 3.7357468232934203
+    }
+  ],
+  "scale_selected_edge": {
+    "v2N": false,
+    "v2R": false
+  },
+  "designs": {
+    "v2N": {
+      "design": {
+        "sign": 1.0,
+        "lam": 0.3705334848405657,
+        "mu": 0.2998935497823591,
+        "Kp": 3295768.654204022,
+        "Ki": 26535.917548641097,
+        "Kd": 1668.038409319682,
+        "wc": 313.21018662541,
+        "wo": 3014.611810371603,
+        "b0_eff": -4.946046709479354,
+        "eps_leak": 618.8979642859972,
+        "wf": 17238.498310819592,
+        "scale": 0.5
+      },
+      "ap_feasible_mm": 0.47187500000000004,
+      "ap_crit_linear_nominal_mm": 0.55166015625,
+      "ap_crit_linear_refined_mm": 0.24345703125000004,
+      "drift_feasible_mm": {
+        "-20%": 0.0,
+        "nominal": 0.47187500000000004,
+        "+20%": 0.290625
+      },
+      "ablation_stripped_feasible_mm": 0.290625
+    },
+    "v2R": {
+      "design": {
+        "sign": 1.0,
+        "lam": 0.5856474502394633,
+        "mu": 0.6737900637639059,
+        "Kp": 234648.02954489255,
+        "Ki": 472404.58369529777,
+        "Kd": 2053.4871017123673,
+        "wc": 174.9803179147867,
+        "wo": 644.436634109463,
+        "b0_eff": 0.04308596144143171,
+        "eps_leak": 1550.2195508502666,
+        "wf": 2448.678962527783,
+        "scale": 0.5
+      },
+      "ap_feasible_mm": 0.6531250000000001,
+      "ap_crit_linear_nominal_mm": 1.63681640625,
+      "ap_crit_linear_refined_mm": 0.9559570312500001,
+      "drift_feasible_mm": {
+        "-20%": 0.0,
+        "nominal": 0.6531250000000001,
+        "+20%": 0.290625
+      },
+      "ablation_stripped_feasible_mm": 0.0
+    }
+  },
+  "v1_reevaluated_feasible_mm": 0.8343750000000001,
+  "delayed_channel": {
+    "applied_to": "v2N",
+    "base_ap_lin_mm": 0.55166015625,
+    "rows_eso_aware": [
+      {
+        "g": -5.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -2.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -1.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -0.5,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 0.5,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 1.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 2.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 5.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      }
+    ],
+    "rows_eso_blind": [
+      {
+        "g": -5.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -2.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -1.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": -0.5,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 0.5,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 1.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 2.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      },
+      {
+        "g": 5.0,
+        "ap_lin_nominal_mm": 0.55166015625
+      }
+    ],
+    "best_gain_mm": 0.55166015625,
+    "improvement_pct": 0.0
+  },
+  "trace_summary": {
+    "v2N_0.15": {
+      "stable": true,
+      "yrms_um": 0.38995915613521853,
+      "umax_V": 2.4065229851714647
+    },
+    "v2N_0.50": {
+      "stable": false,
+      "yrms_um": null,
+      "umax_V": 150.0
+    },
+    "v2R_0.15": {
+      "stable": true,
+      "yrms_um": 0.2946526699114176,
+      "umax_V": 1.6381776555856915
+    },
+    "v2R_0.50": {
+      "stable": true,
+      "yrms_um": 20.867819589534257,
+      "umax_V": 111.30654017180824
+    }
+  },
+  "elapsed_s": 3441.81941819191,
+  "disclosures": {
+    "de_budget": {
+      "maxiter": 10,
+      "popsize": 8,
+      "tol": 0.01,
+      "init": "sobol",
+      "seed": 0,
+      "b0_signs": [
+        1,
+        -1
+      ],
+      "sigma_fixed": 1,
+      "quick": false
+    },
+    "design_stage_vs_v1": {
+      "ap_ref_mm": [
+        0.8,
+        1.0
+      ],
+      "m_div_design": [
+        16,
+        20
+      ],
+      "note": "v2 design stage used ap_ref=0.8mm / m_div=16 (speed) vs v1's 1.0mm / 20; all REPORTED boundaries and feasible numbers use the identical evaluation machinery (m_div=30, same bisection), and the stripped-elements ablation addresses attribution of the improvement."
+    },
+    "step_vs_export": "The deployed step() carries the ESO's one-sample u-channel delay (ADRCController convention); the CL-SD export folds u instantaneously. All feasibility numbers use step() itself (conservative).",
+    "validation": "experiments/test_hybrid_validation.py"
+  },
+  "note": "v2 hybrid = v1 + ESO leakage eps_leak + first-order roll-off wf on the ESO injection, both searched by DE alongside the 8 v1 parameters. v2-N optimizes the nominal CL-SD margin; v2-R optimizes the WORST margin over drifted plants (min-max, worst-floor penalty). sigma fixed +1 (winning standalone tip sign; disclosed). Pareto rows expose the margin-vs-finish trade instead of a single point. Delayed-channel bonus uses the CL-SD Bc_tau/D_tau interface, ESO-aware realization (ESO-blind variant reported for comparison).",
+  "drift_cert_check_v2R": {
+    "note": "min-max certificate issued at design gain g=1.0; drift feasible re-evaluated at g=0.75/1.0 on the refined plant",
+    "rows": {
+      "0.75": {
+        "-20%": 0.0,
+        "+20%": 0.38125000000000003
+      },
+      "1.0": {
+        "-20%": 0.0,
+        "+20%": 0.47187500000000004
+      }
+    }
+  },
+  "cert_mdiv_check_v2R": {
+    "note": "min-max objective (worst rho@0.8mm over 3-point drift set, design model, g=1.0) re-evaluated at converged m_div=30",
+    "rows": {
+      "16": {
+        "-20%": 0.9224,
+        "nominal": 0.8745,
+        "+20%": 0.8527
+      },
+      "30": {
+        "-20%": 0.9224,
+        "nominal": 0.8823,
+        "+20%": 0.8527
+      }
+    }
+  }
+}

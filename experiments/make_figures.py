@@ -18,6 +18,7 @@ Output: 300-dpi PNG + PDF in ``figures/``.
   fig11_timeseries   full 81.6 s tip time response of all controllers
   fig11b_waveform    full-rate waveform snapshot at the worst region
   fig12_tip_comparison  tip-sensor-only comparison: LQG/ADRC/FOPID/HYBRID
+  fig13_hybrid_v2    hybrid v2 improvements: Pareto, finish, drift, spillover
 """
 import os, json
 import numpy as np
@@ -556,6 +557,117 @@ def fig_tip_comparison():
                  fontsize=12)
     save(fig, "fig12_tip_comparison")
 
+# ---------------------------- Fig 13: hybrid v2 improvements
+def fig_hybrid_v2():
+    d2 = load("hybrid_v2.json")
+    d1 = load("hybrid_tip.json")
+    tr2 = np.load(os.path.join(RES, "hybrid_v2_traces.npz"))
+    tr1 = np.load(os.path.join(RES, "hybrid_tip_traces.npz"))
+    C_HYB, C_V2N, C_V2R = "#7b1fa2", "#00838f", "#c2185b"
+    fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.6), layout="constrained")
+
+    # (a) margin-vs-finish Pareto plane
+    ax = axes[0, 0]
+    for tag, col, lab in (("v2N", C_V2N, "v2-N family"),
+                          ("v2R", C_V2R, "v2-R family")):
+        rows = [r for r in d2[f"pareto_{tag}"] if r["rms15_um"] is not None]
+        rows.sort(key=lambda r: r["scale"])
+        ax.plot([r["feasible_mm"] for r in rows], [r["rms15_um"] for r in rows],
+                "o-", color=col, ms=6, lw=1.5, label=lab)
+    v1r = d1["trace_summary"]["HYBRID_0.15"]["yrms_um"]
+    ax.plot(d1["HYBRID"]["ap_feasible_mm"], v1r, "s", color=C_HYB, ms=11,
+            mec="k", label=f"v1 hybrid ({v1r:.0f} µm, saturated)")
+    lqg_r = d1["trace_summary"]["LQG_0.15"]["yrms_um"]
+    ax.plot(d1["summary_tip_feasible_mm"]["LQG"], lqg_r, "*",
+            color=C_LQG, ms=17, mec="k", label=f"LQG ({lqg_r:.2f} µm)")
+    ax.set_yscale("log")
+    ax.set_xlabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_ylabel("tip RMS at 0.15 mm (µm, log)")
+    ax.set_title("(a) margin vs finish (gain-scale sweeps, non-monotone:\n"
+                 "the limit cycle returns at high gains); v1 = saturated 37 µm",
+                 fontsize=10)
+    ax.legend(fontsize=8.5)
+
+    # (b) rejection traces at 0.15 mm
+    ax = axes[0, 1]
+    for key, tr, col, lab in (("HYBRID_0.15", tr1, C_HYB, "v1 hybrid"),
+                              ("v2R_0.15", tr2, C_V2R, "v2-R"),
+                              ("LQG_0.15", tr1, C_LQG, "LQG")):
+        if f"{key}_t" not in tr:
+            continue
+        rms = (d1 if tr is tr1 else d2)["trace_summary"][key]["yrms_um"]
+        ax.plot(tr[f"{key}_t"] * 1e3, tr[f"{key}_y_um"], color=col, lw=0.9,
+                label=f"{lab}  (RMS {rms:.2f} µm)")
+    ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
+    ax.set_title("(b) rejection at $a_p$ = 0.15 mm on the tip sensor\n"
+                 "ESO leakage removes the saturated limit cycle (~125x)",
+                 fontsize=10)
+    ax.legend(fontsize=9)
+
+    # (c) drift robustness bars
+    ax = axes[1, 0]
+    tags = ["-20%", "nominal", "+20%"]
+    v1_rob = {t: d1["robustness_feasible_mm"][t]["HYBRID"] for t in tags}
+    lqg_rob = {t: d1["robustness_feasible_mm"][t]["LQG"] for t in tags}
+    v2r_rob = d2["designs"]["v2R"]["drift_feasible_mm"]
+    x = np.arange(3); w = 0.26
+    ax.bar(x - w, [v1_rob[t] for t in tags], w, color=C_HYB, ec="k",
+           label="v1 hybrid")
+    ax.bar(x, [v2r_rob[t] for t in tags], w, color=C_V2R, ec="k", label="v2-R")
+    ax.bar(x + w, [lqg_rob[t] for t in tags], w, color=C_LQG, ec="k",
+           label="LQG")
+    for xi, vals in zip(x, zip(*[[v1_rob[t] for t in tags],
+                                 [v2r_rob[t] for t in tags],
+                                 [lqg_rob[t] for t in tags]])):
+        for off, v in zip((-w, 0, w), vals):
+            ax.text(xi + off, v + 0.02, ("0" if v < 0.05 else f"{v:.2f}"),
+                    ha="center", fontsize=8)
+    ax.set_xticks(x); ax.set_xticklabels(tags)
+    ax.set_xlabel("plant frequency drift")
+    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_title("(c) drift robustness: the -20% weakness persists on the\n"
+                 "refined plant despite the linear min-max certificate",
+                 fontsize=10)
+    ax.legend(fontsize=9)
+
+    # (d) spillover repair + ablation
+    ax = axes[1, 1]
+    names = ["v1 hybrid", "v2-N", "v2-R"]
+    lin_ref = [d1["HYBRID"]["ap_crit_linear_refined_mm"],
+               d2["designs"]["v2N"]["ap_crit_linear_refined_mm"],
+               d2["designs"]["v2R"]["ap_crit_linear_refined_mm"]]
+    feas = [d1["HYBRID"]["ap_feasible_mm"],
+            d2["designs"]["v2N"]["ap_feasible_mm"],
+            d2["designs"]["v2R"]["ap_feasible_mm"]]
+    abl = [None, d2["designs"]["v2N"]["ablation_stripped_feasible_mm"],
+           d2["designs"]["v2R"]["ablation_stripped_feasible_mm"]]
+    x = np.arange(3); w = 0.26
+    ax.bar(x - w, lin_ref, w, color="#9e9e9e", ec="k",
+           label="linear boundary, refined 5-mode plant")
+    ax.bar(x, feas, w, color=[C_HYB, C_V2N, C_V2R], ec="k",
+           label="voltage-feasible")
+    ax.bar(x + w, [a if a is not None else 0 for a in abl], w, color="#e0e0e0",
+           ec="k", hatch="..", label="elements stripped (ablation)")
+    for xi, v in zip(x - w, lin_ref):
+        ax.text(xi, v + 0.02, f"{v:.2f}", ha="center", fontsize=8)
+    for xi, v in zip(x, feas):
+        ax.text(xi, v + 0.02, f"{v:.2f}", ha="center", fontsize=8,
+                fontweight="bold")
+    for xi, a in zip(x + w, abl):
+        if a is not None:
+            ax.text(xi, a + 0.02, ("0" if a < 0.05 else f"{a:.2f}"),
+                    ha="center", fontsize=8)
+    ax.set_xticks(x); ax.set_xticklabels(names)
+    ax.set_ylabel(r"$a_p$ (mm)")
+    ax.set_title("(d) spillover repair (refined-plant linear boundary\n"
+                 "0.01 -> 0.96 mm) and load-bearing ablation", fontsize=10)
+    ax.legend(fontsize=8.5)
+
+    fig.suptitle("HYBRID v2 improvements: ESO leakage + injection roll-off + "
+                 "robust min-max co-design (tip sensor)", fontsize=12)
+    save(fig, "fig13_hybrid_v2")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
@@ -565,7 +677,8 @@ if __name__ == "__main__":
            ("full_process_lqg.json", fig_full_process),
            ("full_process_afc.json", fig_afc),
            ("full_process_afc_traces.npz", fig_timeseries),
-           ("hybrid_tip.json", fig_tip_comparison)]
+           ("hybrid_tip.json", fig_tip_comparison),
+           ("hybrid_v2.json", fig_hybrid_v2)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

@@ -822,18 +822,30 @@ error) are the stress case: they destabilize the PD baselines
 value of modelling the delay explicitly.  The sample size (20) supports
 order statistics, not tail-probability claims, which we do not make.  A dedicated pass
 against the drifting-frequency plant (scheduled material removal)
-matches the nominal performance within \RemovalPerf.  Under
-spindle-speed changes (Fig.~\ref{fig:rpm}), where the open-loop
-response changes strongly as the spindle-harmonic comb moves relative
-to the plate resonances, the spindle-synchronized controller retains
-full performance (\RpmSixty\ at 6000~rpm, \RpmEighty\ at 8000~rpm).
-Notably, a controller with the internal model left detuned at the
-7000-rpm TPF degrades only mildly (by \DetunedRange): the scheduled LQR
-and the broadband force state carry most of the benefit, and the
-spindle-synchronous phasors provide the final refinement.  The
-architecture is thus robust to TPF misinformation rather than reliant
-on it---addressing the frequency-mismatch caveat of \citep{Kinney2011}
-by construction.
+matches the nominal performance within \RemovalPerf.
+
+The spindle-speed sweep (Fig.~\ref{fig:rpm}) maps the boundary of the
+method honestly.  At the design speed the controller delivers its
+nominal \RedPSH; at 6000~rpm, where the open-loop pass is quiet
+(\SI{2.6}{\micro m} RMS), it yields a modest \RpmSixty; at 8000~rpm,
+where the open loop sits in a large finite-amplitude limit cycle
+(\SI{37}{\micro m} RMS), every controller variant we tested---full
+PSH-LQG, harmonics disabled, authority reduced $10\times$ and
+$100\times$---\emph{enlarges} the limit cycle (reduction factor
+\RpmEighty, i.e.\ amplification), while the constant PD is merely
+neutral ($1.04\times$).  This is a genuinely nonlinear phenomenon:
+in the jump-out regime the response amplitude is a property of the
+limit cycle, linear feedback perturbs the cycle rather than the
+linearized dynamics, and frozen margins, closed-loop chatter limits,
+and even short-window simulation scoring did not predict the full-pass
+outcome.  A deployed system should therefore gate the controller on
+measured benefit (a trivial supervisory on/off comparison), and
+extending the design apparatus with amplitude-predictive nonlinear
+analysis (e.g.\ bistability-aware methods \citep{Insperger2004}) is,
+in our view, the most important open problem this study exposes.  At
+the speeds where control helps, a detuned internal model costs only
+0--5\%, so the architecture is robust to TPF misinformation rather
+than reliant on it \citep{Kinney2011}.
 
 \begin{figure}[tb]
 \centering

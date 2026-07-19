@@ -21,7 +21,7 @@ def setup():
 @pytest.fixture(scope="module")
 def controller(setup):
     sysp, model, _ = setup
-    ctl = PshlqgController(sysp, model, PshlqgConfig(r_u=9.4e-15))
+    ctl = PshlqgController(sysp, model, PshlqgConfig(r_u=3e-13))
     assert ctl.spillover_mask(model)
     return ctl
 
@@ -63,7 +63,7 @@ def test_end_to_end_suppression(setup):
     sp.milling.pass_time = 3.0
     m2, _ = build_modal_model(sp, fem=fem)
     r_open = simulate(sp, m2, controller=None, T=3.0)
-    ctl = PshlqgController(sp, m2, PshlqgConfig(r_u=9.4e-15))
+    ctl = PshlqgController(sp, m2, PshlqgConfig(r_u=3e-13))
     ctl.spillover_mask(m2)
     r_ctl = simulate(sp, m2, controller=ctl, T=3.0)
     so, sc = summarize(r_open, 3.0), summarize(r_ctl, 3.0)

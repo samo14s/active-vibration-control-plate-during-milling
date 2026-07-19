@@ -59,11 +59,42 @@ def _mc_case(i: int) -> dict:
     return row
 
 
+def _build_psh_for_speed(sp, model, r_u0, f_dist):
+    """Per-speed design with a regenerative-margin gate: the closed loop
+    must not degrade the chatter limit at that speed's regenerative
+    delay; if it does, feedback authority is reduced and the design
+    re-verified."""
+    from avcp import PshlqgController, PshlqgConfig, MillingForce
+    from avcp.stability import closed_loop_frf_nn
+    mf = MillingForce(sp.milling)
+    r_u = r_u0
+    for _ in range(4):
+        ctl = PshlqgController(sp, model, PshlqgConfig(r_u=r_u),
+                               f_dist=f_dist)
+        if not ctl.spillover_mask(model):
+            r_u *= 10.0
+            continue
+        ok = True
+        for xp in (0.012, 0.06, 0.108):
+            a_ol = mf.a_crit_nyquist(
+                lambda w: closed_loop_frf_nn(sp, model, None, xp, w),
+                sp.milling.rpm, nf=12000)
+            a_cl = mf.a_crit_nyquist(
+                lambda w: closed_loop_frf_nn(sp, model, ctl, xp, w),
+                sp.milling.rpm, nf=12000)
+            if a_cl < 0.9 * a_ol:
+                ok = False
+                break
+        if ok:
+            return ctl
+        r_u *= 10.0
+    return ctl
+
+
 def _rpm_case(args) -> tuple[str, dict]:
     rpm, = args
     from avcp import SystemParams, build_modal_model, simulate
     from avcp.metrics import summarize
-    from run_campaign import make_controllers
 
     sys_p = SystemParams()
     model, _ = build_modal_model(sys_p)
@@ -72,10 +103,11 @@ def _rpm_case(args) -> tuple[str, dict]:
     sp.milling.rpm = rpm
     T = sp.milling.pass_time + 1.0
     r_open = simulate(sp, model, controller=None, T=T, seed=42)
-    ctl_a = make_controllers(sp, model, tuning,
-                             f_dist=sp.milling.f_tpf)["pshlqg"]
+    ctl_a = _build_psh_for_speed(sp, model, tuning["r_u"],
+                                 f_dist=sp.milling.f_tpf)
     r_a = simulate(sp, model, controller=ctl_a, T=T, seed=42)
-    ctl_d = make_controllers(sp, model, tuning, f_dist=466.6667)["pshlqg"]
+    ctl_d = _build_psh_for_speed(sp, model, tuning["r_u"],
+                                 f_dist=466.6667)
     r_d = simulate(sp, model, controller=ctl_d, T=T, seed=42)
     out = {
         "open": summarize(r_open, sp.milling.pass_time)["rms_ac_wc"],

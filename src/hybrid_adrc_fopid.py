@@ -69,12 +69,21 @@ class HybridADRCFOPID:
     Kp,Ki,Kd,lam,mu,sign : FOPID branch (see fopid_control.FOPIDController)
     wb,wh,N : Oustaloup realization (kept below Nyquist)
     u_max   : saturation [V]
+    eps_leak: ESO disturbance-state leakage [1/s] (v2 improvement).  The plain
+              ESO integrates the innovation into z3 without bound; on the NMP
+              tip this rams the actuator into a saturated limit cycle at low
+              depths.  A leak z3' += -eps_leak*z3 bounds the estimate (an LTI
+              change: A_o[2,2] = -eps_leak).  0 recovers the v1 hybrid.
+    wf      : optional first-order low-pass corner [rad/s] on the ESO branch
+              output (v2 improvement): u_ESO is filtered before injection,
+              rolling the mode-1 inversion off before the 3.4-4.1 kHz spillover
+              modes.  None recovers the v1 hybrid (no filter state).
     """
 
     def __init__(self, plate, dt, wc, wo, b0_eff,
                  Kp, Ki, Kd, lam, mu, sign=1.0,
                  wb=2 * np.pi * 5.0, wh=2 * np.pi * 8000.0, N=3,
-                 u_max=150.0, verbose=False):
+                 u_max=150.0, eps_leak=0.0, wf=None, verbose=False):
         self.plate = plate
         self.dt = float(dt)
         self.n_x = 2 * plate.n_modes
@@ -91,17 +100,19 @@ class HybridADRCFOPID:
         Af, Bf, Cf, Df = self.fopid.export_lti()
         self.nzf = Af.shape[0]
 
-        # ---- ESO branch (identical structure to ADRCController) ----
+        # ---- ESO branch (ADRCController structure + optional v2 leakage) ----
         kp_a, kd_a = wc ** 2, 2.0 * wc
         b1, b2, b3 = 3 * wo, 3 * wo ** 2, wo ** 3
+        self.eps_leak = float(eps_leak)
         A_o = np.array([[-b1, 1.0, 0.0],
                         [-b2, 0.0, 1.0],
-                        [-b3, 0.0, 0.0]])
+                        [-b3, 0.0, -self.eps_leak]])
         B_o = np.array([0.0, self.b0, 0.0])
         L_o = np.array([b1, b2, b3])
         Ce = np.array([[-kp_a / self.b0, -kd_a / self.b0, -1.0 / self.b0]])
         self.A_o, self.B_o, self.L_o, self.Ce = A_o, B_o, L_o, Ce
         self.kp_a, self.kd_a = kp_a, kd_a
+        self.wf = None if wf is None else float(wf)
 
         # ZOH discretization of the ESO (u_prev and y as held inputs)
         Ad = expm(A_o * dt)
@@ -114,20 +125,43 @@ class HybridADRCFOPID:
         self.Ad_e, self.Bd_u, self.Bd_y = Ad, Bd_u, Bd_y
 
         # ---- exported continuous augmented controller ----
-        nz = 3 + self.nzf
-        Ac = np.zeros((nz, nz))
-        Ac[:3, :3] = A_o + np.outer(B_o, Ce.ravel())
-        Ac[:3, 3:] = np.outer(B_o, Cf.ravel())
-        Ac[3:, 3:] = Af
-        Bc = np.zeros((nz, 1))
-        Bc[:3, 0] = L_o + B_o * Df[0, 0]
-        Bc[3:, :] = Bf
-        Cc = np.zeros((1, nz))
-        Cc[0, :3] = Ce
-        Cc[0, 3:] = Cf
-        Dc = Df.copy()
+        if self.wf is None:
+            # v1 structure: states [z_e(3), z_f]
+            nz = 3 + self.nzf
+            Ac = np.zeros((nz, nz))
+            Ac[:3, :3] = A_o + np.outer(B_o, Ce.ravel())
+            Ac[:3, 3:] = np.outer(B_o, Cf.ravel())
+            Ac[3:, 3:] = Af
+            Bc = np.zeros((nz, 1))
+            Bc[:3, 0] = L_o + B_o * Df[0, 0]
+            Bc[3:, :] = Bf
+            Cc = np.zeros((1, nz))
+            Cc[0, :3] = Ce
+            Cc[0, 3:] = Cf
+            Dc = Df.copy()
+        else:
+            # v2 structure: states [z_e(3), z_lp(1), z_f];  u = z_lp + u_FOPID,
+            # z_lp' = -wf z_lp + wf Ce z_e  (ESO output low-passed before
+            # injection), and the ESO sees the TOTAL voltage u.
+            nz = 4 + self.nzf
+            Ac = np.zeros((nz, nz))
+            Ac[:3, :3] = A_o
+            Ac[:3, 3] = B_o                      # u contribution: z_lp
+            Ac[:3, 4:] = np.outer(B_o, Cf.ravel())
+            Ac[3, :3] = self.wf * Ce.ravel()
+            Ac[3, 3] = -self.wf
+            Ac[4:, 4:] = Af
+            Bc = np.zeros((nz, 1))
+            Bc[:3, 0] = L_o + B_o * Df[0, 0]
+            Bc[4:, :] = Bf
+            Cc = np.zeros((1, nz))
+            Cc[0, 3] = 1.0
+            Cc[0, 4:] = Cf
+            Dc = Df.copy()
         self.Ac, self.Bc, self.Cc, self.Dc = Ac, Bc, Cc, Dc
         self.nz = nz
+        self.a_lp = None if self.wf is None else float(np.exp(-self.wf * dt))
+        self.z_lp = 0.0
 
         self.z_e = np.zeros(3)
         self.needs_kstep = False
@@ -138,6 +172,7 @@ class HybridADRCFOPID:
     # ------------------------------------------------------------------
     def reset(self):
         self.z_e = np.zeros(3)
+        self.z_lp = 0.0
         self.fopid.reset()
 
     # ------------------------------------------------------------------
@@ -148,6 +183,9 @@ class HybridADRCFOPID:
                     + self.Bd_y * y_meas)
         z1, z2, z3 = self.z_e
         u_e = (-self.kp_a * z1 - self.kd_a * z2 - z3) / self.b0
+        if self.a_lp is not None:            # v2: low-pass the ESO injection
+            self.z_lp = self.a_lp * self.z_lp + (1.0 - self.a_lp) * u_e
+            u_e = self.z_lp
         # FOPID branch: output from current state, then advance (strictly causal)
         f = self.fopid
         u_f = float(f.Cc[0] @ f.z + f.Dc[0, 0] * y_meas)

@@ -676,8 +676,9 @@ class PshlqgController:
 
     # ------------------------------------------------ spillover masking
 
-    def spillover_mask(self, eval_model: ModalModel, n_check: int = 13,
-                       max_iter: int = 15, backoff: float = 0.6) -> bool:
+    def spillover_mask(self, eval_model, n_check: int = 13,
+                       max_iter: int = 15, backoff: float = 0.6,
+                       robust_family: bool = True) -> bool:
         """Verification-driven per-harmonic gain masking.
 
         The internal-model inversion is computed on the reduced design
@@ -691,6 +692,7 @@ class PshlqgController:
 
         Returns True when the frozen loop verifies along the path.
         """
+        import copy as _copy
         from .stability import closed_loop_matrix
         mil = self.sys.milling
         xs = np.linspace(mil.x_start, mil.x_end, n_check)
@@ -698,17 +700,29 @@ class PshlqgController:
         w_h = np.concatenate([[0.0], self.plant.w_h])
         margin_im = 1.0 - 0.5 * (1.0 - self.cfg.rho_dist)
         band = 2.0 * np.pi * 30.0
+        # verify against a small family of perturbed full-order models
+        # (modal-frequency and damping errors of the magnitude expected
+        # from identification), not only the nominal one
+        models = [eval_model] if not isinstance(eval_model, list) \
+            else list(eval_model)
+        if robust_family and len(models) == 1:
+            for sf, sz in ((1.03, 0.7), (0.97, 0.7)):
+                pm = _copy.deepcopy(models[0])
+                pm.freqs = models[0].freqs * sf
+                pm.zeta = models[0].zeta * sz
+                models.append(pm)
         for _ in range(max_iter):
             viol = []
-            for xc in xs:
-                ev = np.linalg.eigvals(
-                    closed_loop_matrix(self.sys, eval_model, self, xc))
-                bad = np.abs(ev) > margin_im
-                for e in ev[bad]:
-                    f_e = abs(np.angle(e)) / Ts
-                    h = int(np.argmin(np.abs(w_h - f_e)))
-                    if abs(w_h[h] - f_e) < band:
-                        viol.append((xc, h))
+            for em in models:
+                for xc in xs:
+                    ev = np.linalg.eigvals(
+                        closed_loop_matrix(self.sys, em, self, xc))
+                    bad = np.abs(ev) > margin_im
+                    for e in ev[bad]:
+                        f_e = abs(np.angle(e)) / Ts
+                        h = int(np.argmin(np.abs(w_h - f_e)))
+                        if abs(w_h[h] - f_e) < band:
+                            viol.append((xc, h))
             if not viol:
                 return True
             for xc, h in viol:

@@ -564,10 +564,15 @@ midpoint, which falls between modes~2 and~3 while mode~2 decouples from
 the $x$-symmetric patch), residual-mode truncation can flip its phase and
 push the corresponding internal-model pole outside the unit circle---a
 harmonic-specific observation/control spillover \citep{Balas1978}.  A
-verification loop against the full-order model therefore checks the
-frozen poles in a $\pm\SI{30}{Hz}$ band around each harmonic along the
-path and locally backs off the offending $\Lambda_h$ until the whole
-path verifies.  One ambiguity deserves explicit treatment: a
+verification loop therefore checks the frozen poles in a
+$\pm\SI{30}{Hz}$ band around each harmonic along the path---against a
+small \emph{family} of full-order models (nominal plus $\pm3\%$
+modal-frequency and $-30\%$ damping perturbations, the magnitude
+expected of identification error)---and locally backs off the offending
+$\Lambda_h$ until the whole path verifies for every family member.
+Because the $r_u$ auto-tuner requires this mask to converge, feedback
+authority is bounded by robust feasibility across the family, not by
+nominal feasibility alone.  One ambiguity deserves explicit treatment: a
 \emph{plate} pole can fall inside a harmonic band (here mode~4 at
 \SI{1874.8}{Hz} vs.\ the 4th harmonic at \SI{1866.8}{Hz}), and no
 frequency criterion can distinguish it from an internal-model pole.
@@ -807,11 +812,15 @@ material-removal drift), damping ($\pm30\%$), force level ($\pm20\%$),
 per-tooth runout (0--\SI{5}{\micro m}), and the computation delay
 (doubled in 30\% of runs), with all three controllers kept at their
 nominal designs.  Figure~\ref{fig:robust} shows the distributions of
-RMS reduction factors: PSH-LQG retains a median reduction of
-\MCmedPSH\ (interquartile range \MCiqrPSH, worst case \MCminPSH),
-degrading gracefully, and never destabilizes nor saturates
-persistently; the sample size (20) supports order statistics, not
-tail-probability claims, which we do not make.  A dedicated pass
+RMS reduction factors: PSH-LQG achieves a median reduction of
+\MCmedPSH\ (interquartile range \MCiqrPSH, worst case \MCminPSH); the
+largest factors occur precisely in the draws whose perturbations
+destabilize the open-loop cut into large-amplitude chatter, which the
+controller suppresses.  The doubled-delay draws (a 100\% delay-model
+error) are the stress case: they destabilize the PD baselines
+(reduction $\to$ 0) while PSH-LQG remains bounded, quantifying the
+value of modelling the delay explicitly.  The sample size (20) supports
+order statistics, not tail-probability claims, which we do not make.  A dedicated pass
 against the drifting-frequency plant (scheduled material removal)
 matches the nominal performance within \RemovalPerf.  Under
 spindle-speed changes (Fig.~\ref{fig:rpm}), where the open-loop

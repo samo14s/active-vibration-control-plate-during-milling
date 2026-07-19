@@ -37,15 +37,31 @@ map* and the *performance output map* travel with the cutter:
   cutting point* (the rigorous form of the VPD intuition), with the
   voltage weight auto-tuned against the **full 20-mode model** (spillover
   bound).
-- **Scheduled harmonic cancellation** — Tikhonov-regularized model
-  inversion of the estimated force phasors at the cutting point,
-  spindle-encoder-adaptive, with **verification-driven per-harmonic
-  masking** against the full-order model (spillover safeguard).
+- **Scheduled harmonic cancellation** — regularized model inversion of
+  the estimated force phasors at the cutting point, computed on the
+  LQR-closed design loop with an absolute per-harmonic regularization
+  floor, spindle-synchronized, plus a broadband random-walk force state
+  for sub-harmonic regenerative content.
+- **Robust spillover masking** — verification-driven per-harmonic gain
+  backoff checked against a family of perturbed full-order models
+  (±3 % modal frequency, −30 % damping); the LQR weight auto-tuner
+  requires family feasibility, so authority is bounded by robust — not
+  nominal — stability.
 
 Baselines: an optimally tuned constant PD (CPD) and a faithful,
 safeguarded re-derivation of the reference paper's time-space varying PD
 (VPD) — including the finding that its quintic gain smoothing can bridge
-over local stability dips and must be re-verified after fitting.
+over local stability dips and must be re-verified after fitting.  Both
+baselines are tuned with nonlinear simulation in the selection loop
+(frequency-domain surrogates rank candidates incorrectly in the
+finite-amplitude regenerative regime).
+
+**Benchmark note.** The corrected force projection
+(dFn = dFt sinφ − dFr cosφ) leaves the reference paper's exact feed
+nearly quiescent, so the control benchmark uses a declared
+semi-finishing condition (fz = 51 µm/tooth, ae = 0.3 mm, runout 2.5 µm)
+that reproduces the experimentally reported vibration magnitudes; the
+reference condition is retained for model validation.
 
 ## Repository layout
 

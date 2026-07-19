@@ -200,7 +200,7 @@ def _stable_at(make_ctrl, plant, ap, T=0.3, dt=DT, ret=False):
     r = sim.simulate(a3, a4, kp, controller=make_ctrl(), progress=False)
     ie = r['stop_idx']
     if ie < sim.nstep - 1:
-        return (False, None) if ret else False
+        return (False, r) if ret else False    # diverged: return the trajectory
     ytip = plant.D_tip @ r['qm'][:, :ie + 1]
     yr = float(np.sqrt(np.mean(ytip[len(ytip) // 2:] ** 2)) * 1e6)
     ok = yr < 50.0

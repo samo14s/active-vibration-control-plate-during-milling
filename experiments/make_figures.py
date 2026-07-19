@@ -18,6 +18,7 @@ Output: 300-dpi PNG + PDF in ``figures/``.
   fig11_timeseries   full 81.6 s tip time response of all controllers
   fig11b_waveform    full-rate waveform snapshot at the worst region
   fig12_fopid        fractional-order PID (FOPID) vs LQG / ADRC (identical metrics)
+  fig13_fopid_tip    all controllers forced onto the tip (NMP) sensor
 """
 import os, json
 import numpy as np
@@ -568,6 +569,61 @@ def fig_fopid():
     save(fig, "fig12_fopid")
 
 
+# ---------------------------- Fig 13: all controllers on the tip sensor
+def fig_fopid_tip():
+    d = load("fopid_tip.json")
+    tr = np.load(os.path.join(RES, "fopid_tip_traces.npz"))
+    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID}
+    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.2))
+
+    # (a) feasible depth on the tip sensor, with the collocated case for contrast
+    ax = axes[0]
+    names = ["LQG", "ADRC", "FOPID"]
+    tipf = [d["summary"]["ap_feasible_tip_mm"][n] for n in names]
+    con = d.get("collocated_contrast_feasible_mm", {})
+    colf = [con.get("LQG_collocated") or con.get("LQG_tip"),
+            con.get("ADRC_collocated"), con.get("FOPID_collocated")]
+    x = np.arange(len(names)); w = 0.38
+    ax.bar(x - w / 2, colf, w, color="#cfcfcf", ec="k", hatch="//",
+           label="collocated (min-phase) sensor")
+    ax.bar(x + w / 2, tipf, w, color=[cols[n] for n in names], ec="k",
+           label="tip (non-min-phase) sensor")
+    for xi, v in zip(x - w / 2, colf):
+        if v:
+            ax.text(xi, v + 0.03, f"{v:.2f}", ha="center", fontsize=8.5)
+    for xi, v in zip(x + w / 2, tipf):
+        ax.text(xi, v + 0.03, ("fails" if v < 0.2 else f"{v:.2f}"),
+                ha="center", fontsize=8.5, fontweight="bold",
+                color=("#b00" if v < 0.2 else "k"))
+    ax.set_xticks(x); ax.set_xticklabels(names)
+    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_title("(a) feasible depth on the common tip sensor\n"
+                 "ADRC fails on the NMP tip; FOPID degrades; LQG least affected",
+                 fontsize=10)
+    ax.legend(fontsize=9, loc="upper right")
+
+    # (b) tip time response at a low depth: which controllers survive
+    ax = axes[1]
+    apc = d["traces_common_depth_mm"]
+    for name in ["LQG", "ADRC", "FOPID"]:
+        tk, yk = f"{name}_t", f"{name}_y_um"
+        if tk not in tr:
+            continue
+        t, y = tr[tk], tr[yk]
+        stable = abs(y[-1]) < 100 and t[-1] > 0.9 * apc  # rough; label from data below
+        ax.plot(t * 1e3, y, color=cols[name], lw=1.0,
+                label=f"{name}" + ("" if len(y) else ""))
+    ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
+    ax.set_title(f"(b) tip response at $a_p$ = {apc:.1f} mm on the tip sensor\n"
+                 "diverging traces terminate at the chatter threshold", fontsize=10)
+    ax.legend(fontsize=9)
+
+    fig.suptitle("All controllers forced onto the tip (non-minimum-phase) sensor",
+                 fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    save(fig, "fig13_fopid_tip")
+
+
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
            ("adrc.json", fig_scenarios), ("feedforward.json", fig_feedforward),
@@ -577,7 +633,7 @@ if __name__ == "__main__":
            ("full_process_lqg.json", fig_full_process),
            ("full_process_afc.json", fig_afc),
            ("full_process_afc_traces.npz", fig_timeseries),
-           ("fopid.json", fig_fopid)]
+           ("fopid.json", fig_fopid), ("fopid_tip.json", fig_fopid_tip)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

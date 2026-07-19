@@ -1,0 +1,108 @@
+{
+  "dt_us": 25.0,
+  "u_max": 150.0,
+  "rpm": 4900,
+  "sensor": "tip (all controllers)",
+  "tip_coupling_signs": "-+--+",
+  "b0_tip": 0.3771737586767732,
+  "OL": {
+    "ap_crit_nominal_mm": 0.0627734375,
+    "ap_crit_refined_mm": 0.0578515625
+  },
+  "LQG": {
+    "rows": [
+      {
+        "label": "grid-default",
+        "weights": null,
+        "feasible_mm": 1.015625
+      },
+      {
+        "label": "w_q=1e16,w_qd=1e8",
+        "weights": [
+          1e+16,
+          100000000.0
+        ],
+        "feasible_mm": 1.2875
+      },
+      {
+        "label": "w_q=1e12,w_qd=1e8",
+        "weights": [
+          1000000000000.0,
+          100000000.0
+        ],
+        "feasible_mm": 0.74375
+      }
+    ],
+    "tune": "w_q=1e16,w_qd=1e8",
+    "ap_feasible_mm": 1.2875,
+    "ap_crit_linear_nominal_mm": 3.9993164062499997,
+    "ap_crit_linear_refined_mm": 0.01
+  },
+  "ADRC": {
+    "rows": [
+      {
+        "wc": 200,
+        "wo": 1200,
+        "feasible_mm": 0.0,
+        "ap_lin_nominal_mm": 0.01
+      },
+      {
+        "wc": 400,
+        "wo": 3200,
+        "feasible_mm": 0.0,
+        "ap_lin_nominal_mm": 0.01
+      },
+      {
+        "wc": 800,
+        "wo": 9600,
+        "feasible_mm": 0.0,
+        "ap_lin_nominal_mm": 0.01
+      },
+      {
+        "wc": 1200,
+        "wo": 14400,
+        "feasible_mm": 0.0,
+        "ap_lin_nominal_mm": 0.01
+      },
+      {
+        "wc": 1800,
+        "wo": 21600,
+        "feasible_mm": 0.0,
+        "ap_lin_nominal_mm": 0.01
+      }
+    ],
+    "best_feasible_mm": 0.0,
+    "best_linear_nominal_mm": 0.01,
+    "fails": true
+  },
+  "FOPID": {
+    "design": {
+      "sign": 1.0,
+      "lam": 0.7183922366780789,
+      "mu": 0.644333681972222,
+      "Kp": 937492.7532871399,
+      "Ki": 4440398.935335497,
+      "Kd": 31.8475837115969,
+      "scale": 0.25
+    },
+    "ap_feasible_mm": 0.2,
+    "ap_crit_linear_nominal_mm": 0.0841015625,
+    "ap_crit_linear_refined_mm": 0.0627734375
+  },
+  "traces_common_depth_mm": 0.5,
+  "collocated_contrast_feasible_mm": {
+    "LQG_tip": 1.2875,
+    "LQG_collocated": 1.559375,
+    "ADRC_collocated": 1.65,
+    "FOPID_collocated": 1.559375
+  },
+  "summary": {
+    "ap_feasible_tip_mm": {
+      "LQG": 1.2875,
+      "ADRC": 0.0,
+      "FOPID": 0.2
+    }
+  },
+  "elapsed_s": 638.9763197898865,
+  "note": "All three controllers read the SAME non-minimum-phase tip sensor. ADRC (lumped-disturbance ESO) fails to stabilise at any bandwidth/depth on the NMP plant; FOPID (fixed-structure) is heavily degraded vs its collocated case; LQG (full-state observer that models the NMP dynamics) works. This is the quantified reason the output-feedback controllers use a collocated minimum-phase sensor elsewhere in the study."
+}

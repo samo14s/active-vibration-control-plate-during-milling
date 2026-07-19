@@ -56,8 +56,12 @@ model-free and observer-free it still reaches a voltage-feasible depth of 1.56 m
 provides -- and it is as drift-tolerant as ADRC; but, lacking a disturbance
 estimator, it only *stabilises* chatter and rejects vibration ~14x worse than
 ADRC (13.4 vs 0.98 um at 1.2 mm), a clean separation of "stabiliser" from
-"suppressor".  We also document and correct the fabricated results of the package
-this work started from (`CORRECTIONS.md`).
+"suppressor".  Forcing all three controllers onto the *same* non-minimum-phase
+tip sensor is decisive: ADRC fails to stabilise at any bandwidth, FOPID is
+crippled (0.20 mm), and only the model-based LQG works (1.29 mm) -- so the
+output-feedback advantages are contingent on a collocated minimum-phase sensor,
+a design rule rather than a free choice.  We also document and correct the
+fabricated results of the package this work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
 
@@ -703,6 +707,40 @@ the CL-SD framework's generality: an arbitrary fixed-structure fractional
 controller drops into the same Floquet analysis and two-stage metric with no
 special-casing (Fig. 12).
 
+### 4.12 A strict single-sensor test: all controllers on the tip
+
+Sec. 4.11 gave the output-feedback controllers (ADRC, FOPID) a collocated
+minimum-phase sensor while LQG read the tip.  To test the comparison at its most
+adversarial we force ALL three onto the *same* tip sensor -- the non-minimum-phase
+measurement (modal coupling D_tip . H_pe = -+--+, i.e. right-half-plane zeros in
+the u -> y_tip transfer, b0 = +0.38) (`experiments/fopid_tip_study.py`).
+
+| controller | needs | voltage-feasible a_p (tip) | (collocated, Sec. 4.11) |
+|---|---|---:|---:|
+| open loop | -- | 0.06 mm | -- |
+| LQG | full-state observer | **1.29 mm** | 1.56 mm |
+| FOPID | fixed structure, no model | 0.20 mm | 1.56 mm |
+| ADRC | lumped-disturbance ESO | **0.00 mm (fails)** | 1.65 mm |
+
+On a common tip sensor only the model-based LQG works.  **ADRC fails to stabilise
+at any bandwidth (wc = 200-1800 rad/s) or depth** -- its linear CL-SD boundary
+sits at the floor and the saturated loop diverges even at 0.2 mm (Fig. 13b): a
+single lumped-disturbance ESO cannot invert a plant with right-half-plane zeros.
+**FOPID is crippled to 0.20 mm**, barely above the open loop -- a fixed-structure
+law cannot push enough phase lead through the RHP zeros.  LQG survives because its
+Kalman observer is built from the full (non-minimum-phase) state model and
+accounts for the wrong-signed modal contributions explicitly.
+
+This is the honest converse of Sec. 4.11 and resolves the sensor question it
+raised: the ADRC/FOPID advantages are **contingent on a collocated minimum-phase
+sensor** -- not a free modelling choice but a requirement for output-feedback
+control of this workpiece -- while a full-state observer is the only option if
+one is restricted to the tip measurement.  The design rule that falls out is
+crisp: *pair lumped-disturbance or fixed-structure controllers with a collocated
+sensor; use a model-based full-state observer if only a non-collocated (NMP)
+sensor is available.*  The sensor choice does not merely shift the numbers -- it
+decides which controller class is viable at all (Fig. 13).
+
 ## 5. Discussion
 
 These are *simulation* results. CL-SD, like all Floquet stability analysis, is
@@ -713,7 +751,10 @@ simulated depths therefore remain optimistic relative to the experiments of [1]
 and should be read as relative comparisons under identical assumptions. The ADRC
 comparison uses a collocated control sensor (natural for a piezo transducer)
 while the model-based controllers use the tip measurement with a full-state
-observer; performance for all is read at the tip. The static feedback-authority
+observer; performance for all is read at the tip. This sensor choice is not
+cosmetic: forcing the output-feedback controllers onto the non-minimum-phase tip
+(Sec. 4.12) makes ADRC fail outright and cripples FOPID, so the collocated sensor
+is a requirement for those controllers, not a convenience. The static feedback-authority
 curve (Sec. 4.5) is an idealised bound, not a realizable envelope. The
 contribution is a controlled SLD that is computed rather than asserted, an ADRC
 design suited to varying dynamics, and an honest accounting of what feedback
@@ -753,8 +794,12 @@ of 1.56 mm -- equal to a full LQG on the same collocated sensor (so the state
 model buys nothing beyond the sensor here) and 95 % of ADRC -- and is as
 drift-tolerant as ADRC, yet rejects vibration ~14x worse, cleanly separating a
 chatter *stabiliser* from a *suppressor* and demonstrating that the framework
-accepts an arbitrary fixed-structure controller without special-casing.  Every
-reported number is reproducible from the code.
+accepts an arbitrary fixed-structure controller without special-casing.  A strict
+single-sensor test settles the fairness question: forced onto the same
+non-minimum-phase tip sensor, ADRC fails to stabilise and FOPID is crippled while
+only the model-based LQG works -- the output-feedback advantages require a
+collocated minimum-phase sensor.  Every reported number is reproducible from the
+code.
 
 ## References
 

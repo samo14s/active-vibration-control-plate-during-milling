@@ -46,7 +46,12 @@ metric, where it reaches the same voltage-feasible depth as a full LQG on equal
 (collocated) sensing (**1.56 mm**, vs 1.29 mm for tip-sensor LQG — the sensor,
 not the state model, drives that gap) and is as drift-tolerant as ADRC, but
 rejects vibration ~14x worse (no disturbance estimator) — a clean separation of
-chatter *stabiliser* from *suppressor*. All numbers are computed and reproducible.
+chatter *stabiliser* from *suppressor*. A strict single-sensor test
+(`experiments/fopid_tip_study.py`) settles fairness: forced onto the *same*
+non-minimum-phase tip sensor, **ADRC fails to stabilise and FOPID is crippled
+(0.20 mm) while only the model-based LQG works (1.29 mm)** — the output-feedback
+advantages are contingent on a collocated minimum-phase sensor, a design rule.
+All numbers are computed and reproducible.
 
 ## Layout
 
@@ -72,6 +77,7 @@ experiments/
   placement_study.py       transducer-placement co-design (linear + feasible)
   augmentation_study.py    negative results: delayed channel & resonant ESO
   fopid_study.py           FOPID design + comparison vs OL/LQG/ADRC (same metrics)
+  fopid_tip_study.py       strict single-sensor test: all controllers on the tip
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)
 figures/                   publication figures (created by make_figures.py)
@@ -106,6 +112,9 @@ python experiments/full_process_sim.py --controller afc   #   end-to-end process
 python experiments/fopid_study.py          # ~18 min: FOPID design + comparison
                                            #   (linear nominal+refined, feasible,
                                            #    drift robustness, damping contrast)
+python experiments/fopid_tip_study.py      # ~11 min: all controllers on the tip
+                                           #   (NMP) sensor -- ADRC fails, FOPID
+                                           #   crippled, only LQG works
 ```
 
 The full derivation of the (refined) Kirchhoff model is in

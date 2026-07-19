@@ -47,21 +47,22 @@ feedforward in a two-degree-of-freedom controller is shown, analytically and wit
 CL-SD, to reduce forced vibration and peak voltage but *not* the stability
 boundary; and two natural ADRC augmentations (a regeneration-aware delayed
 channel and a resonant ESO) are honestly reported as *negative results* (< 2 %
-gain).  **(vii)** To place the observer-based designs against the cheapest
-realistic alternative, a *fractional-order PID* (FOPID, PI^lambda D^mu, Oustaloup
-realization) is dropped into the same CL-SD monodromy and two-stage metric: being
-model-free and observer-free it still reaches a voltage-feasible depth of 1.56 mm
--- equal to a full LQG on the *same* collocated sensor and 95 % of ADRC's
-1.65 mm, showing the state model buys nothing here beyond what the sensor already
-provides -- and it is as drift-tolerant as ADRC; but, lacking a disturbance
-estimator, it only *stabilises* chatter and rejects vibration ~14x worse than
-ADRC (13.4 vs 0.98 um at 1.2 mm), a clean separation of "stabiliser" from
-"suppressor".  Forcing all three controllers onto the *same* non-minimum-phase
-tip sensor is decisive: ADRC fails to stabilise at any bandwidth, FOPID is
-crippled (0.20 mm), and only the model-based LQG works (1.29 mm) -- so the
-output-feedback advantages are contingent on a collocated minimum-phase sensor,
-a design rule rather than a free choice.  We also document and correct the
-fabricated results of the package this work started from (`CORRECTIONS.md`).
+gain).  **(vii)** Keeping the article's original sensing unchanged -- the single
+non-minimum-phase tool-tip measurement -- we compare four controller classes in
+the same CL-SD monodromy and two-stage metric: the model-based LQG works
+(1.29 mm feasible), a model-free *fractional-order PID* (FOPID, PI^lambda D^mu,
+Oustaloup realization) survives but is weak (0.20 mm), and the plain ADRC fails
+at every bandwidth (its lumped-disturbance ESO inverts the plant through its
+right-half-plane zeros).  We then merge ADRC and FOPID into a **HYBRID**
+controller -- a band-limited ESO with a *searched, signed* effective gain plus a
+co-designed FOPID branch, one voltage output, same single sensor: joint
+co-design (retrofit is provably impossible) locks the ESO onto the mode-1
+subplant (b0_eff = -0.55, band ~ 487 Hz) and reaches **0.83 mm -- 4x the best
+fixed-structure law** -- making disturbance-rejection control usable at all on
+this sensor, at honestly-stated costs (saturated ~37 um limit cycle at low
+depth, -20 % drift fragility) that keep LQG the best overall tip-sensor
+controller.  We also document and correct the fabricated results of the package
+this work started from (`CORRECTIONS.md`).
 
 ## 1. Introduction
 
@@ -245,29 +246,56 @@ observer-free output-feedback law
 
 whose two extra knobs (the fractional orders lambda, mu) give independent
 low- and high-frequency phase shaping.  The irrational operators are realized by
-the Oustaloup recursive approximation over [5, 20 000] Hz (order N = 3, i.e.
+the Oustaloup recursive approximation (order N = 3 over [5, 8000] Hz, i.e.
 2N+1 = 7 biproper first-order sections per branch, built as a well-conditioned
-series cascade rather than a companion form); the individual operators track
-s^alpha to within ~2 % magnitude and <=~15 deg phase across the mode band.  The
-resulting controller is a strictly-causal LTI system z' = Ac z + Bc y,
-u = Cc z + Dc y (Dc != 0, the operators are biproper), so it embeds in the CL-SD
-monodromy through the *same* `rho_dynamic` interface as ADRC and LQG -- its
-stability-lobe diagram is genuine, not asserted.  It reads the collocated
-(minimum-phase) piezo-corner sensor, like ADRC.
+series cascade rather than a companion form; the band top is kept well below the
+20 kHz Nyquist so the continuous realization embedded in CL-SD and the deployed
+ZOH realization coincide); the individual operators track s^alpha to within ~2 %
+magnitude and <=~15 deg phase across the mode band.  The resulting controller is
+a strictly-causal LTI system z' = Ac z + Bc y, u = Cc z + Dc y (Dc != 0, the
+operators are biproper), so it embeds in the CL-SD monodromy through the *same*
+`rho_dynamic` interface as ADRC and LQG -- its stability-lobe diagram is genuine,
+not asserted.  Faithful to the system of [1], it reads the article's original
+measurement: the tool-tip displacement (a non-minimum-phase channel; Sec. 4.11).
 
 The FOPID is designed against the true chatter metric: for each loop sign the
 gains and orders are chosen by differential evolution to *minimize the dominant
 Floquet multiplier* of the closed-loop semi-discretization at a reference depth
 (the analogue of ADRC's bandwidth grid), then selected by the voltage-feasible
 metric of Sec. 3.5 -- the same latitude LQG (weights) and ADRC (bandwidth)
-receive.  As a computed control (not an assertion), we also design a
-*damping-optimal* FOPID -- maximizing the minimum closed-loop modal damping (no
-cutting) -- and evaluate its chatter boundary: it comes out below the
-chatter-optimal design on both metrics (Sec. 4.11), confirming that modal damping
-is a proxy, not the objective, since the regenerative limit is set by the loop
-phase at the chatter frequency; on this benchmark the gap is modest (~20-30 %).
-Realized with N = 3 over [5, 8 kHz] (kept below the 20 kHz Nyquist so the CL-SD
-and ZOH realizations coincide).  Results in Sec. 4.11.
+receive.  Results in Sec. 4.11.
+
+### 3.8 Hybrid ADRC-FOPID controller
+
+The tip measurement of [1] is non-minimum phase: the modal coupling
+D_tip . H_pe is sign-indefinite (-+--+), i.e. the u -> y_tip transfer carries
+right-half-plane zeros.  Sec. 4.11 shows this defeats each parent controller in
+a different way: the plain ADRC's single lumped-disturbance ESO effectively
+inverts the plant through its RHP zeros (some subset of modes always sees
+positive feedback), while the fixed-structure FOPID survives but cannot push
+enough phase lead through the RHP zeros to earn a useful margin.  The HYBRID
+(`src/hybrid_adrc_fopid.py`) merges them into one voltage output on the single
+tip sensor:
+
+    u = u_ESO + u_FOPID,
+    u_ESO   = ( -wc^2 z1 - 2 wc z2 - z3 ) / b0_eff,
+    u_FOPID = -sigma ( Kp + Ki s^-lambda + Kd s^mu ) y,
+
+with the crucial difference from plain ADRC that the ESO bandwidth wo and the
+signed effective input gain b0_eff are *free design parameters*: a band-limited
+ESO sees essentially the mode-1 subplant, whose tip coupling has a definite
+(negative) sign, so with a matching signed b0_eff its disturbance estimate is
+coherent exactly in the band where regenerative chatter lives, while the FOPID
+branch shapes the loop elsewhere.  Both branches are LTI, so the hybrid exports
+(Ac, Bc, Cc, Dc) -- the ESO sees the total voltage, giving the exact augmented
+form -- and drops into the CL-SD monodromy unchanged (implementation validated
+three ways: the ESO branch reproduces `ADRCController` to machine precision, the
+export equals the analytic (G_y + F)/(1 - G_u) closed form, and the deployed
+discrete step matches the continuous export to < 1 % in closed loop).  Design is
+two-stage and honest about it: stage A freezes the best tip FOPID and searches
+only the ESO add-on (does a retrofit help?); stage B co-designs all eight
+parameters jointly by differential evolution on the CL-SD spectral radius; the
+winner is then selected by the voltage-feasible metric.  Results in Sec. 4.11.
 
 ## 4. Results
 
@@ -624,122 +652,81 @@ breaks (e.g. heavy chatter onset -- where the ADRC's margin, not the comb, is
 the relevant defence), and under frequency drift beyond the FxLMS phase
 envelope it degrades to neutrality by design (leakage).
 
-### 4.11 A model-free alternative: fractional-order PID (FOPID)
+### 4.11 Controllers on the article's tip sensor: FOPID, plain ADRC, and the HYBRID
 
-How much of the observer-based controllers' advantage survives against a
-model-free, observer-free law?  We designed a FOPID (Sec. 3.7) and compared it
-with LQG and ADRC under *identical* conditions -- refined 5-mode plant,
-dt = 25 us, +/-150 V saturation on all, collocated sensor for FOPID/ADRC and tip
-for LQG, performance read at the tip (`experiments/fopid_study.py`).  The
-chatter-optimal design was sigma = -1, lambda = 0.94, mu = 0.92.
+Faithful to the system of [1], this comparison uses ONE sensor: the tool-tip
+displacement.  The tip channel is non-minimum phase -- its modal coupling
+D_tip . H_pe is sign-indefinite (-+--+, instantaneous gain b0 = +0.38 but
+mode-1 coupling negative), i.e. u -> y_tip has right-half-plane zeros.  All
+controllers run on the refined 5-mode plant at dt = 25 us with +/-150 V
+saturation; LQG keeps its full-state Kalman observer, FOPID and the hybrid are
+output-feedback laws on y_tip
+(`experiments/fopid_tip_study.py`, `experiments/hybrid_tip_study.py`).
 
-| controller | model | sensor | linear a_p,crit (nominal / refined) | voltage-feasible a_p | tip RMS at 1.2 mm |
-|---|---|---|---:|---:|---:|
-| open loop | -- | -- | 0.06 / 0.06 mm | -- | (chatter) |
-| LQG | full state | tip | 4.00 / **0.01** mm | 1.29 mm | 12.0 um |
-| LQG | full state | collocated | -- | **1.56 mm** | -- |
-| **FOPID** | **none** | collocated | 4.33 / 3.31 mm | **1.56 mm** | 13.4 um |
-| ADRC | b0 only | collocated | 2.95 / 2.90 mm | **1.65 mm** | **0.98 um** |
-
-Five findings, each computed.
-
-**(i) On feasible depth FOPID matches a full LQG -- and the gap over the
-tip-sensor LQG is the sensor, not the model.**  The model-free FOPID reaches
-1.56 mm, above the tip-sensor LQG (1.29 mm) and 95 % of ADRC (1.65 mm).  But an
-LQG driven by the *same collocated sensor* also reaches exactly 1.56 mm: once the
-sensor is equalized, the full state model and Kalman observer buy LQG **nothing**
-in feasible depth -- the collocated minimum-phase measurement is worth +0.27 mm,
-the model ~0.  For stability alone, a two-extra-parameter PID on a good sensor is
-as good as a full LQG.
-
-**(ii) The linear boundary is deceptive -- symmetrically.**  On the nominal design
-model FOPID posts the *highest* linear boundary (4.33 mm, above LQG's 4.00 and
-ADRC's 2.95), yet its feasible depth (1.56) is far below: the voltage wall, the
-inversion of Sec. 4.6 now visible within one controller.  And the *deployed*
-LQG's linear boundary is the most illusory of all -- 4.00 mm on the design model
-collapses to 0.01 mm on the refined 5-mode plant (observer spillover through the
-un-modelled 3.4-4.1 kHz modes), while the collocated FOPID and ADRC keep
-well-posed refined-plant boundaries (3.31 and 2.90 mm).  Only the feasible metric
-ranks all three sensibly.
-
-**(iii) FOPID stabilises but does not suppress.**  At a_p = 1.2 mm its residual
-tip RMS is 13.4 um (saturating at 150 V), ~14x ADRC's 0.98 um and on par with
-LQG's 12.0 um (Fig. 12d).  FOPID only shapes loop gain and phase; with no
-disturbance estimator it cannot cancel the regenerative/forced force the way the
-ESO does.  This -- not the stability boundary -- is where ADRC's active
-disturbance estimate earns its place.
-
-**(iv) Robustness favours the collocated controllers.**  Under +/-20 % plant-
-frequency drift the feasible depth of FOPID and ADRC stays high while the
-model-based LQG loses about half its depth at either extreme:
-
-| drift | FOPID | ADRC | LQG (tip) |
-|---|---:|---:|---:|
-| -20 % | 1.38 mm | 1.29 mm | 0.65 mm |
-| nominal | 1.56 mm | 1.65 mm | 1.29 mm |
-| +20 % | 2.65 mm | 1.92 mm | 0.56 mm |
-
-Both collocated controllers retain >= 1.29 mm across +/-20 % (FOPID is in fact the
-more drift-tolerant of the two here); the fixed-model LQG collapses -- the
-expected penalty of committing to a nominal model.
-
-**(v) Modal damping is the wrong design objective.**  Designing the FOPID to
-maximize closed-loop modal damping (3.87 %, no cutting) instead of the chatter
-margin gives a lower boundary on both metrics -- 2.54 vs 3.03 mm linear (nominal)
-and 1.20 vs 1.56 mm feasible -- confirming that the regenerative limit is set by
-loop phase at the chatter frequency, not by raw damping; on this benchmark the
-gap is modest (~20-30 %), not dramatic.
-
-*Honest limitations.*  The FOPID's gain-scale selection saturated the low edge of
-its grid (best at scale 0.25), so 1.56 mm is a robust value across the 0.25-2.0
-range (feasible stayed 1.2-1.56 mm) but not a proven global optimum; and because
-only the scalar gain scale -- not the orders/relative gains -- is feasible-selected
-(the core search targets the linear metric), the reported FOPID feasible depth is,
-if anything, conservative.  The Oustaloup band [5, 8 kHz], order N = 3, is kept
-below the 20 kHz Nyquist so the CL-SD (continuous) and time-domain (ZOH)
-realizations coincide.
-
-The verdict: a well-designed FOPID is a cheap, robust chatter *stabiliser* --
-model-free, as good as a full LQG on equal sensing, and drift-tolerant -- but not
-a chatter *suppressor*; for surface finish the active disturbance estimate of ADRC
-(and, above it, the AFC-ADRC comb) remains decisive.  The comparison also shows
-the CL-SD framework's generality: an arbitrary fixed-structure fractional
-controller drops into the same Floquet analysis and two-stage metric with no
-special-casing (Fig. 12).
-
-### 4.12 A strict single-sensor test: all controllers on the tip
-
-Sec. 4.11 gave the output-feedback controllers (ADRC, FOPID) a collocated
-minimum-phase sensor while LQG read the tip.  To test the comparison at its most
-adversarial we force ALL three onto the *same* tip sensor -- the non-minimum-phase
-measurement (modal coupling D_tip . H_pe = -+--+, i.e. right-half-plane zeros in
-the u -> y_tip transfer, b0 = +0.38) (`experiments/fopid_tip_study.py`).
-
-| controller | needs | voltage-feasible a_p (tip) | (collocated, Sec. 4.11) |
+| controller | needs | voltage-feasible a_p (tip) | tip RMS at 0.15 mm |
 |---|---|---:|---:|
-| open loop | -- | 0.06 mm | -- |
-| LQG | full-state observer | **1.29 mm** | 1.56 mm |
-| FOPID | fixed structure, no model | 0.20 mm | 1.56 mm |
-| ADRC | lumped-disturbance ESO | **0.00 mm (fails)** | 1.65 mm |
+| open loop | -- | 0.06 mm (linear) | (chatter) |
+| **LQG** | full state model | **1.29 mm** | **0.23 um** (18 V) |
+| plain ADRC | b0 only | **0.00 mm -- fails** | (unstable) |
+| plain FOPID | nothing | 0.20 mm | 1.30 um (3.6 V) |
+| **HYBRID** (Sec. 3.8) | b0_eff, wo (searched) | **0.83 mm** | 37 um (saturated) |
 
-On a common tip sensor only the model-based LQG works.  **ADRC fails to stabilise
-at any bandwidth (wc = 200-1800 rad/s) or depth** -- its linear CL-SD boundary
-sits at the floor and the saturated loop diverges even at 0.2 mm (Fig. 13b): a
-single lumped-disturbance ESO cannot invert a plant with right-half-plane zeros.
-**FOPID is crippled to 0.20 mm**, barely above the open loop -- a fixed-structure
-law cannot push enough phase lead through the RHP zeros.  LQG survives because its
-Kalman observer is built from the full (non-minimum-phase) state model and
-accounts for the wrong-signed modal contributions explicitly.
+Findings, each computed.
 
-This is the honest converse of Sec. 4.11 and resolves the sensor question it
-raised: the ADRC/FOPID advantages are **contingent on a collocated minimum-phase
-sensor** -- not a free modelling choice but a requirement for output-feedback
-control of this workpiece -- while a full-state observer is the only option if
-one is restricted to the tip measurement.  The design rule that falls out is
-crisp: *pair lumped-disturbance or fixed-structure controllers with a collocated
-sensor; use a model-based full-state observer if only a non-collocated (NMP)
-sensor is available.*  The sensor choice does not merely shift the numbers -- it
-decides which controller class is viable at all (Fig. 13).
+**(i) Plain ADRC fails outright on the tip.**  At every bandwidth tried
+(wc = 200-1800 rad/s) the linear CL-SD boundary sits at the floor and the
+saturated loop diverges even at 0.2 mm (Fig. 12b): a single lumped-disturbance
+ESO cannot invert a plant with RHP zeros.  **Plain FOPID survives but is weak**
+(0.20 mm, barely above the 0.06 mm open loop): a fixed structure cannot push
+enough phase lead through the RHP zeros.
+
+**(ii) A retrofit ESO is provably useless -- only co-design works.**  Stage A
+(best tip FOPID frozen, ESO added on top, 3-parameter search over wc, wo/wc and
+the signed b0_eff, both signs) finds NO stabilising ESO at all -- every retrofit
+destabilises the loop.  Stage B (joint 8-parameter co-design) does find one, and
+only in a physically telling corner: b0_eff = -0.55 (the sign and order of the
+*mode-1* coupling, opposite to the instantaneous +0.38), ESO bandwidth
+wo = 3058 rad/s ~ 487 Hz (a band around mode 1 at 540 Hz), with the FOPID branch
+reshaped to vacate that band (mu drops from 0.64 to 0.30).  The ESO must be
+band-limited to, and sign-matched with, the mode-1 subplant -- and the FOPID
+must be co-designed to make room for it.
+
+**(iii) The hybrid rescues disturbance-rejection control on the tip.**  The
+co-designed hybrid reaches a voltage-feasible depth of **0.83 mm -- 4x the plain
+FOPID and infinitely better than the plain ADRC's zero** -- with a nominal-model
+linear boundary of 2.02 mm (~2x FOPID's 1.02 mm).  At 0.5 mm, where FOPID and
+ADRC both chatter to divergence, the hybrid holds the cut (Fig. 12b).
+
+**(iv) The costs, stated plainly.**  First, finish: at 0.15 mm the hybrid rides
+a saturated limit cycle of ~37 um RMS -- stable, but far above LQG's 0.23 um and
+plain FOPID's 1.30 um (Fig. 12c).  The hybrid is a chatter *boundary extender*,
+not a finish controller; its aggressive mode-1 inversion buys margin with
+voltage, not accuracy.  Second, drift: at -20 % plant-frequency drift the
+hybrid's mode-1-tuned ESO loses its band and the feasible depth collapses to
+zero (as does plain FOPID's), while at +20 % it holds 0.74 mm; LQG degrades but
+survives on both sides (0.65 / 0.56 mm) (Fig. 12d).  Third, spillover: like the
+aggressive LQG of Sec. 4.8, the hybrid's *linear* boundary on the refined
+5-mode plant collapses to the floor (un-modelled 3.4-4.1 kHz modes destabilise
+the linear analysis; the saturated nonlinear loop survives) -- one more instance
+of Sec. 4.6's lesson that only the feasible metric ranks controllers sensibly.
+
+**(v) Verdict on the article's sensor.**  LQG remains the best tip-sensor
+controller on every axis (deepest feasible cut, best finish, only survivor of
+-20 % drift): with a single non-collocated NMP measurement, a full-state
+model-based observer is not a luxury but the price of admission.  The hybrid's
+contribution is to make ESO-based control *usable at all* on this sensor -- a
+4x feasible-depth gain over the best fixed-structure law, from two components
+that individually fail or underperform -- and to expose the design rule: a
+lumped-disturbance observer on an NMP channel must be band-limited and
+sign-matched to a single dominant mode, and the companion controller must be
+co-designed around it (retrofit is impossible, stage A).  All of it drops into
+the same CL-SD monodromy and two-stage metric with no special-casing (Fig. 12).
+
+*Honest limitations.*  The joint search fixed the FOPID loop sign at sigma = +1
+(its winning sign as a standalone tip controller) and used a disclosed DE budget
+(popsize 8, 10 generations per b0 sign); the gain-scale feasible selection
+landed interior (0.35).  The hybrid numbers are therefore lower bounds from a
+bounded search, not proven optima.
 
 ## 5. Discussion
 
@@ -751,10 +738,12 @@ simulated depths therefore remain optimistic relative to the experiments of [1]
 and should be read as relative comparisons under identical assumptions. The ADRC
 comparison uses a collocated control sensor (natural for a piezo transducer)
 while the model-based controllers use the tip measurement with a full-state
-observer; performance for all is read at the tip. This sensor choice is not
-cosmetic: forcing the output-feedback controllers onto the non-minimum-phase tip
-(Sec. 4.12) makes ADRC fail outright and cripples FOPID, so the collocated sensor
-is a requirement for those controllers, not a convenience. The static feedback-authority
+observer; performance for all is read at the tip. The controller-class comparison
+of Sec. 4.11 deliberately keeps the article's original single tip sensor: there,
+the non-minimum-phase channel makes plain ADRC fail outright and cripples FOPID,
+and only band-limited, sign-matched, co-designed hybridization (Sec. 3.8)
+recovers a useful ESO -- while a full-state model-based observer remains the
+strongest option on that sensor. The static feedback-authority
 curve (Sec. 4.5) is an idealised bound, not a realizable envelope. The
 contribution is a controlled SLD that is computed rather than asserted, an ADRC
 design suited to varying dynamics, and an honest accounting of what feedback
@@ -788,18 +777,19 @@ removed: full-process vibration ~3x below both baselines (0.15 vs
 0.47-0.53 um) at negligible voltage cost and unchanged fast-loop stability.
 Two in-loop ADRC augmentations were honestly reported as negative results, and
 a two-degree-of-freedom feedforward was shown to help forced vibration but not
-stability.  Finally, a model-free, observer-free fractional-order PID was dropped
-into the same CL-SD framework and two-stage metric: it reaches a feasible depth
-of 1.56 mm -- equal to a full LQG on the same collocated sensor (so the state
-model buys nothing beyond the sensor here) and 95 % of ADRC -- and is as
-drift-tolerant as ADRC, yet rejects vibration ~14x worse, cleanly separating a
-chatter *stabiliser* from a *suppressor* and demonstrating that the framework
-accepts an arbitrary fixed-structure controller without special-casing.  A strict
-single-sensor test settles the fairness question: forced onto the same
-non-minimum-phase tip sensor, ADRC fails to stabilise and FOPID is crippled while
-only the model-based LQG works -- the output-feedback advantages require a
-collocated minimum-phase sensor.  Every reported number is reproducible from the
-code.
+stability.  Finally, keeping the article's original single tip sensor -- a
+non-minimum-phase channel -- we compared four controller classes in the same
+CL-SD framework and two-stage metric: the model-based LQG works (1.29 mm
+feasible), a model-free fractional-order PID survives but is weak (0.20 mm),
+plain ADRC fails at every bandwidth, and a HYBRID that merges the two
+(band-limited ESO with searched signed gain + co-designed FOPID branch) reaches
+0.83 mm -- 4x the best fixed-structure law -- with its costs stated plainly
+(saturated low-depth limit cycle, -20 % drift fragility).  The hybrid's design
+rule is itself a result: on an NMP channel a lumped-disturbance observer must be
+band-limited and sign-matched to one dominant mode and its companion controller
+co-designed around it (a retrofit is provably impossible); and the framework
+accepted every one of these structures without special-casing.  Every reported
+number is reproducible from the code.
 
 ## References
 

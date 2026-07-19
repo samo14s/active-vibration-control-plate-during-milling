@@ -1,9 +1,14 @@
 """
 fopid_study.py
 ==============
-Fractional-order PID (FOPID / PI^lambda D^mu) controller: honest design and
-head-to-head comparison with the open loop, LQG and ADRC on the SAME plant,
-sensors, saturation and metrics used throughout the study.
+FOPID design LIBRARY (differential-evolution tuning against the CL-SD spectral
+radius, voltage-feasible bisection, drift-plate helper) shared by
+fopid_tip_study.py and hybrid_tip_study.py.
+
+Note: running this file directly executes an older collocated-sensor comparison
+that is NOT part of the manuscript -- the manuscript's controller comparison
+(Sec. 4.11) uses ONLY the article's original tip sensor; see
+fopid_tip_study.py and hybrid_tip_study.py.
 
 Why a fixed-structure fractional controller is worth testing here
 ----------------------------------------------------------------

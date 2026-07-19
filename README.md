@@ -39,19 +39,22 @@ endpoint (refined plant, 20 kHz) confirms **ADRC 1.65 mm vs LQG 1.29 mm
 (+28 %)**; (5) two natural ADRC augmentations (regeneration-aware delayed
 channel, resonant ESO) are honestly documented as **negative results** (< 2 %
 gain); (6) a **phase-aware feedforward** (`src/twodof_control.py`) is shown to
-reduce forced vibration/voltage but *not* the stability boundary; and (7) a
-model-free, observer-free **fractional-order PID** (`src/fopid_control.py`,
-Oustaloup realization) is dropped into the *same* CL-SD monodromy and two-stage
-metric, where it reaches the same voltage-feasible depth as a full LQG on equal
-(collocated) sensing (**1.56 mm**, vs 1.29 mm for tip-sensor LQG — the sensor,
-not the state model, drives that gap) and is as drift-tolerant as ADRC, but
-rejects vibration ~14x worse (no disturbance estimator) — a clean separation of
-chatter *stabiliser* from *suppressor*. A strict single-sensor test
-(`experiments/fopid_tip_study.py`) settles fairness: forced onto the *same*
-non-minimum-phase tip sensor, **ADRC fails to stabilise and FOPID is crippled
-(0.20 mm) while only the model-based LQG works (1.29 mm)** — the output-feedback
-advantages are contingent on a collocated minimum-phase sensor, a design rule.
-All numbers are computed and reproducible.
+reduce forced vibration/voltage but *not* the stability boundary; and (7) on the
+**article's original single tip sensor** (a non-minimum-phase channel — the only
+sensor used in this comparison), four controller classes meet in the same CL-SD
+monodromy and two-stage metric (`experiments/fopid_tip_study.py`,
+`experiments/hybrid_tip_study.py`): the model-based LQG works (**1.29 mm**
+feasible), a model-free **fractional-order PID** (`src/fopid_control.py`)
+survives but is weak (0.20 mm), plain ADRC **fails at every bandwidth** (its
+lumped ESO inverts the RHP zeros), and a **HYBRID ADRC-FOPID**
+(`src/hybrid_adrc_fopid.py`) — a band-limited ESO with a *searched signed* gain
+plus a co-designed FOPID branch — reaches **0.83 mm, 4x the best fixed-structure
+law**, making disturbance-rejection control usable at all on this sensor.  Its
+costs are stated plainly (saturated ~37 µm limit cycle at low depth, −20% drift
+fragility), and the design rule is computed, not asserted: the ESO must be
+band-limited and sign-matched to the mode-1 subplant with the companion
+controller co-designed around it — a retrofit is provably impossible (stage-A
+search finds none). All numbers are computed and reproducible.
 
 ## Layout
 
@@ -70,14 +73,16 @@ src/                       importable modules
   afc_adrc.py              *** AFC-ADRC: + spindle-synchronous adaptive
                                feedforward comb on the tip sensor (FxLMS)
   fopid_control.py         *** fractional-order PID (PI^lambda D^mu, Oustaloup)
+  hybrid_adrc_fopid.py     *** HYBRID: band-limited ESO + FOPID on the tip sensor
   twodof_control.py        *** feedback + phase-aware feedforward (2-DOF)
   floquet_synthesis.py     feedback-authority design curve (supplementary)
 experiments/
   run_all.py               reproduces every core result -> results/
   placement_study.py       transducer-placement co-design (linear + feasible)
   augmentation_study.py    negative results: delayed channel & resonant ESO
-  fopid_study.py           FOPID design + comparison vs OL/LQG/ADRC (same metrics)
-  fopid_tip_study.py       strict single-sensor test: all controllers on the tip
+  fopid_study.py           FOPID design library (DE tuning, metrics, drift)
+  fopid_tip_study.py       tip-sensor baselines: LQG / plain ADRC / plain FOPID
+  hybrid_tip_study.py      HYBRID design (2-stage DE) + final tip-only comparison
   make_figures.py          builds figures/ from results/
 results/                   computed JSON / NPZ (created by run_all.py)
 figures/                   publication figures (created by make_figures.py)
@@ -109,12 +114,11 @@ python experiments/material_removal.py     # ~3 min: in-process removal
 python experiments/full_process_sim.py --controller lqg   # ~5 min each:
 python experiments/full_process_sim.py --controller adrc  #   continuous 4-pass
 python experiments/full_process_sim.py --controller afc   #   end-to-end process
-python experiments/fopid_study.py          # ~18 min: FOPID design + comparison
-                                           #   (linear nominal+refined, feasible,
-                                           #    drift robustness, damping contrast)
-python experiments/fopid_tip_study.py      # ~11 min: all controllers on the tip
-                                           #   (NMP) sensor -- ADRC fails, FOPID
-                                           #   crippled, only LQG works
+python experiments/fopid_tip_study.py      # ~11 min: tip-sensor baselines
+                                           #   (LQG works; plain ADRC fails;
+                                           #    plain FOPID weak)
+python experiments/hybrid_tip_study.py     # ~10 min: HYBRID ADRC-FOPID design
+                                           #   + final tip-only comparison
 ```
 
 The full derivation of the (refined) Kirchhoff model is in

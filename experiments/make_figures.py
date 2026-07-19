@@ -17,8 +17,7 @@ Output: 300-dpi PNG + PDF in ``figures/``.
   fig10_afc          AFC-ADRC vs baselines (finish map + per-pass RMS)
   fig11_timeseries   full 81.6 s tip time response of all controllers
   fig11b_waveform    full-rate waveform snapshot at the worst region
-  fig12_fopid        fractional-order PID (FOPID) vs LQG / ADRC (identical metrics)
-  fig13_fopid_tip    all controllers forced onto the tip (NMP) sensor
+  fig12_tip_comparison  tip-sensor-only comparison: LQG/ADRC/FOPID/HYBRID
 """
 import os, json
 import numpy as np
@@ -482,147 +481,80 @@ def fig_timeseries():
         save(fig, "fig11b_waveform")
 
 
-# ---------------------------- Fig 12: FOPID comparison
-def fig_fopid():
-    d = load("fopid.json")
-    tr = np.load(os.path.join(RES, "fopid_traces.npz"))
-    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID}
-    fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.8), layout="constrained")
+# ---------------------------- Fig 12: tip-only controller comparison (+ HYBRID)
+def fig_tip_comparison():
+    dt_ = load("fopid_tip.json")
+    dh = load("hybrid_tip.json")
+    tr = np.load(os.path.join(RES, "hybrid_tip_traces.npz"))
+    C_HYB = "#7b1fa2"
+    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID, "HYBRID": C_HYB}
+    fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.6), layout="constrained")
 
-    # (a) linear boundary (nominal model) vs voltage-feasible depth
+    # (a) voltage-feasible depth on the tip sensor
     ax = axes[0, 0]
-    names = ["LQG", "ADRC", "FOPID"]
-    lin = [d["linear_nominal_mm"][n] for n in names]
-    fea = [d[n]["ap_feasible_mm"] for n in names]
-    x = np.arange(len(names)); w = 0.38
-    ax.bar(x - w / 2, lin, w, color="#cccccc", ec="k",
-           label="linear boundary (nominal model)")
-    ax.bar(x + w / 2, fea, w, color=[cols[n] for n in names], ec="k",
-           label="voltage-feasible (150 V)")
-    for xi, v in zip(x - w / 2, lin):
-        ax.text(xi, v + 0.06, f"{v:.2f}", ha="center", fontsize=8.5)
-    for xi, v in zip(x + w / 2, fea):
-        ax.text(xi, v + 0.06, f"{v:.2f}", ha="center", fontsize=8.5, fontweight="bold")
-    ax.axhline(d["linear_nominal_mm"]["OL"], color=C_OL, ls=":", lw=1.5)
-    ax.text(2.45, d["linear_nominal_mm"]["OL"] + 0.05,
-            f"open loop {d['linear_nominal_mm']['OL']:.2f} mm", color=C_OL,
-            ha="right", fontsize=8)
-    # LQG on the collocated sensor: same feasible depth as FOPID -> sensor, not model
-    lqg_col = d["LQG"].get("ap_feasible_collocated_mm")
-    if lqg_col:
-        ax.plot([0 + w / 2, 2 + w / 2], [lqg_col, lqg_col], color=C_LQG, ls="--", lw=1.6)
-        ax.text(1.0, lqg_col + 0.06, f"LQG on collocated sensor = {lqg_col:.2f} mm "
-                "(= FOPID: the sensor, not the model)", color=C_LQG, ha="center",
-                fontsize=7.6)
-    ax.set_xticks(x); ax.set_xticklabels(names)
-    ax.set_ylim(0, max(lin) * 1.22)
-    ax.set_ylabel(r"critical depth $a_p$ (mm)")
-    ax.set_title("(a) linear boundary (nominal) vs voltage-feasible depth\n"
-                 "FOPID = LQG on equal sensing; the voltage wall caps the linear boundary",
+    names = ["LQG", "ADRC", "FOPID", "HYBRID"]
+    s = dh["summary_tip_feasible_mm"]
+    fea = [s[n] for n in names]
+    x = np.arange(len(names))
+    bars = ax.bar(x, fea, 0.55, color=[cols[n] for n in names], ec="k")
+    for xi, v in zip(x, fea):
+        ax.text(xi, v + 0.03, ("fails" if v < 0.1 else f"{v:.2f}"), ha="center",
+                fontsize=9.5, fontweight="bold", color=("#b00" if v < 0.1 else "k"))
+    ax.axhline(s["OL_linear"], color=C_OL, ls=":", lw=1.5)
+    ax.text(3.35, s["OL_linear"] + 0.02, f"open loop {s['OL_linear']:.2f} mm",
+            color=C_OL, ha="right", fontsize=8)
+    ax.set_xticks(x)
+    ax.set_xticklabels(["LQG\n(full model)", "ADRC\n(plain ESO)",
+                        "FOPID\n(model-free)", "HYBRID\n(ESO+FOPID)"], fontsize=9)
+    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_title("(a) feasible depth, all controllers on the article's tip sensor\n"
+                 "(non-minimum phase: coupling " + dt_["tip_coupling_signs"] + ")",
                  fontsize=10)
-    ax.legend(fontsize=9, loc="upper right")
 
-    # (b) robustness: voltage-feasible depth under +/-20% frequency drift
+    # (b) stability demo at 0.5 mm
     ax = axes[0, 1]
-    rb = d["robustness_feasible_mm"]
-    tags, xx = ["-20%", "nominal", "+20%"], [-20, 0, 20]
-    for n in ["FOPID", "ADRC", "LQG"]:
-        ax.plot(xx, [rb[t][n] for t in tags], "o-", color=cols[n], lw=2, ms=7, label=n)
-    ax.set_xticks(xx); ax.set_xlabel("plant frequency drift (%)")
-    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
-    ax.set_title("(b) robustness: feasible depth under frequency drift\n"
-                 "collocated FOPID/ADRC hold; model-based LQG collapses",
-                 fontsize=10)
-    ax.legend(fontsize=9)
-
-    # (c) designed FOPID controller Bode (fractional character)
-    ax = axes[1, 0]
-    b = d["fopid_bode"]
-    f = np.array(b["w"]) / 2 / np.pi
-    ax.semilogx(f, b["mag_db"], color=C_FOPID, lw=2)
-    ax.set_xlabel("frequency (Hz)")
-    ax.set_ylabel(r"$|C(j\omega)|$ (dB)", color=C_FOPID)
-    ax.tick_params(axis="y", labelcolor=C_FOPID)
-    ax2 = ax.twinx()
-    ax2.semilogx(f, b["phase_deg"], color="#555", lw=1.5, ls="--")
-    ax2.set_ylabel("phase (deg)", color="#555"); ax2.grid(False)
-    de = d["FOPID"]["design"]
-    ax.set_title("(c) designed FOPID  "
-                 rf"$C(s)=K_p+K_i\,s^{{-{de['lam']:.2f}}}+K_d\,s^{{{de['mu']:.2f}}}$"
-                 "\n(dashed = phase; fractional slopes)", fontsize=10)
-
-    # (d) tip time response at a common depth
-    ax = axes[1, 1]
-    apc = d["traces_common_depth_mm"]
-    for n in ["ADRC", "FOPID", "LQG"]:
-        t, y = tr[f"{n}_t"], tr[f"{n}_y_um"]
-        rms = np.sqrt(np.mean(y[len(y) // 2:] ** 2))
-        ax.plot(t * 1e3, y, color=cols[n], lw=0.9,
-                label=f"{n}  (RMS {rms:.2f} µm)")
-    ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
-    ax.set_title(f"(d) tip response at $a_p$ = {apc:.1f} mm\n"
-                 "ADRC rejects; FOPID stabilises but ~10× more residual", fontsize=10)
-    ax.legend(fontsize=9)
-
-    fig.suptitle("Fractional-order PID (FOPID) vs LQG / ADRC — identical plant, "
-                 "sensors, saturation and metrics", fontsize=12)
-    save(fig, "fig12_fopid")
-
-
-# ---------------------------- Fig 13: all controllers on the tip sensor
-def fig_fopid_tip():
-    d = load("fopid_tip.json")
-    tr = np.load(os.path.join(RES, "fopid_tip_traces.npz"))
-    cols = {"LQG": C_LQG, "ADRC": C_ADRC, "FOPID": C_FOPID}
-    fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.2))
-
-    # (a) feasible depth on the tip sensor, with the collocated case for contrast
-    ax = axes[0]
-    names = ["LQG", "ADRC", "FOPID"]
-    tipf = [d["summary"]["ap_feasible_tip_mm"][n] for n in names]
-    con = d.get("collocated_contrast_feasible_mm", {})
-    colf = [con.get("LQG_collocated") or con.get("LQG_tip"),
-            con.get("ADRC_collocated"), con.get("FOPID_collocated")]
-    x = np.arange(len(names)); w = 0.38
-    ax.bar(x - w / 2, colf, w, color="#cfcfcf", ec="k", hatch="//",
-           label="collocated (min-phase) sensor")
-    ax.bar(x + w / 2, tipf, w, color=[cols[n] for n in names], ec="k",
-           label="tip (non-min-phase) sensor")
-    for xi, v in zip(x - w / 2, colf):
-        if v:
-            ax.text(xi, v + 0.03, f"{v:.2f}", ha="center", fontsize=8.5)
-    for xi, v in zip(x + w / 2, tipf):
-        ax.text(xi, v + 0.03, ("fails" if v < 0.2 else f"{v:.2f}"),
-                ha="center", fontsize=8.5, fontweight="bold",
-                color=("#b00" if v < 0.2 else "k"))
-    ax.set_xticks(x); ax.set_xticklabels(names)
-    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
-    ax.set_title("(a) feasible depth on the common tip sensor\n"
-                 "ADRC fails on the NMP tip; FOPID degrades; LQG least affected",
-                 fontsize=10)
-    ax.legend(fontsize=9, loc="upper right")
-
-    # (b) tip time response at a low depth: which controllers survive
-    ax = axes[1]
-    apc = d["traces_common_depth_mm"]
-    for name in ["LQG", "ADRC", "FOPID"]:
-        tk, yk = f"{name}_t", f"{name}_y_um"
-        if tk not in tr:
+    for name in ["ADRC", "FOPID", "HYBRID", "LQG"]:
+        k = f"{name}_0.50"
+        if f"{k}_t" not in tr:
             continue
-        t, y = tr[tk], tr[yk]
-        stable = abs(y[-1]) < 100 and t[-1] > 0.9 * apc  # rough; label from data below
-        ax.plot(t * 1e3, y, color=cols[name], lw=1.0,
-                label=f"{name}" + ("" if len(y) else ""))
+        ax.plot(tr[f"{k}_t"] * 1e3, tr[f"{k}_y_um"], color=cols[name], lw=0.9,
+                label=name)
     ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
-    ax.set_title(f"(b) tip response at $a_p$ = {apc:.1f} mm on the tip sensor\n"
+    ax.set_title("(b) tip response at $a_p$ = 0.5 mm\n"
                  "diverging traces terminate at the chatter threshold", fontsize=10)
     ax.legend(fontsize=9)
 
-    fig.suptitle("All controllers forced onto the tip (non-minimum-phase) sensor",
-                 fontsize=12)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    save(fig, "fig13_fopid_tip")
+    # (c) rejection at a low common depth (0.15 mm): FOPID vs HYBRID vs LQG
+    ax = axes[1, 0]
+    for name in ["LQG", "FOPID", "HYBRID"]:
+        k = f"{name}_0.15"
+        if f"{k}_t" not in tr:
+            continue
+        rms = dh["trace_summary"][k]["yrms_um"]
+        ax.plot(tr[f"{k}_t"] * 1e3, tr[f"{k}_y_um"], color=cols[name], lw=0.9,
+                label=f"{name}  (RMS {rms:.2f} µm)" if rms else name)
+    ax.set_xlabel("time (ms)"); ax.set_ylabel("tip displacement (µm)")
+    ax.set_title("(c) rejection at $a_p$ = 0.15 mm (all stable)\n"
+                 "does the ESO branch improve on plain FOPID?", fontsize=10)
+    ax.legend(fontsize=9)
 
+    # (d) drift robustness (feasible metric)
+    ax = axes[1, 1]
+    rb = dh["robustness_feasible_mm"]
+    tags, xx = ["-20%", "nominal", "+20%"], [-20, 0, 20]
+    for n in ["HYBRID", "LQG", "FOPID"]:
+        ax.plot(xx, [rb[t][n] for t in tags], "o-", color=cols[n], lw=2, ms=7,
+                label=n)
+    ax.set_xticks(xx); ax.set_xlabel("plant frequency drift (%)")
+    ax.set_ylabel(r"voltage-feasible $a_p$ (mm)")
+    ax.set_title("(d) robustness: feasible depth under frequency drift\n"
+                 "(tip sensor; plain ADRC infeasible everywhere)", fontsize=10)
+    ax.legend(fontsize=9)
+
+    fig.suptitle("Tip-sensor-only comparison (the article's measurement): "
+                 "LQG / ADRC / FOPID / HYBRID (band-limited ESO + FOPID)",
+                 fontsize=12)
+    save(fig, "fig12_tip_comparison")
 
 if __name__ == "__main__":
     reg = [("sld.npz", fig_sld), ("robustness.json", fig_robustness),
@@ -633,7 +565,7 @@ if __name__ == "__main__":
            ("full_process_lqg.json", fig_full_process),
            ("full_process_afc.json", fig_afc),
            ("full_process_afc_traces.npz", fig_timeseries),
-           ("fopid.json", fig_fopid), ("fopid_tip.json", fig_fopid_tip)]
+           ("hybrid_tip.json", fig_tip_comparison)]
     for f, fn in reg:
         if os.path.exists(os.path.join(RES, f)):
             fn()

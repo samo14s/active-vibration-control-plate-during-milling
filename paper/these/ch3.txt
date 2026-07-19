@@ -1,0 +1,138 @@
+# Chapitre 3. Contrôle actif robuste pour les parois minces : atténuation des vibrations régénératives en fraisage
+
+## 3.1. Introduction et positionnement du chapitre
+
+Le chapitre précédent a établi l'intérêt du rejet actif de perturbation d'ordre fractionnaire (ADRC-FOPID) pour la suppression du broutement, sur un modèle de pièce ramené à une dynamique dominante et piloté par un actionneur supposé parfait. Sa conclusion identifiait deux idéalisations à lever : une dynamique de pièce figée et un actionneur sans limites physiques. Le présent chapitre lève ces deux hypothèses sur la configuration la plus exigeante du fraisage de finition : la paroi mince flexible, dont la dynamique est multimodale, variable le long du trajet d'outil, et dont l'actionneur piézoélectrique sature à une tension finie.
+
+Le banc de référence retenu est celui de Du et al. [Du 2024] : une plaque mince en AL6061 de 100 × 80 × 4 mm, encastrée sur un bord, usinée en périphérie par une fraise trois dents de 10 mm (hélice 35°) à 4900 tr/min, et équipée d'un patch piézoélectrique QDA60-200,7 (±150 V) collé près de l'encastrement. La mesure disponible sur ce montage est le déplacement de l'extrémité libre de la plaque (la « pointe »), et c'est ce capteur — et lui seul — qui est utilisé dans la comparaison des correcteurs de ce chapitre, afin de rester fidèle au système de l'article de référence.
+
+La démarche du chapitre obéit à une règle d'intégrité stricte : chaque valeur annoncée est calculée par un code reproductible, chaque frontière de stabilité « contrôlée » est obtenue en plaçant le correcteur — observateur compris — à l'intérieur de l'analyse de stabilité, et chaque résultat négatif est rapporté comme tel. Les contributions du chapitre sont au nombre de cinq :
+
+- une modélisation de type Kirchhoff dite « précise » de la paroi mince, où la masse et la raideur du patch piézoélectrique entrent dans le modèle éléments finis comme une section composite, validée mode à mode contre les fréquences mesurées de [Du 2024] ;
+- une méthode de semi-discrétisation en boucle fermée (CL-SD) qui insère un correcteur linéaire arbitraire, avec ses états internes (observateur, filtres), dans la matrice de monodromie de Floquet du système à retard périodique : le diagramme des lobes contrôlé qui en résulte est authentique et non asserté ;
+- une métrique de stabilité à deux étages, associant à la frontière linéaire la profondeur de passe « faisable en tension », c'est-à-dire la plus grande profondeur pour laquelle la boucle non linéaire saturée (±150 V) reste exempte de broutement ;
+- une comparaison honnête de quatre classes de correcteurs sur le capteur d'origine du montage, dont le caractère non minimum de phase s'avère décisif : la LQG à modèle complet fonctionne, l'ADRC classique échoue à toutes les bandes passantes, le FOPID seul survit mais faiblement ;
+- un correcteur hybride ADRC–FOPID co-conçu qui rend le rejet de perturbation utilisable sur ce capteur, puis une seconde itération (fuite d'observateur, filtre de roll-off, objectif min-max robuste) qui en corrige les faiblesses calculées — avec les coûts et l'échec résiduel énoncés sans détour.
+
+## 3.2. Modélisation de type Kirchhoff de la paroi mince
+
+### 3.2.1. Élément de plaque et réduction modale
+
+La plaque est discrétisée par des éléments de plaque mince de Kirchhoff-Love à quatre nœuds (élément rectangulaire de type ACM à fonctions de forme de Hermite), à trois degrés de liberté par nœud : la flèche transversale w et les deux rotations. Chaque élément porte douze degrés de liberté. Les matrices de masse et de raideur assemblées sur un maillage de 30 × 24 éléments, avec l'encastrement du bord inférieur, fournissent le problème aux valeurs propres dont les premiers modes servent de base de réduction. L'équation du mouvement en coordonnées modales q s'écrit, pendant la coupe :
+
+[EQ:Mp q̈ + Cp q̇ + [Kp + a₄(t) Dp Dpᵀ] q − a₄(t) Dp Dpᵀ q(t − τ) = fₜ a₃(t) Dp + H_pe u(t)|(3.1)]
+
+où τ = 60/(Nₜ·N) est la période de passage de dent, a₃(t) et a₄(t) les coefficients périodiques d'effort de coupe de la fraise hélicoïdale, Dp le vecteur des formes modales au point de coupe courant, H_pe le vecteur d'entrée modal de l'actionneur et u la tension appliquée. Le terme retardé en q(t − τ) est la rétroaction régénérative qui engendre le broutement. La mesure est scalaire :
+
+[EQ:y(t) = D_obs q(t)|(3.2)]
+
+où D_obs est la ligne des formes modales au point de mesure — ici l'extrémité libre de la plaque.
+
+### 3.2.2. Couplage piézoélectrique
+
+Le patch collé impose, par effet d31, un moment réparti sur sa surface. La projection de ce moment sur les fonctions de forme conduit au vecteur d'effort physique H_pe = m_p ∇²N intégré sur l'emprise du patch, avec m_p = −E_p d31 (b_p + h_p)/[2(1 − ν_p)], puis à sa projection modale. Une tension d'un volt produit ainsi un effort modal parfaitement défini, sans paramètre ajusté.
+
+### 3.2.3. Modèle « précis » : masse et raideur du patch
+
+Le modèle source traite le patch uniquement comme une source d'effort et néglige sa masse et sa raideur de flexion. Or le patch couvre une fraction significative de la plaque près de l'encastrement, là où l'énergie de déformation du premier mode est maximale. Le modèle précis développé ici l'intègre comme une section composite : sur les éléments couverts, l'axe neutre est déplacé de z̄, et les rigidités de flexion locales sont augmentées des contributions du patch (ΔD₁, ΔD₂), de même que la masse surfacique. L'analyse modale est ensuite refaite sur le modèle composite et le vecteur H_pe reprojeté sur la nouvelle base.
+
+### 3.2.4. Validation expérimentale et convergence
+
+Le tableau 3-1 confronte les cinq premières fréquences propres calculées aux fréquences mesurées publiées dans [Du 2024], ainsi qu'au modèle théorique des auteurs eux-mêmes. Le modèle nu (sans dynamique de patch) place le mode 1 — le mode dominant du broutement — à −3,51 % de la mesure ; le modèle précis le ramène à +0,12 %, soit une réduction de trente fois de l'erreur sur le mode qui gouverne la stabilité. Sur les cinq modes, l'erreur moyenne absolue du modèle précis (1,44 %) est inférieure à celle du modèle théorique de l'article source (1,93 %) ; celle du modèle nu (1,34 %) est comparable, mais concentrée précisément sur le mode dominant, là où elle est la plus nuisible aux prédictions de stabilité. La convergence de maillage est vérifiée de 20 × 16 à 50 × 40 éléments (écart de 0,05 % sur f₁ entre 30 × 24 et 50 × 40), et la sensibilité à la masse volumique supposée du PZT reste inférieure à 0,3 % sur f₁. La figure 3-1 rassemble la validation, la convergence et l'effet des couches de fidélité sur les conclusions de contrôle.
+
+[TABCAP:Tableau 3-1. Validation du modèle précis : fréquences propres calculées et mesurées (Hz), erreurs relatives.]
+[TAB]
+Mode|Mesure [Du 2024]|Modèle nu|Erreur|Modèle précis|Erreur|Théorie [Du 2024]
+1|540|521,1|−3,51 %|540,6|+0,12 %|537 (−0,56 %)
+2|1068|1069,9|+0,18 %|1092,0|+2,24 %|1101 (+3,09 %)
+3|2787|2733,0|−1,94 %|2739,2|−1,72 %|2805 (+0,65 %)
+4|3351|3334,4|−0,50 %|3405,2|+1,62 %|3423 (+2,15 %)
+5|4122|4145,6|+0,57 %|4183,8|+1,50 %|4254 (+3,20 %)
+[/TAB]
+
+[FIG:figures/fig7_refinement.png|Figure 3-1. Modèle précis : validation contre les fréquences mesurées, convergence de maillage et effet des couches de fidélité (troncature modale, résolution d'échantillonnage) sur les métriques de contrôle.]
+
+## 3.3. Effort de coupe régénératif et intégration temporelle
+
+Les coefficients a₃(t) et a₄(t) de l'équation (3.1) résultent de l'intégration, le long des arêtes hélicoïdales engagées, des efforts élémentaires sur la fenêtre angulaire d'engagement (fraisage de profil, aₑ = 0,1 mm, avance 0,02 mm/dent). Ils sont strictement périodiques de période τ et sont pré-calculés sur une période. La réponse temporelle est intégrée par un schéma de Newmark implicite (γ = 1/2, β = 1/4) portant l'état retardé dans une mémoire circulaire de longueur τ/Δt ; l'actionneur piézoélectrique réaliste applique la saturation ±150 V, la limite de vitesse de balayage et l'hystérésis lorsque requis. Le pas retenu pour toutes les évaluations de ce chapitre est Δt = 25 μs (20 kHz), valeur dont la nécessité — et le danger d'un pas plus grossier — est établie par l'analyse de résolution d'échantillonnage du chapitre 4.
+
+## 3.4. Semi-discrétisation en boucle fermée (CL-SD)
+
+### 3.4.1. Principe
+
+La stabilité du fraisage est classiquement jugée par semi-discrétisation [Insperger 2004] : sur chaque sous-intervalle de la période de dent, les coefficients sont gelés, l'état retardé est prélevé dans un vecteur d'histoire augmenté, et le rayon spectral ρ de la matrice de monodromie de Floquet décide de la stabilité (ρ < 1 : stable ; ρ ≥ 1 : broutement). Un diagramme des lobes « contrôlé » n'a de sens que si la loi de commande est placée à l'intérieur de cette matrice. La méthode CL-SD développée ici augmente l'état de la plaque x = [q ; q̇] par l'état z du correcteur, pour toute loi linéaire de la forme :
+
+[EQ:ż = A_c z + B_c y,   u = C_c z + D_c y|(3.3)]
+
+de sorte que la LQG (avec son observateur de Kalman), l'ADRC (avec son observateur d'état étendu), le FOPID (avec ses états de réalisation d'Oustaloup) et le correcteur hybride s'analysent tous par la même interface, sans cas particulier. La profondeur critique a_p,crit est obtenue par balayage et dichotomie sur la première traversée ρ = 1.
+
+### 3.4.2. Validation
+
+En boucle ouverte, la méthode donne a_p,crit ≈ 0,063 mm à 4900 tr/min sur le modèle nominal, en accord avec l'ordre de grandeur expérimental publié (≈ 0,1 mm) pour cette plaque : l'assemblage est physiquement correct. Toute frontière « contrôlée » annoncée dans la suite est calculée par cette voie — jamais par un raccourci du type mise à l'échelle de l'amortissement modal, dont il est facile de montrer qu'il surestime plusieurs fois le bénéfice réel.
+
+## 3.5. Métrique de stabilité à deux étages
+
+La frontière linéaire ignore la saturation de l'actionneur. Or un correcteur agressif peut afficher une frontière linéaire spectaculaire tout en étant incapable, à ±150 V, de fournir l'effort qu'elle suppose. La métrique retenue est donc à deux étages : (i) l'étage linéaire CL-SD, rapide, sert au réglage et au pré-filtrage ; (ii) l'étage « faisable en tension » mesure, par dichotomie sur des simulations temporelles non linéaires saturées, la plus grande profondeur de passe restant exempte de broutement (divergence ou RMS stationnaire de pointe > 50 μm). C'est l'étage (ii) qui a valeur de verdict ; le chapitre 4 montrera que les deux étages peuvent classer des configurations en ordre quasi inverse.
+
+## 3.6. Comparaison des correcteurs sur le capteur d'origine (pointe)
+
+### 3.6.1. Un capteur non minimum de phase
+
+Sur ce montage, le transfert tension → déplacement de pointe possède des zéros à partie réelle positive : les couplages modaux D_tip·H_pe sont de signes alternés (−, +, −, −, +), avec un gain instantané b₀ = +0,38 mais un couplage du mode 1 négatif. Cette structure non minimum de phase (NMP) borne fondamentalement ce qu'une rétroaction de sortie peut accomplir, et elle décide — comme on va le voir — de la viabilité même des classes de correcteurs.
+
+### 3.6.2. Résultats : une hiérarchie tranchée
+
+Quatre correcteurs sont comparés dans des conditions strictement identiques : plante raffinée à cinq modes, Δt = 25 μs, saturation ±150 V, unique mesure de pointe. La LQG conserve son observateur de Kalman à état complet ; l'ADRC classique est réglé sur une grille de bandes passantes (ω_c = 200 à 1800 rad/s) ; le FOPID C(s) = K_p + K_i s^(−λ) + K_d s^(μ) est réalisé par approximation d'Oustaloup (N = 3, bande [5, 8000] Hz maintenue sous le Nyquist pour que la réalisation continue insérée dans la CL-SD et la réalisation discrète déployée coïncident), et ses gains comme ses ordres fractionnaires sont optimisés par évolution différentielle directement sur le rayon spectral de la CL-SD — l'analogue exact de la latitude de réglage accordée aux autres correcteurs — puis sélectionnés par la métrique faisable.
+
+[TABCAP:Tableau 3-2. Comparaison sur le capteur de pointe (plante raffinée, ±150 V) : profondeur faisable et résidu vibratoire.]
+[TAB]
+Correcteur|Information requise|a_p faisable|RMS de pointe à 0,15 mm
+Boucle ouverte|—|0,06 mm (linéaire)|broutement
+LQG (Kalman + LQR)|modèle d'état complet|1,29 mm|0,23 μm (18 V)
+ADRC classique|b₀ seul|0,00 mm — échec|instable
+FOPID|aucune|0,20 mm|1,30 μm (3,6 V)
+Hybride ADRC–FOPID (§3.7)|b₀_eff, ω_o (recherchés)|0,83 mm|37 μm (saturé)
+[/TAB]
+
+Trois constats, chacun calculé. Premièrement, l'ADRC classique échoue totalement : à toutes les bandes passantes essayées, sa frontière linéaire reste au plancher et la boucle saturée diverge dès 0,2 mm. La cause est structurelle : l'observateur d'état étendu estime une perturbation globale et l'annule en inversant de fait la plante à travers ses zéros à partie réelle positive — un sous-ensemble de modes voit alors une rétroaction positive quelle que soit la bande. Deuxièmement, le FOPID seul survit mais reste faible (0,20 mm, à peine au-dessus de la boucle ouverte) : une structure fixe ne peut fournir assez d'avance de phase à travers les zéros NMP. Troisièmement, la LQG fonctionne (1,29 mm) parce que son observateur de Kalman est construit sur le modèle d'état complet — y compris les contributions modales de signes contraires — qu'il inverse en connaissance de cause. La figure 3-2 montre notamment les trajectoires temporelles à 0,5 mm : la LQG tient la passe, l'ADRC et le FOPID divergent jusqu'au seuil de broutement.
+
+[FIG:figures/fig12_tip_comparison.png|Figure 3-2. Comparaison sur le seul capteur de pointe (mesure d'origine du montage) : (a) profondeurs faisables ; (b) réponses temporelles à 0,5 mm — les trajectoires divergentes s'interrompent au seuil de broutement ; (c) rejet à 0,15 mm ; (d) robustesse à la dérive fréquentielle.]
+
+## 3.7. Correcteur hybride ADRC–FOPID co-conçu
+
+### 3.7.1. Structure
+
+L'échec de l'ADRC et la faiblesse du FOPID sont complémentaires : le premier possède l'estimation de perturbation qui manque au second, le second possède le façonnage de boucle large bande qui manque au premier. Le correcteur hybride les fusionne sur l'unique capteur de pointe :
+
+[EQ:u = u_ESO + u_FOPID,   u_ESO = (−ω_c² z₁ − 2ω_c z₂ − z₃)/b₀_eff,   u_FOPID = −σ (K_p + K_i s^(−λ) + K_d s^(μ)) y|(3.4)]
+
+avec une différence décisive par rapport à l'ADRC classique : la bande passante de l'observateur ω_o et le gain d'entrée effectif signé b₀_eff sont des paramètres de conception libres. Un observateur à bande étroite ne voit essentiellement que la sous-plante du mode 1, dont le couplage en pointe possède un signe défini (négatif) : avec un b₀_eff de signe assorti, son estimation de perturbation est cohérente précisément dans la bande où vit le broutement régénératif, tandis que la branche FOPID façonne la boucle ailleurs. Les deux branches étant linéaires, l'hybride s'exporte sous la forme (3.3) — l'observateur voyant la tension totale, ce qui fixe exactement les couplages de la forme augmentée — et s'insère dans la monodromie CL-SD sans aucun cas particulier. L'implantation est validée trois fois : la branche ESO reproduit l'ADRC de référence à la précision machine ; l'export coïncide avec la forme analytique (G_y + F)/(1 − G_u) à 10⁻¹⁴ près ; le pas discret déployé et l'export continu concordent à moins de 1 % en boucle fermée.
+
+### 3.7.2. Conception en deux étapes et règle qui en découle
+
+La conception est volontairement scindée. L'étape A fige le meilleur FOPID de pointe et cherche seulement l'ajout d'observateur (trois paramètres, les deux signes) : aucun réglage stabilisant n'existe — le « retrofit » d'un ESO sur un correcteur existant est prouvé impossible sur cette plante NMP. L'étape B co-conçoit conjointement les huit paramètres par évolution différentielle sur le rayon spectral : elle trouve la solution, et dans un recoin physiquement parlant — b₀_eff = −0,55 (le signe et l'ordre de grandeur du couplage du mode 1, opposés au gain instantané +0,38), bande d'observateur ω_o ≈ 3058 rad/s ≈ 487 Hz (une bande autour du mode 1 à 540 Hz), la branche FOPID se reconfigurant pour libérer cette bande (μ passe de 0,64 à 0,30). Le résultat : une profondeur faisable de 0,83 mm — quatre fois le meilleur correcteur à structure fixe, là où l'ADRC classique vaut zéro. La règle de conception est elle-même un résultat : sur un canal NMP, un observateur de perturbation globale doit être limité en bande et assorti en signe à un unique mode dominant, et son correcteur compagnon doit être co-conçu autour de lui.
+
+### 3.7.3. Les coûts, énoncés sans détour
+
+L'hybride v1 paie sa marge trois fois. À faible profondeur, il chevauche un cycle limite saturé d'environ 37 μm RMS — stable, mais très loin des 0,23 μm de la LQG : c'est un extenseur de frontière, pas un correcteur d'état de surface. À −20 % de dérive fréquentielle, sa profondeur faisable s'effondre à zéro. Enfin, sa frontière linéaire sur la plante raffinée à cinq modes tombe au plancher (débordement modal, « spillover », par les modes non modélisés de 3,4–4,1 kHz), la boucle saturée survivant seule — nouvelle illustration du besoin de la métrique à deux étages.
+
+## 3.8. Seconde itération : fuite d'observateur, roll-off d'injection, min-max robuste
+
+Chacune des trois faiblesses reçoit un élément de correction, linéaire lui aussi. Une fuite ε sur l'état de perturbation (ż₃ ← ż₃ − ε z₃) borne l'estimation dont l'intégration sans limite précipitait l'actionneur dans le cycle limite. Un filtre passe-bas du premier ordre de fréquence de coupure ω_f sur l'injection de l'observateur replie l'inversion du mode 1 avant les modes de débordement. Un objectif min-max (v2-R) minimise le pire multiplicateur de Floquet sur les plantes déviées de −20/0/+20 % (pénalité au pire plancher), l'objectif nominal (v2-N) restant en référence. Les dix paramètres sont co-recherchés par la même évolution différentielle, sur les deux signes de gain ; l'attribution des gains est contrôlée par une ablation (éléments retirés, gains conservés).
+
+[TABCAP:Tableau 3-3. Itération v2 de l'hybride : les trois faiblesses, les corrections, les résultats calculés.]
+[TAB]
+Conception|a_p faisable|RMS à 0,15 mm|Frontière linéaire (plante raffinée)|Dérive −20 % / +20 %
+Hybride v1|0,83 mm|37 μm (saturé, 150 V)|0,01 mm (plancher)|0,00 / 0,74 mm
+v2-N (nominal)|0,47 mm|0,39 μm (2,4 V)|0,24 mm|0,00 / 0,29 mm
+v2-R (min-max)|0,65 mm|0,29 μm (1,6 V)|0,96 mm|0,00 / 0,29 mm
+LQG (référence)|1,29 mm|0,23 μm (18 V)|—|0,65 / 0,56 mm
+[/TAB]
+
+Le cycle limite est éliminé à faible profondeur : 0,29 μm sous 1,6 V à 0,15 mm pour v2-R, soit un rapport d'environ 125 — dont l'ampleur tient à ce que v1 chevauchait le plafond de saturation — et un état de surface de classe LQG à cette profondeur ; l'écart se resserre avec la profondeur (à 0,5 mm : 20,9 μm contre 6,1 μm pour la LQG). Les balayages de gain exposent le compromis marge/état de surface avec une réserve honnête : le « bouton de réglage » n'est pas monotone, le cycle limite réapparaissant aux gains élevés. La frontière linéaire raffinée est réparée pour la conception robuste (0,01 → 0,96 mm ; v2-N ne remonte qu'à 0,24 mm — la réparation dépend de la conception). L'ablation confirme que les éléments ajoutés portent conjointement le résultat : leur retrait fait s'effondrer v2-R de 0,65 mm à zéro. En revanche, la faiblesse de dérive à −20 % n'est pas corrigée, et son échec est instructif : la recherche min-max a bien produit un certificat linéaire authentique sur le modèle de conception (pire ρ = 0,922 à 0,8 mm sur l'ensemble {−20, 0, +20 %}, valeur convergée en discrétisation — identique à m = 16 et m = 30), mais les couches de fidélité — modes non modélisés et saturation — le révoquent : sur la plante raffinée saturée, la profondeur faisable à −20 % reste nulle à tous les gains testés. La leçon, quantifiée, prolonge celle du raffinement de modèle : un certificat de robustesse établi sur le modèle de conception doit être revalidé sur la plante raffinée avant d'être cru. Les coûts sont énoncés : marge nominale −22 % (0,65 contre 0,83 mm) et réserve de dérive à +20 % réduite de 61 % (0,29 contre 0,74 mm). La figure 3-3 rassemble ces résultats.
+
+[FIG:figures/fig13_hybrid_v2.png|Figure 3-3. Itération v2 de l'hybride : (a) balayages marge/état de surface (non monotones) ; (b) suppression du cycle limite saturé à 0,15 mm ; (c) robustesse à la dérive — la faiblesse à −20 % persiste malgré le certificat min-max linéaire ; (d) réparation du débordement modal et ablation.]
+
+## 3.9. Conclusion du chapitre
+
+Sur le capteur d'origine du montage — une mesure de pointe non minimum de phase — la hiérarchie des correcteurs est tranchée et entièrement calculée : la LQG à modèle complet est la seule classe pleinement viable (1,29 mm, meilleur état de surface, seule survivante à −20 % de dérive) ; l'ADRC classique échoue structurellement ; le FOPID seul est marginal ; et l'hybride co-conçu — la contribution centrale du chapitre — rend le rejet de perturbation utilisable (0,83 mm, quatre fois la meilleure structure fixe), sa seconde itération ramenant l'état de surface à la classe LQG aux faibles profondeurs au prix d'une marge réduite. Deux règles générales s'en dégagent : la co-conception (et non l'ajout a posteriori) est la condition d'existence d'un observateur de perturbation sur un canal NMP ; et ni une frontière linéaire, ni un certificat de robustesse établi sur le modèle de conception ne doivent être crus avant revalidation sur la plante raffinée saturée. Le chapitre suivant lève la dernière contrainte de ce cadre — le choix imposé du capteur — et porte l'analyse au niveau du procédé complet : co-conception de l'emplacement des transducteurs, capteur colocalisé, enlèvement de matière en cours d'usinage et simulation continue multi-passes.

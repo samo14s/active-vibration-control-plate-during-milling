@@ -1,0 +1,95 @@
+# Chapitre 4. Co-conception des transducteurs et contrôle au niveau du procédé complet
+
+## 4.1. Introduction
+
+Le chapitre 3 a comparé les correcteurs à capteur imposé — la mesure de pointe du montage d'origine — et en a tiré une hiérarchie et des règles de conception. Ce chapitre lève cette contrainte : l'emplacement des transducteurs devient une variable de conception, et l'analyse est portée du point de fonctionnement au procédé d'usinage complet. Quatre questions structurent le chapitre : que coûte réellement l'observateur à la marge de stabilité, et que rapporte un capteur colocalisé ? comment choisir l'emplacement du patch — et la frontière linéaire est-elle un bon guide de placement ? comment la dynamique de la pièce évolue-t-elle sous l'enlèvement de matière, et le contrôle y survit-il ? enfin, que reste-t-il des conclusions lorsqu'on simule, en continu et de bout en bout, plusieurs passes de finition — et comment corriger la faiblesse qui s'y révèle ? Toutes les réponses sont calculées par le même cadre CL-SD et la même métrique à deux étages que précédemment.
+
+## 4.2. Le coût de l'observateur et le SLD contrôlé authentique
+
+Avec un capteur colocalisé au coin supérieur du patch — un canal à phase minimale (couplages tous de même signe utile, b₀ = −0,74) — l'ADRC devient pleinement viable et la comparaison des frontières linéaires authentiques est instructive. À 4900 tr/min, sur le modèle nominal : boucle ouverte 0,063 mm ; borne idéale de retour d'état statique de la LQG 2,43 mm ; LQG réelle, observateur de Kalman dans la boucle, 1,92 mm — l'observateur coûte donc à lui seul environ 21 % de marge, un coût que le SLD « statique » habituel dissimule ; ADRC, observateur d'état étendu dans la boucle, 3,25 mm. La figure 4-1 présente ces lobes contrôlés calculés par CL-SD, l'observateur de chaque correcteur étant inclus dans la matrice de monodromie.
+
+[FIG:figures/fig1_sld.png|Figure 4-1. Diagramme des lobes de stabilité contrôlé authentique (CL-SD, observateurs dans la boucle) : boucle ouverte, LQG et ADRC colocalisé.]
+
+## 4.3. Robustesse à la dérive des dynamiques
+
+La dynamique d'une paroi mince dérive — enlèvement de matière, échauffement, reprise de bridage. Un balayage de ±20 % sur les fréquences propres de la plante (correcteurs figés) montre le contraste attendu entre les deux philosophies : la LQG, liée à son modèle nominal, perd la stabilité dès −20 % et voit sa profondeur faisable s'effondrer aux deux extrêmes (0,65 / 0,56 mm), tandis que l'ADRC colocalisé — qui n'exige que le gain d'entrée b₀ — conserve 1,29 à 1,92 mm sur toute la plage. À mi-tension (25–55 V), l'ADRC réduit en outre le résidu vibratoire de pointe d'environ moitié par rapport à la LQG. La figure 4-2 illustre ce balayage.
+
+[FIG:figures/fig2_robustness.png|Figure 4-2. Vibration de pointe sous dérive des fréquences modales : la LQG décroche, l'ADRC colocalisé tient.]
+
+## 4.4. Co-conception de l'emplacement des transducteurs : les deux métriques s'opposent
+
+L'étude de placement balaie quinze positions candidates du patch (capteur colocalisé au coin), avec pour chacune un réglage automatique de l'ADRC sur le critère CL-SD, puis une mesure de la profondeur faisable en tension pour les emplacements viables. Le résultat central est une inversion : les deux métriques classent les emplacements en ordre quasi opposé (corrélation de rang de Spearman ρ ≈ −0,4). Un emplacement faiblement couplé peut afficher une frontière linéaire de 12 mm — l'observateur n'ayant presque rien à inverser — et se heurter au mur de tension dès 0,93 mm de profondeur faisable ; l'emplacement d'origine, fortement couplé (3,2 mm de frontière linéaire), est l'optimum faisable à 1,92 mm. Sous cette métrique honnête, l'ADRC colocalisé atteint 1,92 mm contre 1,38 mm pour la meilleure LQG (recherche de pondérations menée sous la même métrique), soit +39 % à matériel identique. La conception doit donc se faire sous la métrique faisable, l'étage linéaire servant de pré-filtre rapide. La figure 4-3 présente la carte de placement et l'inversion.
+
+[TABCAP:Tableau 4-1. Extrait de l'étude de placement : la frontière linéaire est un mauvais guide, la métrique faisable tranche.]
+[TAB]
+Emplacement du patch (x₀, z₀) mm|Frontière linéaire|Profondeur faisable (±150 V)
+(60, 0) — faiblement couplé|4,73 mm|1,38 mm
+(80, 0) — le plus éloigné|12,0 mm|0,93 mm
+(0, 0) — origine, fortement couplé|3,2 mm|1,92 mm (optimum)
+LQG de référence (pointe)|—|1,38 mm
+[/TAB]
+
+[FIG:figures/fig6_placement.png|Figure 4-3. Co-conception de l'emplacement : (a) carte des candidats ; (b) inversion du classement entre frontière linéaire et profondeur faisable.]
+
+## 4.5. Couches de fidélité : troncature, débordement, résolution d'échantillonnage
+
+Avant de porter ces conclusions au procédé, leur sensibilité aux couches de fidélité du modèle est quantifiée. Les correcteurs conçus sur le modèle nominal à trois modes sont évalués sur la plante précise à cinq modes du chapitre 3 : à la résolution de production de 10 kHz, une paire de débordement marginalement amortie vers 3,4 kHz se déstabilise numériquement et inverse le verdict — un artefact d'implantation, pas de la physique continue. À 20 kHz (Δt = 25 μs, standard pour le contrôle piézoélectrique, convergence vérifiée à 12,5 μs), la boucle est saine et le point d'arrivée honnête s'établit à : ADRC 1,65 mm contre LQG 1,29 mm (+28 %), l'ADRC divisant par deux le résidu nominal. Ces valeurs — plante raffinée, 20 kHz, saturation — sont celles utilisées comme référence dans tout ce mémoire.
+
+## 4.6. Enlèvement de matière en cours d'usinage
+
+L'enlèvement de matière est modélisé dans le modèle éléments finis lui-même : sur la bande usinée, l'épaisseur locale des éléments est réduite (raideur en h³, masse en h, couverture partielle pondérée), l'analyse modale est refaite et le couplage H_pe reprojeté. Lors d'une mise à jour de base modale en cours de simulation, l'état vibratoire est reprojeté par la transformation masse-orthonormale :
+
+[EQ:T = V_nouvᵀ M V_anc,   q⁺ = T q,  q̇⁺ = T q̇,  q̈⁺ = T q̈|(4.1)]
+
+appliquée aussi à l'historique retardé — le champ de déplacement physique est continu, l'erreur de projection étant d'ordre de l'enlèvement par segment. Sur un cycle de contournage amincissant la bande supérieure de 20 mm de 0,25 mm par passe, la première fréquence propre monte d'environ 9,5 % sur quatre passes ; l'effet intra-passe sur les métriques de contrôle est négligeable, l'effet cumulé ne l'est pas. La figure 4-4 quantifie cette dérive générée physiquement et son effet sur le contrôle.
+
+[FIG:figures/fig8_material_removal.png|Figure 4-4. Enlèvement de matière en cours d'usinage : dérive modale générée physiquement et effet sur les métriques de contrôle.]
+
+## 4.7. Simulation continue du procédé complet
+
+La limite des études précédentes — des vérifications temporelles couvrant quelques millimètres de trajet — est levée par une simulation continue de bout en bout : quatre passes complètes (x = 0 → 100 mm, 20,4 s chacune à l'avance de l'article), soit 81,6 s de temps physique et environ 3,3 millions de pas de Newmark par correcteur, l'enlèvement de matière étant appliqué derrière l'outil par segments de 5 mm avec reprojection d'état (4.1), et les correcteurs restant figés à leur conception initiale, comme sur la machine réelle. Le résultat révèle une faiblesse invisible au point de fonctionnement : l'empreinte spatiale d'observabilité du capteur unique. L'ADRC colocalisé rejette deux fois mieux que la LQG près de son capteur mais se dégrade avec la distance outil-capteur, le résidu du côté éloigné se concentrant aux harmoniques de passage de dent, à peine observables depuis le coin du patch. La figure 4-5 cartographie l'état de surface le long des passes.
+
+[FIG:figures/fig9_full_process.png|Figure 4-5. Procédé complet (4 passes continues) : carte d'état de surface le long du trajet — l'empreinte spatiale d'observabilité du capteur unique apparaît.]
+
+## 4.8. AFC-ADRC : peigne adaptatif synchrone de la broche sur le capteur de pointe
+
+Le résidu éloigné étant périodique et synchrone de la broche, il appelle une anticipation adaptative plutôt qu'une rétroaction plus agressive. Le capteur de pointe — déjà présent sur le banc de [Du 2024], et dont le chapitre 3 a montré qu'il ne peut pas porter la boucle rapide — est utilisé hors de la boucle rapide :
+
+[EQ:u = u_ADRC(y_col) + Σₖ [aₖ cos(kθ) + bₖ sin(kθ)],   θ verrouillé sur la période de dent|(4.2)]
+
+les coefficients de Fourier étant adaptés par LMS à référence filtrée (FxLMS) normalisé sur l'erreur de pointe, avec le trajet secondaire en boucle fermée Gₖ évalué aux harmoniques. Deux détails d'implantation sont indispensables et vérifiés par tests de régression : le trajet secondaire doit inclure le canal d'observateur (matrice d'entrée [B ; B_o] — l'ESO voit l'injection), sans quoi des erreurs de phase de 90 à 280° font diverger l'adaptation ; et le peigne doit être verrouillé en phase sur la période de dent réellement discrétisée, un écart de 0,4 Hz suffisant à ruiner l'annulation. Une fuite d'adaptation garantit la dégradation gracieuse hors de l'enveloppe de validité FxLMS (à +20 % de dérive, le peigne se neutralise au lieu de pomper). L'anticipation étant lente et hors boucle, les frontières de stabilité de la boucle rapide sont inchangées.
+
+Sur le procédé complet, l'AFC-ADRC divise le RMS de procédé par environ trois par rapport aux deux références (0,15 μm contre 0,47–0,53 μm par passe), aplanit le déficit spatial qui l'a motivé (tiers de passe 0,12/0,14/0,21 μm contre 0,28/0,51/0,75 pour l'ADRC seul), au coût d'une tension crête quasi inchangée (37,8 V contre 35,2 V), sans aucune saturation sur les 81,6 s, et sans matériel nouveau. Les figures 4-6 et 4-7 présentent la comparaison et les réponses temporelles complètes.
+
+[TABCAP:Tableau 4-2. RMS d'état de surface par passe sur le procédé complet (μm) : l'anticipation synchrone résout le déficit spatial.]
+[TAB]
+Passe|LQG|ADRC seul|AFC-ADRC
+1|0,473|0,458|0,145
+2|0,474|0,489|0,146
+3|0,484|0,515|0,151
+4|0,495|0,533|0,160
+[/TAB]
+
+[FIG:figures/fig10_afc.png|Figure 4-6. AFC-ADRC contre les deux références sur le procédé complet : carte d'état de surface et RMS par passe.]
+
+[FIG:figures/fig11_timeseries.png|Figure 4-7. Réponse temporelle de pointe sur les 81,6 s du procédé complet, pour les trois correcteurs.]
+
+## 4.9. Résultats négatifs documentés
+
+Trois pistes naturelles ont été évaluées et se sont révélées stériles ; elles sont rapportées comme telles. Un canal de rétroaction retardé u_τ = g[y(t−τ) − y(t)], exploitant le retard de dent exactement connu, n'apporte au mieux que moins de 2 % sur la frontière CL-SD de l'ADRC colocalisé, et strictement zéro sur l'hybride de pointe du chapitre 3 (réalisations avec et sans visibilité de l'observateur). Un ESO résonant, embarquant un modèle interne au voisinage du mode dominant, reste sous les 2 % de gain. Enfin, une anticipation en phase dans une architecture à deux degrés de liberté réduit la vibration forcée et la tension de crête mais ne déplace pas la frontière de stabilité — seule la rétroaction la déplace, ce que l'analyse CL-SD établit proprement.
+
+## 4.10. Conclusion générale des chapitres 3 et 4
+
+Les deux chapitres constituent une chaîne complète et intègre : un modèle de Kirchhoff précis validé mode à mode (+0,12 % sur le mode dominant) ; un cadre d'analyse — CL-SD et métrique à deux étages — qui rend les frontières contrôlées authentiques et démasque les verdicts illusoires (frontières linéaires inversées par la saturation, certificats de robustesse révoqués par les couches de fidélité, artefacts d'échantillonnage) ; une comparaison tranchée des classes de correcteurs sur le capteur d'origine, avec l'hybride co-conçu comme voie de sauvetage du rejet de perturbation en présence de zéros NMP ; la co-conception des transducteurs sous la métrique faisable (+39 % pour l'ADRC colocalisé à matériel identique) ; la modélisation de l'enlèvement de matière et la simulation continue du procédé, qui révèlent l'empreinte d'observabilité spatiale ; et l'AFC-ADRC qui la résout (RMS de procédé divisé par trois, stabilité de boucle rapide intacte). Les perspectives s'énoncent d'elles-mêmes : validation expérimentale sur le banc de [Du 2024] ; correction de la faiblesse résiduelle de dérive à −20 % du canal de pointe, qui appelle vraisemblablement un séquencement de gain (sortant du cadre LTI et exigeant une extension de la CL-SD) ; et extension du cadre de co-conception à des géométries de parois minces industrielles.
+
+## Références des chapitres 3 et 4
+
+- [Du 2024] J. Du, X. Liu, H. Dai, X. Long, « Robust combined time delay control for milling chatter suppression of flexible workpieces », International Journal of Mechanical Sciences, vol. 274 (2024) 109257.
+- [Insperger 2004] T. Insperger, G. Stépán, « Updated semi-discretization method for periodic delay-differential equations with discrete delay », International Journal for Numerical Methods in Engineering, vol. 61 (2004) 117–141.
+- [Altintas 2012] Y. Altintas, Manufacturing Automation, 2e éd., Cambridge University Press, 2012.
+- [Han 2009] J. Han, « From PID to active disturbance rejection control », IEEE Transactions on Industrial Electronics, vol. 56 (2009) 900–906.
+- [Gao 2003] Z. Gao, « Scaling and bandwidth-parameterization based controller tuning », Proc. American Control Conference (2003) 4989–4996.
+- [Podlubny 1999] I. Podlubny, « Fractional-order systems and PIλDμ controllers », IEEE Transactions on Automatic Control, vol. 44 (1999) 208–214.
+- [Oustaloup 2000] A. Oustaloup, F. Levron, B. Mathieu, F. M. Nanot, « Frequency-band complex noninteger differentiator: characterization and synthesis », IEEE Transactions on Circuits and Systems I, vol. 47 (2000) 25–39.
+- [Monje 2010] C. A. Monje, Y. Q. Chen, B. M. Vinagre, D. Xue, V. Feliu, Fractional-order Systems and Controls: Fundamentals and Applications, Springer, 2010.
+- [Kuo 1996] S. M. Kuo, D. R. Morgan, Active Noise Control Systems: Algorithms and DSP Implementations, Wiley, 1996.

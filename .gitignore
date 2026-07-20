@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# campaign artifacts (regenerable via scripts/run_all.py)
+results/cache/

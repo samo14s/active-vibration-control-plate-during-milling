@@ -219,3 +219,11 @@ __marimo__/
 
 # campaign artifacts (regenerable via scripts/run_all.py)
 results/cache/
+
+# LaTeX build artifacts (keep main.pdf as the deliverable)
+paper/*.aux
+paper/*.log
+paper/*.blg
+paper/*.out
+paper/*.spl
+paper/main.bbl

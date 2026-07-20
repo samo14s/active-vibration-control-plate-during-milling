@@ -164,7 +164,8 @@ def main():
                 h = sign * habs
                 r_on = run(cfg, ap, rpm, h, cfg.f_max)
                 v = classify(r_on)
-                rec["runs"][f"{sign*mult:+g}x"] = {**r_on, "verdict": v}
+                rec["runs"][f"{sign*habs*1e6:+g}um"] = {**r_on,
+                                                       "verdict": v}
                 log(f"  {key} h={h*1e6:+8.2f}um: {v} "
                     f"(clip {r_on['clip_frac']:.3f})")
                 if v != "decays":

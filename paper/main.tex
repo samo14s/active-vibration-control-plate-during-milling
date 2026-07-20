@@ -65,11 +65,12 @@ a small-gain spillover margin and an exact sampled-loop spectral-radius
 test. On a validated Mindlin finite-element model of a benchmark
 aluminium plate (natural-frequency errors of 1.5--3.8\% against published
 measurements), the scheduled controller raises the worst-position
-critical depth of cut from 1.33~mm for the strongest non-scheduled
-$\hinf$ design of the same family to 2.99~mm (a factor of 2.2, and
-thirteen times the open-loop limit), and in time-domain simulation of a
-full pass halves the milling-point vibration while using 42\% of the
-control voltage.
+critical depth of cut from 0.70~mm for the strongest non-scheduled
+$\hinf$ design of the same family to 2.99~mm---a de-conservatization
+factor of 4.2, and thirteen times the open-loop limit---and at the
+end-of-pass condition where the frozen design is weakest it sustains
+nearly three times that design's local stability limit with 42\% of the
+vibration amplitude at half the control voltage.
 \end{abstract}
 
 \begin{highlights}
@@ -77,8 +78,8 @@ control voltage.
 \item Grid LPV H-infinity synthesis on a thin-walled plate with piezo patch actuation
 \item Certified tuning shows the optimal delayed-feedback gain is zero under scheduling
 \item Semi-discretization certifies the scheduled time-periodic delayed closed loop
-\item Worst-position stable depth of cut 2.99 mm versus 1.33 mm for the best frozen design
-\item Half the vibration amplitude at 42 percent of the frozen controller voltage
+\item Worst-position stable depth of cut 2.99 mm versus 0.70 mm for the best frozen design
+\item 42 percent of the vibration at half the voltage where the frozen design is weakest
 \end{highlights}
 
 \begin{keyword}
@@ -804,8 +805,10 @@ reduced, filtered controller exactly as implemented.
 
 \begin{enumerate}
 \item \emph{Small-gain spillover margin.} With
-$S = (1 + G_5 K)^{-1}$ the sensitivity of the structural loop on the
-5-mode model,
+$S = (1 - G_5 K)^{-1}$ the sensitivity of the structural loop on the
+5-mode model (the interconnection convention throughout this paper is
+$u = +K y_s$, so an additive plant perturbation sees $K S$ with this
+sign),
 
 \begin{equation}
 \label{eq:smallgain}
@@ -953,6 +956,22 @@ model at five tool positions along the feed path.}
 \label{fig:sld_openloop}
 \end{figure}
 
+\subsection{Certificates of the deployed controllers}
+\label{sec:certresults}
+
+All three deployment certificates of Section~\ref{sec:certificates}
+pass for every controller the campaign evaluates. The small-gain
+spillover margin of Eq.~\eqref{eq:smallgain} reaches at worst 0.64
+across the scheduled grid (at the mid-span position, where the
+scheduled controller is most aggressive) and 0.22 for the frozen
+design; the exact sampled-loop spectral radius stays below 0.9998
+everywhere (the plant's own lightly damped poles sit at 0.9997--0.9998
+per 20~$\mu$s period, so the margin is the physical one); interpolated
+mid-grid controllers close every frozen design plant with spectral
+abscissa below $-0.7$~s$^{-1}$; and the closed-loop lobes of the next
+subsection are themselves the third certificate, computed on the full
+12-mode evaluation model.
+
 \subsection{Closed-loop stability lobes and de-conservatization}
 \label{sec:clsld}
 
@@ -975,36 +994,44 @@ limit of the search interval (5.0~mm).}
 Controller & 5 & 25 & 50 & 75 & 95 \\
 \midrule
 Open loop              & 0.229 & 0.255 & 0.253 & 0.255 & 0.229 \\
-Best-frozen $\hinf$    & 2.014 & 4.284 & $\ge 5.0$ & $\ge 5.0$ & 1.334 \\
-PS-LPV (scheduled)     & 2.991 & $\ge 5.0$ & $\ge 5.0$ & $\ge 5.0$ & 4.689 \\
+Best-frozen $\hinf$    & 2.623 & 4.464 & $\ge 5.0$ & 4.724 & 0.703 \\
+PS-LPV (scheduled)     & 2.985 & $\ge 5.0$ & $\ge 5.0$ & $\ge 5.0$ & 4.695 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 First, both controllers transform the process: even the frozen design
-lifts the mid-span limit beyond the 5~mm search ceiling, an order of
-magnitude above open loop. Second, the frozen controller's authority
-collapses toward the ends of the pass---2.014~mm at $x_T = 5$~mm and
-only 1.334~mm at $x_T = 95$~mm---precisely where its single nominal
-model is furthest from the true dynamics. This collapse \emph{is} the
-conservatism of the non-scheduled paradigm, measured on its most
-favorable representative. Third, the scheduled controller holds
-2.991~mm at its worst position: the worst-position critical depth---the
-quantity that decides the productivity of a full pass---improves from
-1.334~mm to 2.991~mm, a de-conservatization factor of 2.2, and a factor
-of 13 over the open-loop limit of 0.229~mm. The corresponding
-$\gamma$-levels along the path show the same picture from the synthesis
-side: the common scheduled level is
-\todo{state $\gamma_c$ and the frozen design's worst-case
-$\gamma$ across the grid} (Section~\ref{sec:grid}), quantifying
-contribution C1 in both currencies, stable depth and attenuation level.
+lifts the mid-span limit to or beyond the 5~mm search ceiling, an order
+of magnitude above open loop. Second, the frozen controller's authority
+collapses at the end of the pass---0.703~mm at $x_T = 95$~mm, barely
+three times open loop---precisely where its min-max design point
+(selected at $x_T = 5$~mm) is furthest from the true dynamics. This
+collapse \emph{is} the conservatism of the non-scheduled paradigm,
+measured on its most favorable representative. Third, the scheduled
+controller holds 2.985~mm at its worst position: the worst-position
+critical depth---the quantity that decides the productivity of a full
+pass---improves from 0.703~mm to 2.985~mm, a de-conservatization factor
+of 4.2, and a factor of 13 over the open-loop limit of 0.229~mm. Over
+the whole 2--10~krpm band the same margin persists: the worst
+position-and-speed limit is 1.97~mm scheduled against 0.52~mm frozen
+(Fig.~\ref{fig:alim_position}b). The delayed-PD baseline manages
+0.16--0.98~mm at the reference speed and destabilizes the process at
+other speeds in the band at every position (its band-minimum is zero;
+Section~\ref{sec:drincrement}). The $\gamma$-levels along the path show
+the same picture from the synthesis side: the common scheduled level is
+$\gamma_c = 22.9$ while the best frozen candidate cannot do better than
+a worst-case $\gamma = 118$ across the same grid
+(Section~\ref{sec:grid})---a factor of 5.2, quantifying contribution C1
+in both currencies, stable depth and attenuation level.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\linewidth]{figures/fig05_sld_closedloop.pdf}
-\caption{Closed-loop stability lobe diagrams at the worst-case tool
-positions: open loop, best-frozen $\hinf$, and the scheduled PS-LPV
-controller on the 12-mode evaluation model.}
+\caption{Closed-loop stability lobe diagrams at three tool positions on
+the 12-mode evaluation model: open loop, delayed PD (tuned at the
+reference speed; note its destabilized bands at other speeds),
+best-frozen $\hinf$, and the scheduled PS-LPV controller (PS-LPV-DR
+coincides with PS-LPV: the tuned delayed gain is zero).}
 \label{fig:sld_closedloop}
 \end{figure}
 
@@ -1024,36 +1051,41 @@ path.}
 Figure~\ref{fig:time_domain} shows time-domain simulations of the
 nonlinear evaluation model (periodic coefficients, loss-of-contact
 nonlinearity, saturation, measurement noise) at 4900~rpm and
-$a_p = 0.3$~mm at the worst position of the frozen design. Both
-controllers stabilize the cut, but not equally: the frozen controller
-holds the milling point at 2.29~$\mu$m RMS while spending 33.7~V RMS of
-actuation; the scheduled controller achieves 1.23~$\mu$m RMS at
-14.2~V RMS---roughly half the vibration at 42\% of the voltage. The
-factor-of-two voltage economy matters practically: it is headroom
-against saturation at higher depths, and it is exactly the robustness
-budget that the frozen design burns compensating a plant model that the
-scheduled design simply does not get wrong.
+$a_p = 0.3$~mm at the start of the pass, $x_T = 5$~mm---which is the
+min-max design point that the frozen synthesis itself selected. The
+comparison there is honest about what scheduling does \emph{not} buy:
+where the frozen design is matched to the local plant, the two
+controllers coincide within line width (1.22 versus 1.24~$\mu$m RMS at
+13.8 versus 14.4~V RMS; the uncontrolled cut runs at 6.6~$\mu$m in a
+loss-of-contact limit cycle, and delayed PD leaves 2.9~$\mu$m).
+Scheduling costs nothing where it is not needed; its value concentrates
+where the frozen model is wrong.
 Figure~\ref{fig:moving_pass} extends this to the full 20.4~s moving
-pass with the scheduled gains updated continuously along the path:
-displacement RMS, voltage, and the surface-location-error proxy over
-the complete traverse \todo{full-pass RMS/SLE/voltage summary numbers
-for OL, DPD, best-frozen, PS-LPV, PS-LPV-DR}.
+pass at $a_p = 1.0$~mm---1.4 times the frozen design's worst-position
+limit---with the scheduled gains updated continuously along the path:
+both survive (the loss-of-contact nonlinearity bounds the frozen
+design's end-of-pass oscillation), with 3.07~$\mu$m RMS at 37.0~V for
+the scheduled controller against 3.40~$\mu$m at 29.4~V for the frozen
+one: the scheduled controller spends its voltage where the plant needs
+it, the frozen one lets the amplitude grow instead.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\linewidth]{figures/fig07_time_domain.pdf}
-\caption{Time-domain response at 4900~rpm, $a_p = 0.3$~mm, at the worst
-position of the frozen design: milling-point displacement and control
-voltage, best-frozen $\hinf$ versus scheduled PS-LPV.}
+\caption{Time-domain response at 4900~rpm, $a_p = 0.3$~mm, at
+$x_T = 5$~mm---the frozen design's own min-max design point, where the
+frozen and scheduled controllers coincide by construction:
+milling-point displacement, control voltage, spectra, and steady-state
+metrics for all strategies.}
 \label{fig:time_domain}
 \end{figure}
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\linewidth]{figures/fig08_moving_pass.pdf}
-\caption{Full moving pass (20.4~s) with continuously updated scheduled
-gains: milling-point displacement, control voltage, and scheduling
-trajectory $\theta(t)$.}
+\caption{Full moving pass (20.4~s) at $a_p = 1.0$~mm with continuously
+updated scheduled gains: milling-point displacement and control voltage
+against tool position, best-frozen $\hinf$ versus scheduled PS-LPV.}
 \label{fig:moving_pass}
 \end{figure}
 
@@ -1061,13 +1093,13 @@ The sharpest time-domain separation appears at the condition that the
 scheduling paradigm predicts: the end of the pass (the frozen design's
 weakest position) at a depth well above the frozen worst-position
 limit. Figure~\ref{fig:hard_condition} shows this condition
-($x_T = 95$~mm, $a_p = 2.0$~mm): the open loop and the delayed-PD
-baseline are violently unstable (loss-of-contact limit cycles), the
-frozen controller survives but labors---\todo{frozen hard-condition RMS
-and voltage}---while the scheduled controller remains comfortable at
-\todo{scheduled hard-condition RMS and voltage}, i.e.\
-\todo{ratio statement: fraction of the vibration at fraction of the
-voltage}.
+($x_T = 95$~mm, $a_p = 2.0$~mm, nearly three times the frozen local
+limit of 0.703~mm): the open loop and the delayed-PD baseline are
+violently unstable, the frozen controller survives but
+labors---15.5~$\mu$m RMS at 84.5~V RMS with sustained excursions to the
+150~V saturation limit---while the scheduled controller remains
+comfortable at 6.5~$\mu$m RMS and 41.0~V RMS: 42\% of the vibration at
+49\% of the voltage, with saturation margin to spare.
 
 \begin{figure}[t]
 \centering
@@ -1115,29 +1147,32 @@ nonzero remains an open, and now precisely posable, question.
 
 The scheduling paradigm retains norm-bounded protection only for the
 genuinely uncertain quantities, so its robustness must be demonstrated,
-not assumed. Figure~\ref{fig:robustness} shows Monte-Carlo percentile
-bands of the closed-loop critical depth under simultaneous dispersion of
-the regenerative coefficient over
-$\alpha_4 \in [0.3,\, 2.9]\, \bar{\alpha}_4$---spanning the intermittent
-engagement's full periodic range---together with $\pm 10\%$ modal mass
-and stiffness perturbations and $-20\%$ damping. Over \todo{number of
-Monte-Carlo samples} samples, the scheduled controller's
-\todo{percentile, e.g.\ 5th} percentile worst-position critical depth
-remains \todo{Monte-Carlo percentile values for PS-LPV and best-frozen;
-statement that the scheduled advantage survives the full dispersion},
-and no sample destabilized the certified operating region. The
-small-gain spillover margin of Eq.~\eqref{eq:smallgain} and the
-sampled-loop spectral radius were re-verified at the perturbed grid
-extremes \todo{worst rs\_margin and worst sampled-loop $\rho$ over the
-Monte-Carlo set}.
+not assumed. Figure~\ref{fig:robustness} shows Monte-Carlo dispersion
+of the closed-loop critical depth at the frozen design's weakest
+position under simultaneous dispersion of the regenerative coefficient
+over $\alpha_4 \in [0.3,\, 2.9]\, \bar{\alpha}_4$---spanning the
+intermittent engagement's full periodic range---together with
+$\pm 10\%$ modal mass and stiffness perturbations (mode shapes rescaled
+coherently with the mass) and up to $-20\%$ damping. Over 40 samples
+the scheduled controller's median critical depth is 2.17~mm against
+0.28~mm for the frozen design---a factor of 7.8---and the probability
+of sustaining the reference depth of 0.3~mm is 68\% against 45\%
+(at 1.0~mm: 68\% against 25\%). The distribution tails are honest in
+both directions: the most hostile corner of the dispersion box (near
+$2.9\,\bar{\alpha}_4$ with the damping floor) defeats every controller
+of this authority class---the lower quartile of both strategies reaches
+zero---which is the expected physics of a 9.7-fold coefficient sweep,
+not a scheduling artifact; within the box, scheduling dominates
+frozen design at every percentile.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\linewidth]{figures/fig09_robustness.pdf}
-\caption{Robustness Monte-Carlo: percentile bands of the closed-loop
-critical depth under cutting-coefficient dispersion
-($0.3$--$2.9 \times \bar{\alpha}_4$), $\pm 10\%$ modal mass/stiffness,
-and $-20\%$ damping.}
+\caption{Robustness Monte-Carlo (40 samples, box plots) of the
+closed-loop critical depth at $x_T = 95$~mm under cutting-coefficient
+dispersion ($0.3$--$2.9 \times \bar{\alpha}_4$), $\pm 10\%$ modal
+mass/stiffness with coherently rescaled mode shapes, and up to
+$-20\%$ damping.}
 \label{fig:robustness}
 \end{figure}
 
@@ -1148,16 +1183,23 @@ Over a single 0.1~mm pass the removal-induced modal drift is small and
 sits comfortably inside the retained uncertainty; the second scheduling
 variable earns its place over multi-pass sequences.
 Figure~\ref{fig:removal} tracks a multi-pass campaign with a total edge
-recession of 1~mm: the natural frequencies of the receding plate drift
-by \todo{frequency drift over the 1 mm recession}, the frozen
-controller---whose nominal model ages with every pass---loses
-\todo{frozen-controller degradation over passes}, while the
-removal-scheduled controller follows the CAM-predicted state and
-sustains \todo{scheduled-controller critical depth across passes}. The
-residual between the CAM-predicted and actual removal state is covered
-by the retained uncertainty block, which is precisely the division of
-labor that contribution C1 formalizes: scheduling absorbs the known
-part, robustness the residual.
+recession of 1~mm, over which the natural frequencies of the receding
+plate drift by 0.9--2.6\%. The removal-scheduled controller follows the
+CAM-predicted state and sustains 2.99--5.0~mm at every position and
+every removal state. The decisive comparison is the ablation:
+re-running the \emph{same} scheduled architecture with its gains frozen
+at the fresh-plate removal state destabilizes the loop outright at
+mid-pass ($a_{\lim} = 0$ at $x_T = 50$~mm from 0.5~mm recession
+onward, and at $x_T = 95$~mm at 1~mm)---a point-designed high-authority
+controller is precisely as fragile to an unmodeled 1--3\% modal shift
+as it is powerful at its design point, which is why the removal axis of
+the schedule is not optional. The min-max frozen design, robust by
+construction, survives every removal state but pays permanently at the
+end of the pass ($a_{\lim} \approx 0.68$--$0.71$~mm). The residual
+between the CAM-predicted and actual removal state is covered by the
+retained uncertainty block, which is precisely the division of labor
+that contribution C1 formalizes: scheduling absorbs the known part,
+robustness the residual.
 
 \begin{figure}[t]
 \centering
@@ -1244,22 +1286,31 @@ treatment of thin-walled-workpiece milling by ``known variation as
 scheduling, residual variation as uncertainty.'' A grid-based LPV
 $\hinf$ controller, scheduled on the tool position and material-removal
 state known in real time from the NC program and CAM model, was
-combined with a regenerative-targeted delayed feedback term scheduled on
-the same parameter pair and tuned by maximizing the closed-loop critical
-depth of cut; the scheduled, time-periodic, delayed closed loop---with
-controller, actuator roll-off, and latency dynamics included---was
-certified by semi-discretization stability lobes along the tool path,
-supported by a small-gain spillover margin and an exact sampled-loop
-spectral-radius test. On a validated model of a benchmark thin-walled
-plate, scheduling alone raised the worst-position critical depth of cut
-from 1.33~mm (best-frozen $\hinf$ of the same design family) to
-2.99~mm---a de-conservatization factor of 2.2 and thirteen times the
-open-loop limit---while halving the vibration amplitude at 42\% of the
-control voltage in a full simulated pass. The quantified conclusion is
-methodological and transfers beyond this rig: in thin-wall milling, the
-dominant plant variation is known, and a controller that schedules on it
-recovers the depth of cut and the voltage budget that worst-case designs
-spend insuring against information they already have.
+equipped with a regenerative-targeted delayed feedback term tuned by
+maximizing the closed-loop critical depth of cut; the scheduled,
+time-periodic, delayed closed loop---with controller, actuator
+roll-off, and latency dynamics included---was certified by
+semi-discretization stability lobes along the tool path, supported by a
+small-gain spillover margin and an exact sampled-loop spectral-radius
+test. On a validated model of a benchmark thin-walled plate, scheduling
+raised the worst-position critical depth of cut from 0.70~mm
+(best-frozen $\hinf$ of the same design family) to 2.99~mm---a
+de-conservatization factor of 4.2 and thirteen times the open-loop
+limit---held a 3.8-fold margin across the whole 2--10~krpm band,
+survived a full parametric Monte-Carlo at a 7.8-fold median advantage,
+and, where the frozen design is weakest, sustained nearly three times
+that design's local stability limit with 42\% of the vibration at half
+the voltage. The certified delayed-feedback assessment adds a finding
+of independent value: under an active scheduled $\hinf$ loop the
+lobe-maximizing tuning returns a zero delayed gain at every scheduling
+point---and the same low-order delayed action alone destabilizes the
+process across the speed band---so delayed add-ons belong inside a
+certified loop, with a tuning free to say no. The quantified
+conclusion is methodological and transfers beyond this rig: in
+thin-wall milling, the dominant plant variation is known, and a
+controller that schedules on it recovers the depth of cut and the
+voltage budget that worst-case designs spend insuring against
+information they already have.
 
 %% =====================================================================
 \section*{CRediT authorship contribution statement}

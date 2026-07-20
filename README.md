@@ -1,12 +1,30 @@
 # Active Vibration Control of a Thin-Walled Plate During Milling
 
-**PS-LPV-DR: Position-Scheduled LPV control with Regenerative-targeted
-Delayed feedback for chatter suppression in thin-walled plate milling.**
+**Position-Scheduled LPV chatter control with certified stability lobes —
+and a certified assessment of regenerative-targeted delayed feedback.**
 
 This repository contains the complete model, controller synthesis, stability
 analysis, simulation campaign, and manuscript draft for a journal publication
 (target: Q1 — *Mechanical Systems and Signal Processing* / *International
 Journal of Mechanical Sciences*).
+
+**Headline results** (12-mode evaluation model, 4.9 krpm, all three
+deployment certificates passing):
+
+| Metric | no control | delayed PD | best frozen H∞ | **PS-LPV (proposed)** |
+|---|---|---|---|---|
+| worst-position critical depth | 0.229 mm | 0.161 mm* | 0.703 mm | **2.985 mm** |
+| band-worst (2–10 krpm) | 0.157 mm | 0 (destabilizes) | 0.517 mm | **1.971 mm** |
+| hard condition (x=95 mm, ap=2 mm) | unstable | unstable | 15.5 µm @ 84.5 V | **6.5 µm @ 41.0 V** |
+| Monte-Carlo median (40 samples) | — | — | 0.28 mm | **2.17 mm** |
+
+\* tuned at the reference speed; destabilizes at other speeds in the band.
+
+A certified negative result completes the picture: the lobe-maximizing
+tuning of the regenerative-targeted delayed feedback gain returns **zero**
+at every scheduling point once the scheduled H∞ loop is active, and gain
+staleness in the *removal* axis destabilizes a point-designed loop outright
+after 0.5–1 mm of edge recession — both findings are in the manuscript.
 
 ## The idea in one paragraph
 

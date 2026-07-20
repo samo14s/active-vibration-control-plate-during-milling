@@ -98,13 +98,7 @@ def classify(res):
     return "chatter" if res["ratio"] > 3.0 else "decays"
 
 
-def main():
-    cfg = OZSOY_PUBLISHED if OZSOY_PUBLISHED is not None else REPRESENTATIVE
-    out = {"config": cfg.label, "h_req_um": H_REQ * 1e6,
-           "provenance": ("published parameter set" if OZSOY_PUBLISHED
-                          else "class-representative stand-in — NOT the "
-                          "published values (OA sources blocked by the "
-                          "session network policy; see avc/sdof.py)")}
+def study(cfg, out):
 
     # 1. linear boundaries
     cfg_ol = replace(cfg, g_v=0.0)
@@ -222,7 +216,31 @@ def main():
                           "PS-LPV x=50mm ap=2.0mm": {"U": 0.999,
                                                      "D": 4.14}},
         "sdof_islands_D": dd}
+    return out
 
+
+def main():
+    base = OZSOY_PUBLISHED if OZSOY_PUBLISHED is not None \
+        else REPRESENTATIVE
+    out = {"h_req_um": H_REQ * 1e6,
+           "provenance": ("published parameter set" if OZSOY_PUBLISHED
+                          else "class-representative stand-in — NOT the "
+                          "published values (OA sources blocked by the "
+                          "session network policy; see avc/sdof.py)"),
+           "configs": {}}
+    # the ideal-force-source vs proof-mass-dynamics comparison IS the
+    # mechanism experiment: a clipped ideal DVF stays dissipative
+    # (sign(-xdot) force), while the proof-mass high-pass distorts the
+    # phase of the clipped feedback — the island ingredient of the
+    # published rig class
+    variants = {
+        "ideal-force-source": base,
+        "proof-mass-10Hz": replace(base, fa_hz=10.0, za=0.25,
+                                   label=base.label + " + proof-mass "
+                                   "(fa=10 Hz, za=0.25)")}
+    for name, cfg in variants.items():
+        log(f"===== variant: {name} =====")
+        out["configs"][name] = study(cfg, {"config": cfg.label})
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(out, indent=1))
     log(f"written {OUT}")

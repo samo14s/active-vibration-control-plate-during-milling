@@ -61,6 +61,14 @@ class SDOFConfig:
     g_v: float             # DVF gain [N s / m] (force = -g_v * xdot)
     f_max: float           # actuator force bound [N]
     rate: float = 10e3     # DVF implementation rate [Hz]
+    fa_hz: float | None = None   # inertial-actuator resonance [Hz];
+    #                              None = ideal force source. The
+    #                              transmitted force is the classic
+    #                              proof-mass high-pass s^2/(s^2 +
+    #                              2 za wa s + wa^2) * F_cmd — the
+    #                              phase-distortion ingredient of the
+    #                              published rig class
+    za: float = 0.25       # actuator damping ratio
     label: str = "sdof"
 
 
@@ -127,15 +135,32 @@ def lift_sdof(cfg: SDOFConfig, ap: float, rpm: float,
     a4 = alpha4_time(cfg, ap, rpm, t_sub).reshape(m, n_sub).mean(axis=1)
 
     wn = 2.0 * np.pi * cfg.fn_hz
-    A0 = np.array([[0.0, 1.0], [-wn * wn, -2.0 * cfg.zeta * wn]])
-    Ady = np.array([[0.0, 0.0], [-1.0 / cfg.m_kg, 0.0]])   # per unit a4
-    bu = np.array([0.0, 1.0 / cfg.m_kg])                   # actuator force
-    bf = np.array([0.0, 1.0 / cfg.m_kg])                   # cut force path
-    cs = np.array([0.0, 1.0])                              # velocity sensor
-    cw = np.array([1.0, 0.0])                              # surface record
+    A0m = np.array([[0.0, 1.0], [-wn * wn, -2.0 * cfg.zeta * wn]])
+    if cfg.fa_hz is None:
+        n2 = 2
+        A0 = A0m
+        bu = np.array([0.0, 1.0 / cfg.m_kg])               # ideal force
+    else:
+        # proof-mass high-pass: F_out = F_cmd - ca @ xa,
+        # xa' = Aa xa + ba F_cmd
+        wa = 2.0 * np.pi * cfg.fa_hz
+        ca = np.array([wa * wa, 2.0 * cfg.za * wa])
+        n2 = 4
+        A0 = np.zeros((4, 4))
+        A0[:2, :2] = A0m
+        A0[1, 2:] = -ca / cfg.m_kg
+        A0[2, 3] = 1.0
+        A0[3, 2:] = np.array([-wa * wa, -2.0 * cfg.za * wa])
+        bu = np.array([0.0, 1.0 / cfg.m_kg, 0.0, 1.0])
+    Ady = np.zeros((n2, n2))
+    Ady[1, 0] = -1.0 / cfg.m_kg                            # per unit a4
+    bf = np.zeros(n2)
+    bf[1] = 1.0 / cfg.m_kg                                 # cut force path
+    cs = np.zeros(n2)
+    cs[1] = 1.0                                            # velocity sensor
+    cw = np.zeros(n2)
+    cw[0] = 1.0                                            # surface record
     Dk = -cfg.g_v                                          # static DVF
-
-    n2 = 2
     Ea = np.empty((m, n2, n2))
     Bcols = np.empty((m, n2, 3))
     for i in range(m):
@@ -201,12 +226,29 @@ def simulate_sdof(cfg: SDOFConfig, ap: float, rpm: float, T: float,
     if abs(ctrl_div * cfg.rate - fs) > 1e-6 * fs:
         raise ValueError("fs must be an integer multiple of cfg.rate")
     wn = 2.0 * np.pi * cfg.fn_hz
-    A0 = np.array([[0.0, 1.0], [-wn * wn, -2.0 * cfg.zeta * wn]])
-    M = np.zeros((3, 3))
-    M[:2, :2] = A0 * dt
-    M[:2, 2] = np.array([0.0, dt / cfg.m_kg])
+    A0m = np.array([[0.0, 1.0], [-wn * wn, -2.0 * cfg.zeta * wn]])
+    if cfg.fa_hz is None:
+        n2 = 2
+        A0 = A0m
+        b_u = np.array([0.0, 1.0 / cfg.m_kg])
+    else:
+        wa = 2.0 * np.pi * cfg.fa_hz
+        ca = np.array([wa * wa, 2.0 * cfg.za * wa])
+        n2 = 4
+        A0 = np.zeros((4, 4))
+        A0[:2, :2] = A0m
+        A0[1, 2:] = -ca / cfg.m_kg
+        A0[2, 3] = 1.0
+        A0[3, 2:] = np.array([-wa * wa, -2.0 * cfg.za * wa])
+        b_u = np.array([0.0, 1.0 / cfg.m_kg, 0.0, 1.0])
+    b_f = np.zeros(n2)
+    b_f[1] = 1.0 / cfg.m_kg
+    M = np.zeros((n2 + 2, n2 + 2))
+    M[:n2, :n2] = A0 * dt
+    M[:n2, n2] = b_u * dt
+    M[:n2, n2 + 1] = b_f * dt
     E = expm(M)
-    Ad, bd = E[:2, :2], E[:2, 2]
+    Ad, bd_u, bd_f = E[:n2, :n2], E[:n2, n2], E[:n2, n2 + 1]
 
     n = int(round(T * fs))
     D = tau * fs
@@ -214,7 +256,7 @@ def simulate_sdof(cfg: SDOFConfig, ap: float, rpm: float, T: float,
     Omega = 2.0 * np.pi * rpm / 60.0
     offs = 2.0 * np.pi * np.arange(cfg.n_teeth) / cfg.n_teeth
 
-    x = np.zeros(2)
+    x = np.zeros(n2)
     xh = np.zeros(n)
     fc = np.zeros(n)
     u_hold = 0.0
@@ -258,7 +300,7 @@ def simulate_sdof(cfg: SDOFConfig, ap: float, rpm: float, T: float,
             F = float(-ap * np.sum(
                 (cfg.kt * np.cos(phi[eng]) + cfg.kr * cfg.kt * s) * h))
         fc[k] = u_hold
-        x = Ad @ x + bd * (u_hold + F)
+        x = Ad @ x + bd_u * u_hold + bd_f * F
     return {"t": t[:n], "x": xh[:n], "f_act": fc[:n],
             "clip_frac": n_clip / max(n_tick, 1), "diverged": diverged,
             "tau": tau}

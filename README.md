@@ -70,6 +70,19 @@ foundational text with filled numbers in
   points tested, islands appeared only for the high-authority scheduled
   controller; the frozen design survived ±500 µm steps. Figure:
   `docs/figures/satcert_campaign.png`.
+- **Saturated-regime extension** (`certify_saturated`, `aw_min_gamma`):
+  circle-criterion global clip-recovery certificate on the lifted
+  deadzone loop + anti-windup line search on its level (AW provably
+  cannot change any linear certificate). Structural result: above the
+  OPEN-LOOP boundary no global sector certificate can exist (the
+  sector edge contains the dead actuator) — regional certificates
+  there are a necessity, not conservatism. Record: paper2 §6.
+- **SDOF (Ozsoy-class) re-simulation harness** (`avc/sdof.py`,
+  matched-authority protocol, published-parameter drop-in slot; OA
+  full texts blocked by the session network policy): NO islands up to
+  matched clipping depth D ≈ 4 in the DVF class — clipped velocity
+  feedback stays dissipative, isolating clipped-feedback PHASE
+  integrity (not clipping depth) as the island ingredient.
 
 ## The idea in one paragraph
 

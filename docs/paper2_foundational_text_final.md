@@ -422,3 +422,101 @@ set. WP4's island mechanism is demonstrated in-family with causal
 attribution (above); the external re-simulation of the published SDOF
 configuration of [ozsoy2025mssp] under a matched-authority protocol
 remains open for the manuscript stage.
+
+## 6. Saturated-regime extension and SDOF re-simulation record (2026-07-20)
+
+Machine records: `results/satregime_points.json`
+(`scripts/satregime_points.py`) and `results/sdof_island_study.json`
+(`scripts/sdof_island_study.py`); machinery in `avc/satcert.py`
+(§psi-injection, `saturated_margins`, `certify_saturated`,
+`aw_min_gamma`) and `avc/sdof.py`; tests in `tests/test_satregime.py`.
+
+**6.1 Machinery delivered.** The sampled-data lift now carries the
+deadzone-injection structure (Gpsi/Vpsi): the saturated variational
+loop is dv = dv_free + L psi with psi = dz(v* + dv) in the
+componentwise sector [0, 1] (strictly causal within the period), and
+the period-lifted transfer L(z) = Vpsi + V (zI − Phi)^{-1} Gpsi is
+evaluated on an eigenvalue-anchored frequency grid (declared
+resolution; eigenbasis evaluation with LU audit). Two sufficient
+global tests are computed: the l2 small gain gamma_2 = max sigma(L)
+and the sharper discrete circle-criterion level
+c = max lambda_max(Re L); c < 1 (+ linear stability + strictly
+unsaturated forced orbit) certifies GLOBAL l2-bounded recovery from
+arbitrarily deep clipping (hard-IQC sector argument), for the
+contact-retaining lifted model. Anti-windup enters the lift and the
+simulator as back-calculation (aw_gain); it provably leaves every
+LINEAR object unchanged (Phi, forced orbit, region-of-linearity
+certificate — asserted in tests) and acts only on Gpsi/Vpsi, so
+minimizing c is THE certified AW objective (`aw_min_gamma`).
+
+**6.2 Structural impossibility result.** Above the OPEN-LOOP stability
+boundary (0.253 mm at x = 50 mm, 4.9 krpm) no global sector-[0, 1]
+certificate can exist for ANY controller: the sector's upper edge
+contains the fully-clipped (dead-actuator) loop, which is the unstable
+open loop. Regional certificates above that depth are therefore a
+structural necessity, not a conservatism artifact — this sharpens the
+paper's positioning of the region-of-linearity certificate.
+
+**6.3 Measured margins** (implementation-exact lifts, 4.9 krpm):
+
+| point | circle level c | gamma_2 | rho | causal-experiment ground truth |
+|---|---|---|---|---|
+| PS-LPV x=50, ap=1.5 mm | 9.69 | 23.2 | 0.955 | island at −37.6 µm |
+| PS-LPV x=50, ap=2.0 mm | 9.70 | 23.0 | 0.955 | island at −50 µm |
+| frozen x=95, ap=0.9 mm | 13.4 | 165 | 0.966 | no island to ±500 µm |
+| frozen x=50, ap=2.0 mm | 2.16 | 11.1 | 0.698 | no island to ±500 µm |
+| PS-LPV x=95, ap=2.0 mm | 4.47 | 38.7 | 0.872 | bounded, 0.28 % clip |
+| frozen x=50, ap ≤ 0.4 mm | 1.54 (plateau) | 14–16 | ≤ 0.7 | — |
+
+Honest reading: the sufficient tests certify globality NOWHERE on this
+rig — not even below the open-loop boundary (the structural loop of
+these high-gain H∞ designs already sits at c ≈ 1.5) — and c does not
+cleanly rank island susceptibility (the island-free frozen point at
+x = 95 has the LARGEST c): worst-case-phase conservatism dominates.
+The causal island experiments of §5 remain the ground truth; the
+identified sharpening route is Zames–Falb multipliers (the shifted
+deadzone is monotone but non-odd, so positive-kernel multipliers
+apply). The frozen x = 95 hard condition (a_p = 2 mm) is linearly
+UNSTABLE in the implementation-exact lift (rho = 1.41): its bounded
+15.5 µm response in the campaign is a purely nonlinear (clipped,
+contact-losing) equilibrium — quantifying how misleading the linear
+picture is there.
+
+**6.4 SDOF (Ozsoy-class) re-simulation under the matched protocol.**
+Full-text access to the published parameter set is blocked by this
+session's network policy (whiterose eprints, ScienceDirect, SSRN,
+ResearchGate, CORE, Semantic Scholar API — all HTTP 403; the paper
+postdates the local scholarly corpus), so the study runs on a
+clearly-labeled class-representative stand-in (25 Hz / 3 % robot-class
+mode, DVF ×16 damping, 60 N bound; `avc/sdof.py` documents the
+drop-in slot and URLs for the published values). Two variants at
+2–4 krpm: ideal force source (DVF boundary > 5 mm cap vs open-loop
+0.31–0.47 mm) and 10 Hz proof-mass actuator dynamics (boundary drops
+to 2.1–2.6 mm — the actuator high-pass consumes linear margin).
+Result: **no saturation island in either variant** up to ±500 µm
+surface steps — at matched clipping depth D ≈ 2.7–4 where the plate's
+scheduled H∞ latched into chatter (D = 2.80 / 4.14), the clipped DVF
+always recovered (≤ 3.7 % transient clip duty). Mechanism: a clipped
+velocity feedback still outputs a force of sign −ẋ — dissipative even
+at the rail (dry-friction-like) — whereas the clipped high-gain
+model-based H∞ loses its stabilizing phase; with the 10 Hz proof-mass
+the phase distortion at 2.5× the actuator resonance is still too mild
+to break dissipativity. The measured islands of the published rig must
+therefore hinge on ingredients the stand-in lacks — the published
+parameter regime (mode/actuator frequency ratio, immersion, gain), and
+plausibly the proof-mass STROKE limit (displacement saturation, a
+harsher nonlinearity than force clipping) — a ranked hypothesis list
+that the drop-in re-run can settle. Matched-authority protocol as
+implemented: U = forced utilization (plate islands: 0.91 / 0.999;
+SDOF class: ≤ 0.29 — forced-dominated vs transient-dominated rigs)
+and D = unclipped transient demand at the island step over the bound
+(the like-for-like clipping depth; rig-agnostic).
+
+**6.5 Comparative insight for the paper.** Island susceptibility is
+NOT set by clipping depth alone: the plate's scheduled H∞ islands at
+D = 2.8 while the SDOF DVF survives D = 4 — the deciding variable is
+the phase integrity of the clipped feedback (dissipativity of what
+remains after the rail). This gives the paper a design-relevant
+message beyond certification: high-authority model-based loops buy
+linear depth at the price of saturation fragility; passive-structured
+loops degrade gracefully; the certificates quantify the boundary.

@@ -1,623 +1,1248 @@
 {
- "config": "class-representative (stand-in)",
  "h_req_um": 10.0,
  "provenance": "class-representative stand-in \u2014 NOT the published values (OA sources blocked by the session network policy; see avc/sdof.py)",
- "linear_boundaries": {
-  "2000": {
-   "ol_mm": 0.3125,
-   "dvf_mm": 5.0,
-   "dvf_capped": true
-  },
-  "2500": {
-   "ol_mm": 0.33203124999999994,
-   "dvf_mm": 5.0,
-   "dvf_capped": true
-  },
-  "3000": {
-   "ol_mm": 0.37109375,
-   "dvf_mm": 5.0,
-   "dvf_capped": true
-  },
-  "3500": {
-   "ol_mm": 0.41015625000000006,
-   "dvf_mm": 5.0,
-   "dvf_capped": true
-  },
-  "4000": {
-   "ol_mm": 0.46875,
-   "dvf_mm": 5.0,
-   "dvf_capped": true
-  }
- },
- "census": {
-  "2000": {
-   "ap_mm": [
-    0.1562,
-    0.4557,
-    0.7552,
-    1.0547,
-    1.3542,
-    1.6536,
-    1.9531,
-    2.2526,
-    2.5521,
-    2.8516,
-    3.151,
-    3.4505,
-    3.75
-   ],
-   "zones": "CCCCCCCCCCCCC",
-   "utilization": [
-    0.012,
-    0.035,
-    0.058,
-    0.081,
-    0.103,
-    0.126,
-    0.149,
-    0.172,
-    0.195,
-    0.218,
-    0.241,
-    0.263,
-    0.286
-   ],
-   "cert_h_um": [
-    1000.0,
-    1000.0,
-    802.7477819915127,
-    557.5086394814747,
-    420.86451168904176,
-    333.856896505574,
-    273.673219346557,
-    229.6128104819867,
-    195.99780205008108,
-    169.53558283272542,
-    148.185307768978,
-    130.6146780065551,
-    115.91701386351946
-   ]
-  },
-  "2500": {
-   "ap_mm": [
-    0.166,
-    0.4842,
-    0.8024,
-    1.1206,
-    1.4388,
-    1.757,
-    2.0752,
-    2.3934,
-    2.7116,
-    3.0298,
-    3.348,
-    3.6662,
-    3.9844
-   ],
-   "zones": "CCCCCCCCCCCCC",
-   "utilization": [
-    0.01,
-    0.029,
-    0.049,
-    0.068,
-    0.087,
-    0.106,
-    0.125,
-    0.145,
-    0.164,
-    0.183,
-    0.202,
-    0.222,
-    0.241
-   ],
-   "cert_h_um": [
-    1000.0,
-    1000.0,
-    877.6881419459315,
-    613.301750894478,
-    465.987137791887,
-    372.13705242729026,
-    307.1567080329494,
-    259.5306405856345,
-    223.14861615579568,
-    194.46726787658662,
-    171.2903035706821,
-    152.1839260125186,
-    136.1723643178872
-   ]
-  },
-  "3000": {
-   "ap_mm": [
-    0.1855,
-    0.5412,
-    0.8968,
-    1.2524,
-    1.6081,
-    1.9637,
-    2.3193,
-    2.675,
-    3.0306,
-    3.3862,
-    3.7419,
-    4.0975,
-    4.4531
-   ],
-   "zones": "CCCCCCCCCCCCC",
-   "utilization": [
-    0.009,
-    0.027,
-    0.045,
-    0.063,
-    0.08,
-    0.098,
-    0.116,
-    0.134,
-    0.152,
-    0.169,
-    0.187,
-    0.205,
-    0.223
-   ],
-   "cert_h_um": [
-    1000.0,
-    1000.0,
-    893.1735132106637,
-    625.8757904749444,
-    476.9005290712765,
-    381.9615444780489,
-    316.2015194941201,
-    267.98206344230607,
-    231.12770928198995,
-    202.05725500813855,
-    178.55095169161683,
-    159.15968416361565,
-    142.89725262298603
-   ]
-  },
-  "3500": {
-   "ap_mm": [
-    0.2051,
-    0.5981,
-    0.9912,
-    1.3843,
-    1.7773,
-    2.1704,
-    2.5635,
-    2.9565,
-    3.3496,
-    3.7427,
-    4.1357,
-    4.5288,
-    4.9219
-   ],
-   "zones": "CCCCCCCCCCCCC",
-   "utilization": [
-    0.009,
-    0.026,
-    0.042,
-    0.059,
-    0.076,
-    0.093,
-    0.109,
-    0.126,
-    0.143,
-    0.16,
-    0.177,
-    0.193,
-    0.21
-   ],
-   "cert_h_um": [
-    1000.0,
-    1000.0,
-    906.8449002532637,
-    636.6749634097149,
-    486.07577757352294,
-    390.0832317141398,
-    323.5778734437023,
-    274.79857519794757,
-    237.50474157594533,
-    208.07739972644717,
-    184.27338695231802,
-    164.62830099676967,
-    148.14553665107837
-   ]
-  },
-  "4000": {
-   "ap_mm": [
-    0.2344,
-    0.6315,
-    1.0286,
-    1.4258,
-    1.8229,
-    2.2201,
-    2.6172,
-    3.0143,
-    3.4115,
-    3.8086,
-    4.2057,
-    4.6029,
-    5.0
-   ],
-   "zones": "CCCCCCCCCCCCC",
-   "utilization": [
-    0.009,
-    0.024,
-    0.038,
-    0.053,
-    0.068,
-    0.083,
-    0.097,
-    0.112,
-    0.127,
-    0.142,
-    0.157,
-    0.171,
-    0.186
-   ],
-   "cert_h_um": [
-    1000.0,
-    1000.0,
-    972.5906131850962,
-    689.9400709401328,
-    530.4970350118801,
-    428.1410799599531,
-    356.8845775867613,
-    304.43532509030854,
-    264.22497111040093,
-    232.42478547938413,
-    206.6521848108048,
-    185.3468643605061,
-    167.4442420477552
-   ]
-  }
- },
- "islands": {
-  "rpm=2000|ap=3.750mm|U=0.286": {
-   "cert_h_um": 115.91701386351946,
-   "rho": 0.8815406250438118,
-   "u_bar_N": 42.819389041752544,
-   "utilization": 0.286,
-   "runs": {
-    "-25um": {
-     "ratio": 1.00158777743667,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+ "configs": {
+  "ideal-force-source": {
+   "config": "class-representative (stand-in)",
+   "linear_boundaries": {
+    "2000": {
+     "ol_mm": 0.3125,
+     "dvf_mm": 5.0,
+     "dvf_capped": true
     },
-    "+25um": {
-     "ratio": 1.0015877764304697,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "2500": {
+     "ol_mm": 0.33203124999999994,
+     "dvf_mm": 5.0,
+     "dvf_capped": true
     },
-    "-50um": {
-     "ratio": 1.0015877779397702,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "3000": {
+     "ol_mm": 0.37109375,
+     "dvf_mm": 5.0,
+     "dvf_capped": true
     },
-    "+50um": {
-     "ratio": 1.0015877759273701,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "3500": {
+     "ol_mm": 0.41015625000000006,
+     "dvf_mm": 5.0,
+     "dvf_capped": true
     },
-    "-100um": {
-     "ratio": 1.0015877789459702,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+100um": {
-     "ratio": 1.0015877750416742,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-200um": {
-     "ratio": 1.001587780897252,
-     "clip_frac": 0.0014814814814814814,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+200um": {
-     "ratio": 1.0015877750416264,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-350um": {
-     "ratio": 1.001587786485255,
-     "clip_frac": 0.01011111111111111,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+350um": {
-     "ratio": 1.0015877750416264,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-500um": {
-     "ratio": 1.0015877885757871,
-     "clip_frac": 0.037481481481481484,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+500um": {
-     "ratio": 1.0015877750416264,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "4000": {
+     "ol_mm": 0.46875,
+     "dvf_mm": 5.0,
+     "dvf_capped": true
     }
    },
-   "verdict": "no island found in tested range",
-   "circle_max": 3.5675721100363793,
-   "gamma_2": 3.720851029249915
-  },
-  "rpm=2000|ap=3.451mm|U=0.263": {
-   "cert_h_um": 130.6146780065551,
-   "rho": 0.8530624022539558,
-   "u_bar_N": 44.19081408151918,
-   "utilization": 0.263,
-   "runs": {
-    "-25um": {
-     "ratio": 1.0016207849218957,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+   "census": {
+    "2000": {
+     "ap_mm": [
+      0.1562,
+      0.4557,
+      0.7552,
+      1.0547,
+      1.3542,
+      1.6536,
+      1.9531,
+      2.2526,
+      2.5521,
+      2.8516,
+      3.151,
+      3.4505,
+      3.75
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.012,
+      0.035,
+      0.058,
+      0.081,
+      0.103,
+      0.126,
+      0.149,
+      0.172,
+      0.195,
+      0.218,
+      0.241,
+      0.263,
+      0.286
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      802.7477819915127,
+      557.5086394814747,
+      420.86451168904176,
+      333.856896505574,
+      273.673219346557,
+      229.6128104819867,
+      195.99780205008108,
+      169.53558283272542,
+      148.185307768978,
+      130.6146780065551,
+      115.91701386351946
+     ]
     },
-    "+25um": {
-     "ratio": 1.00162078491123,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "2500": {
+     "ap_mm": [
+      0.166,
+      0.4842,
+      0.8024,
+      1.1206,
+      1.4388,
+      1.757,
+      2.0752,
+      2.3934,
+      2.7116,
+      3.0298,
+      3.348,
+      3.6662,
+      3.9844
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.01,
+      0.029,
+      0.049,
+      0.068,
+      0.087,
+      0.106,
+      0.125,
+      0.145,
+      0.164,
+      0.183,
+      0.202,
+      0.222,
+      0.241
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      877.6881419459315,
+      613.301750894478,
+      465.987137791887,
+      372.13705242729026,
+      307.1567080329494,
+      259.5306405856345,
+      223.14861615579568,
+      194.46726787658662,
+      171.2903035706821,
+      152.1839260125186,
+      136.1723643178872
+     ]
     },
-    "-50um": {
-     "ratio": 1.00162078492723,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "3000": {
+     "ap_mm": [
+      0.1855,
+      0.5412,
+      0.8968,
+      1.2524,
+      1.6081,
+      1.9637,
+      2.3193,
+      2.675,
+      3.0306,
+      3.3862,
+      3.7419,
+      4.0975,
+      4.4531
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.027,
+      0.045,
+      0.063,
+      0.08,
+      0.098,
+      0.116,
+      0.134,
+      0.152,
+      0.169,
+      0.187,
+      0.205,
+      0.223
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      893.1735132106637,
+      625.8757904749444,
+      476.9005290712765,
+      381.9615444780489,
+      316.2015194941201,
+      267.98206344230607,
+      231.12770928198995,
+      202.05725500813855,
+      178.55095169161683,
+      159.15968416361565,
+      142.89725262298603
+     ]
     },
-    "+50um": {
-     "ratio": 1.0016207849058956,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "3500": {
+     "ap_mm": [
+      0.2051,
+      0.5981,
+      0.9912,
+      1.3843,
+      1.7773,
+      2.1704,
+      2.5635,
+      2.9565,
+      3.3496,
+      3.7427,
+      4.1357,
+      4.5288,
+      4.9219
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.026,
+      0.042,
+      0.059,
+      0.076,
+      0.093,
+      0.109,
+      0.126,
+      0.143,
+      0.16,
+      0.177,
+      0.193,
+      0.21
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      906.8449002532637,
+      636.6749634097149,
+      486.07577757352294,
+      390.0832317141398,
+      323.5778734437023,
+      274.79857519794757,
+      237.50474157594533,
+      208.07739972644717,
+      184.27338695231802,
+      164.62830099676967,
+      148.14553665107837
+     ]
     },
-    "-100um": {
-     "ratio": 1.0016207849378957,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+100um": {
-     "ratio": 1.0016207848965717,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-200um": {
-     "ratio": 1.0016207849596697,
-     "clip_frac": 0.0012592592592592592,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+200um": {
-     "ratio": 1.0016207848965715,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-350um": {
-     "ratio": 1.0016207849444068,
-     "clip_frac": 0.007518518518518518,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+350um": {
-     "ratio": 1.0016207848965715,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-500um": {
-     "ratio": 1.0016207847843839,
-     "clip_frac": 0.019037037037037036,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+500um": {
-     "ratio": 1.0016207848965715,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "4000": {
+     "ap_mm": [
+      0.2344,
+      0.6315,
+      1.0286,
+      1.4258,
+      1.8229,
+      2.2201,
+      2.6172,
+      3.0143,
+      3.4115,
+      3.8086,
+      4.2057,
+      4.6029,
+      5.0
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.024,
+      0.038,
+      0.053,
+      0.068,
+      0.083,
+      0.097,
+      0.112,
+      0.127,
+      0.142,
+      0.157,
+      0.171,
+      0.186
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      972.5906131850962,
+      689.9400709401328,
+      530.4970350118801,
+      428.1410799599531,
+      356.8845775867613,
+      304.43532509030854,
+      264.22497111040093,
+      232.42478547938413,
+      206.6521848108048,
+      185.3468643605061,
+      167.4442420477552
+     ]
     }
    },
-   "verdict": "no island found in tested range",
-   "circle_max": 2.901680490553518,
-   "gamma_2": 3.007917774259069
-  },
-  "rpm=2500|ap=3.984mm|U=0.241": {
-   "cert_h_um": 136.1723643178872,
-   "rho": 0.8829478064123523,
-   "u_bar_N": 45.5557965605159,
-   "utilization": 0.241,
-   "runs": {
-    "-25um": {
-     "ratio": 1.000619157903952,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+   "islands": {
+    "rpm=2000|ap=3.750mm|U=0.286": {
+     "cert_h_um": 115.91701386351946,
+     "rho": 0.8815406250438118,
+     "u_bar_N": 42.819389041752544,
+     "utilization": 0.286,
+     "runs": {
+      "-25um": {
+       "ratio": 1.0015877774366695,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 1.0015877764304713,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 1.0015877779397697,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 1.00158777592737,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.0015877789459702,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 1.0015877750416733,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.001587780897251,
+       "clip_frac": 0.0014814814814814814,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 1.0015877750416258,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.0015877864852554,
+       "clip_frac": 0.01011111111111111,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 1.0015877750416258,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.0015877885757871,
+       "clip_frac": 0.037481481481481484,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 1.0015877750416258,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 3.5675721100363793,
+     "gamma_2": 3.720851029249915
     },
-    "+25um": {
-     "ratio": 1.000619159399429,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "rpm=2000|ap=3.451mm|U=0.263": {
+     "cert_h_um": 130.6146780065551,
+     "rho": 0.8530624022539558,
+     "u_bar_N": 44.19081408151918,
+     "utilization": 0.263,
+     "runs": {
+      "-25um": {
+       "ratio": 1.0016207849218952,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 1.00162078491123,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 1.0016207849272298,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 1.0016207849058958,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.001620784937896,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 1.0016207848965715,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.0016207849596699,
+       "clip_frac": 0.0012592592592592592,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 1.0016207848965715,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.0016207849444057,
+       "clip_frac": 0.007518518518518518,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 1.0016207848965715,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.0016207847843845,
+       "clip_frac": 0.019037037037037036,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 1.0016207848965715,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 2.901680490553518,
+     "gamma_2": 3.007917774259069
     },
-    "-50um": {
-     "ratio": 1.000619157156213,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "rpm=2500|ap=3.984mm|U=0.241": {
+     "cert_h_um": 136.1723643178872,
+     "rho": 0.8829478064123523,
+     "u_bar_N": 45.5557965605159,
+     "utilization": 0.241,
+     "runs": {
+      "-25um": {
+       "ratio": 1.000619157903952,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 1.0006191593994285,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 1.000619157156213,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 1.0006191601471666,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.0006191556607367,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 1.000619161512172,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.0006191521939416,
+       "clip_frac": 0.0012962962962962963,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 1.000619161512173,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.0006191482515778,
+       "clip_frac": 0.007592592592592593,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 1.000619161512173,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.0006191379029765,
+       "clip_frac": 0.025277777777777777,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 1.000619161512173,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 3.20622198555935,
+     "gamma_2": 3.2620858027828823
     },
-    "+50um": {
-     "ratio": 1.0006191601471668,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-100um": {
-     "ratio": 1.0006191556607371,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+100um": {
-     "ratio": 1.0006191615121718,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-200um": {
-     "ratio": 1.0006191521939425,
-     "clip_frac": 0.0012962962962962963,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+200um": {
-     "ratio": 1.000619161512173,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-350um": {
-     "ratio": 1.0006191482515778,
-     "clip_frac": 0.007592592592592593,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+350um": {
-     "ratio": 1.000619161512173,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-500um": {
-     "ratio": 1.000619137902976,
-     "clip_frac": 0.025277777777777777,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+500um": {
-     "ratio": 1.000619161512173,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+    "rpm=3000|ap=4.453mm|U=0.223": {
+     "cert_h_um": 142.89725262298603,
+     "rho": 0.8944498036496925,
+     "u_bar_N": 46.64500919937076,
+     "utilization": 0.223,
+     "runs": {
+      "-25um": {
+       "ratio": 1.000339114554656,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 1.00033911000707,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 1.0003391168284508,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 1.0003391077332762,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.0003391213760409,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 1.0003391034767763,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.0003391311247172,
+       "clip_frac": 0.0013333333333333333,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 1.0003391034764606,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.0003391524568348,
+       "clip_frac": 0.009944444444444445,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 1.0003391034764606,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.000339261274327,
+       "clip_frac": 0.030444444444444444,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 1.0003391034764606,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 3.184949637948625,
+     "gamma_2": 3.2184422556405026
     }
    },
-   "verdict": "no island found in tested range",
-   "circle_max": 3.20622198555935,
-   "gamma_2": 3.2620858027828823
-  },
-  "rpm=3000|ap=4.453mm|U=0.223": {
-   "cert_h_um": 142.89725262298603,
-   "rho": 0.8944498036496925,
-   "u_bar_N": 46.64500919937076,
-   "utilization": 0.223,
-   "runs": {
-    "-25um": {
-     "ratio": 1.000339114554655,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
+   "matched_authority": {
+    "U_metric": "max|forced actuation| / bound",
+    "D_metric": "unclipped transient demand at island step / bound",
+    "plate_islands": {
+     "PS-LPV x=50mm ap=1.5mm": {
+      "U": 0.906,
+      "D": 2.8
+     },
+     "PS-LPV x=50mm ap=2.0mm": {
+      "U": 0.999,
+      "D": 4.14
+     }
     },
-    "+25um": {
-     "ratio": 1.0003391100070687,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-50um": {
-     "ratio": 1.0003391168284503,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+50um": {
-     "ratio": 1.000339107733276,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-100um": {
-     "ratio": 1.0003391213760402,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+100um": {
-     "ratio": 1.0003391034767757,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-200um": {
-     "ratio": 1.000339131124715,
-     "clip_frac": 0.0013333333333333333,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+200um": {
-     "ratio": 1.0003391034764597,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-350um": {
-     "ratio": 1.0003391524568337,
-     "clip_frac": 0.009944444444444445,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+350um": {
-     "ratio": 1.0003391034764597,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "-500um": {
-     "ratio": 1.0003392612743256,
-     "clip_frac": 0.030444444444444444,
-     "diverged": null,
-     "verdict": "decays"
-    },
-    "+500um": {
-     "ratio": 1.0003391034764597,
-     "clip_frac": 0.0,
-     "diverged": null,
-     "verdict": "decays"
-    }
-   },
-   "verdict": "no island found in tested range",
-   "circle_max": 3.184949637948625,
-   "gamma_2": 3.2184422556405026
-  }
- },
- "matched_authority": {
-  "U_metric": "max|forced actuation| / bound",
-  "D_metric": "unclipped transient demand at island step / bound",
-  "plate_islands": {
-   "PS-LPV x=50mm ap=1.5mm": {
-    "U": 0.906,
-    "D": 2.8
-   },
-   "PS-LPV x=50mm ap=2.0mm": {
-    "U": 0.999,
-    "D": 4.14
+    "sdof_islands_D": {}
    }
   },
-  "sdof_islands_D": {}
+  "proof-mass-10Hz": {
+   "config": "class-representative (stand-in) + proof-mass (fa=10 Hz, za=0.25)",
+   "linear_boundaries": {
+    "2000": {
+     "ol_mm": 0.3125,
+     "dvf_mm": 1.015625,
+     "dvf_capped": false
+    },
+    "2500": {
+     "ol_mm": 0.33203124999999994,
+     "dvf_mm": 1.3671875,
+     "dvf_capped": false
+    },
+    "3000": {
+     "ol_mm": 0.37109375,
+     "dvf_mm": 1.7382812499999998,
+     "dvf_capped": false
+    },
+    "3500": {
+     "ol_mm": 0.41015625000000006,
+     "dvf_mm": 2.1484375,
+     "dvf_capped": false
+    },
+    "4000": {
+     "ol_mm": 0.46875,
+     "dvf_mm": 2.5585937499999996,
+     "dvf_capped": false
+    }
+   },
+   "census": {
+    "2000": {
+     "ap_mm": [
+      0.1562,
+      0.2279,
+      0.2995,
+      0.3711,
+      0.4427,
+      0.5143,
+      0.5859,
+      0.6576,
+      0.7292,
+      0.8008,
+      0.8724,
+      0.944,
+      1.0156
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.012,
+      0.017,
+      0.023,
+      0.028,
+      0.033,
+      0.039,
+      0.044,
+      0.05,
+      0.055,
+      0.06,
+      0.066,
+      0.071,
+      0.077
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      919.4928250095314,
+      823.2284387609288,
+      744.2022647542042,
+      678.1689947831102,
+      622.1715524548614,
+      574.0869088948898
+     ]
+    },
+    "2500": {
+     "ap_mm": [
+      0.166,
+      0.2661,
+      0.3662,
+      0.4663,
+      0.5664,
+      0.6665,
+      0.7666,
+      0.8667,
+      0.9668,
+      1.0669,
+      1.167,
+      1.2671,
+      1.3672
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.01,
+      0.016,
+      0.022,
+      0.028,
+      0.034,
+      0.04,
+      0.046,
+      0.052,
+      0.058,
+      0.064,
+      0.07,
+      0.076,
+      0.082
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      913.1407795901144,
+      801.5787030379926,
+      713.1370368569554,
+      641.3081383840113,
+      581.8171129361714,
+      531.7398998669341,
+      489.0087708193969
+     ]
+    },
+    "3000": {
+     "ap_mm": [
+      0.1855,
+      0.3149,
+      0.4443,
+      0.5737,
+      0.7031,
+      0.8325,
+      0.9619,
+      1.0913,
+      1.2207,
+      1.3501,
+      1.4795,
+      1.6089,
+      1.7383
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.016,
+      0.022,
+      0.029,
+      0.035,
+      0.041,
+      0.048,
+      0.054,
+      0.061,
+      0.067,
+      0.074,
+      0.08,
+      0.086
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      959.9438504532952,
+      824.3779249756093,
+      720.9779571966578,
+      639.5151145544997,
+      573.6819254769888,
+      519.3774928092629,
+      473.8201763308593,
+      435.05657718232686
+     ]
+    },
+    "3500": {
+     "ap_mm": [
+      0.2051,
+      0.367,
+      0.529,
+      0.6909,
+      0.8529,
+      1.0148,
+      1.1768,
+      1.3387,
+      1.5007,
+      1.6626,
+      1.8245,
+      1.9865,
+      2.1484
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.016,
+      0.023,
+      0.029,
+      0.036,
+      0.043,
+      0.05,
+      0.057,
+      0.064,
+      0.071,
+      0.078,
+      0.084,
+      0.091
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      880.7331153989954,
+      753.4252234375289,
+      656.9351096746148,
+      581.2853871265382,
+      520.3860894603453,
+      470.3094330147192,
+      428.40846827070413,
+      392.83434122544895
+     ]
+    },
+    "4000": {
+     "ap_mm": [
+      0.2344,
+      0.4281,
+      0.6217,
+      0.8154,
+      1.0091,
+      1.2028,
+      1.3965,
+      1.5902,
+      1.7839,
+      1.9775,
+      2.1712,
+      2.3649,
+      2.5586
+     ],
+     "zones": "CCCCCCCCCCCCC",
+     "utilization": [
+      0.009,
+      0.016,
+      0.023,
+      0.03,
+      0.037,
+      0.045,
+      0.052,
+      0.059,
+      0.066,
+      0.073,
+      0.081,
+      0.088,
+      0.095
+     ],
+     "cert_h_um": [
+      1000.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      988.8962532069951,
+      822.8959209540672,
+      702.9585643130602,
+      612.2525307458613,
+      541.2562651253623,
+      484.17846779288186,
+      437.29429995217413,
+      398.0991729235061,
+      364.8468850266097
+     ]
+    }
+   },
+   "islands": {
+    "rpm=4000|ap=2.559mm|U=0.095": {
+     "cert_h_um": 364.8468850266097,
+     "rho": 0.999997670159063,
+     "u_bar_N": 54.30230297923581,
+     "utilization": 0.095,
+     "runs": {
+      "-25um": {
+       "ratio": 0.9853033629607515,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 0.9637092144753698,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 0.9972807891019765,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 0.9541459208725733,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.0234582191351045,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 0.937506622047061,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.083920296117028,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 0.936684475541118,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.1916628576886559,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 0.936684475541118,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.330431391293038,
+       "clip_frac": 0.0017777777777777779,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 0.936684475541118,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 1732.003463614055,
+     "gamma_2": 5902.10366776989
+    },
+    "rpm=3500|ap=2.148mm|U=0.091": {
+     "cert_h_um": 392.83434122544895,
+     "rho": 0.9999924554670565,
+     "u_bar_N": 54.51788313851161,
+     "utilization": 0.091,
+     "runs": {
+      "-25um": {
+       "ratio": 0.9703418663018897,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 0.9554450217963839,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 0.9794997464341296,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 0.9497596841406866,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.001078053154161,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 0.9419920465383277,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.0562817019294726,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 0.9413918063906207,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.1646194738692444,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 0.9413918063906207,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.3005571282690067,
+       "clip_frac": 0.0016203253613325556,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 0.9413918063906207,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 636.7697588134923,
+     "gamma_2": 5866.037924291641
+    },
+    "rpm=4000|ap=2.365mm|U=0.088": {
+     "cert_h_um": 398.0991729235061,
+     "rho": 0.9994834772971687,
+     "u_bar_N": 54.73352399955815,
+     "utilization": 0.088,
+     "runs": {
+      "-25um": {
+       "ratio": 0.9772447470742596,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 0.9600039147435168,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 0.9869334320181365,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 0.9524904411658871,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 1.0083447000293266,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 0.9396837944600103,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.0586997755374383,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 0.9390232559235204,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.150470670245644,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 0.9390232559235204,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.2643134065474333,
+       "clip_frac": 0.0014814814814814814,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 0.9390232559235204,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 7.650537091093405,
+     "gamma_2": 147.23569905431933
+    },
+    "rpm=3500|ap=1.986mm|U=0.084": {
+     "cert_h_um": 428.40846827070413,
+     "rho": 0.9993990632293055,
+     "u_bar_N": 54.93102875560782,
+     "utilization": 0.084,
+     "runs": {
+      "-25um": {
+       "ratio": 0.9658761317179463,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+25um": {
+       "ratio": 0.9574428761080751,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-50um": {
+       "ratio": 0.9716291679126885,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+50um": {
+       "ratio": 0.9547897979733804,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-100um": {
+       "ratio": 0.9861184267579132,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+100um": {
+       "ratio": 0.9526534244926494,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-200um": {
+       "ratio": 1.026379616213223,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+200um": {
+       "ratio": 0.9526850474239661,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-350um": {
+       "ratio": 1.1116320516520057,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+350um": {
+       "ratio": 0.9526850474239661,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "-500um": {
+       "ratio": 1.2210436529487416,
+       "clip_frac": 0.0012314472746127421,
+       "diverged": null,
+       "verdict": "decays"
+      },
+      "+500um": {
+       "ratio": 0.9526850474239661,
+       "clip_frac": 0.0,
+       "diverged": null,
+       "verdict": "decays"
+      }
+     },
+     "verdict": "no island found in tested range",
+     "circle_max": 7.740220435394233,
+     "gamma_2": 143.20264128175864
+    }
+   },
+   "matched_authority": {
+    "U_metric": "max|forced actuation| / bound",
+    "D_metric": "unclipped transient demand at island step / bound",
+    "plate_islands": {
+     "PS-LPV x=50mm ap=1.5mm": {
+      "U": 0.906,
+      "D": 2.8
+     },
+     "PS-LPV x=50mm ap=2.0mm": {
+      "U": 0.999,
+      "D": 4.14
+     }
+    },
+    "sdof_islands_D": {}
+   }
+  }
  }
 }

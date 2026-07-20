@@ -35,6 +35,18 @@ at every scheduling point once the scheduled H∞ loop is active, and gain
 staleness in the *removal* axis destabilizes a point-designed loop outright
 after 0.5–1 mm of edge recession — both findings are in the manuscript.
 
+## Next paper (planned): SatCERT
+
+`docs/new_strategy_satcert_outline.md` is the evidence-based outline of the
+NEXT strategy (gap verified fresh on 2026-07-20, dossiers in
+`docs/gap_scouting/`): **certified regional stability under actuator
+saturation** — periodic-Lyapunov/generalized-sector LMIs on the
+semi-discretization lifting yield a certified basin per operating point, a
+**certified permissible depth-of-cut envelope** (guaranteed / linear-only /
+unstable), and anti-windup synthesis maximizing the certified region;
+validated against numerical basins and the measured saturation islands of
+Ozsoy et al. (MSSP 2025) — no rig required.
+
 ## The idea in one paragraph
 
 Active chatter control of flexible workpieces must cope with dynamics that

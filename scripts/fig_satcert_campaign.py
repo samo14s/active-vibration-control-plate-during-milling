@@ -112,7 +112,7 @@ def main():
                  arrowprops=dict(arrowstyle="-", lw=0.6))
     axb.annotate(f"{y20:.2f}×\n(ranking inverted)",
                  xy=(20, worst["PS-LPV"][hs.index(20)]),
-                 xytext=(9, 1.45), fontsize=7,
+                 xytext=(22, 0.62 * max(worst["FROZEN"])), fontsize=7,
                  arrowprops=dict(arrowstyle="-", lw=0.6))
     axb.legend(fontsize=6.5)
 
@@ -137,7 +137,7 @@ def main():
     axc.set_xlabel("certificate: model clip-onset step [µm]")
     axc.set_ylabel("simulator: measured clip-onset step [µm]")
     axc.set_title(f"(c) certificate vs nonlinear simulator "
-                  f"({min(devs):.2g}–{max(devs):.2g} %)", fontsize=8.5)
+                  f"({min(devs):.2f}–{max(devs):.1f} %)", fontsize=8.5)
     axc.legend(fontsize=6.5, loc="upper left")
 
     # ---------------- (d) island demonstration -----------------------
@@ -173,9 +173,9 @@ def main():
                     axd.semilogy(tm, env, lw=1.2, color=c, label=lab)
                 axd.axvline(0.0, color="k", lw=0.7, ls=":")
                 axd.axhspan(1e3, 1e7, color="0.85", alpha=0.5, zorder=0)
-                axd.text(0.35, 0.93, "beyond model amplitude validity",
+                axd.text(0.98, 0.70, "beyond model amplitude validity",
                          transform=axd.transAxes, fontsize=6.2,
-                         color="0.35", va="top")
+                         color="0.35", va="top", ha="right")
                 axd.text(0.98, 0.32,
                          f"{key}\nlinearly stable ($\\rho$="
                          f"{rec['rho']:.3f}); step h="

@@ -13,7 +13,7 @@ verdicts archived in the session record). Citation keys resolve in
 
 > Regenerative chatter, not machine capability, caps the material
 > removal rate of thin-walled aerospace parts. Active vibration control
-> can raise that cap, yet industrial uptake remains marginal: mainstream
+> can raise it, yet industrial uptake remains marginal: mainstream
 > designs assume unbounded linear actuation and a time-invariant
 > workpiece, whereas shop-floor piezoelectric actuators saturate at
 > productive depths of cut and cutting-point dynamics vary with tool
@@ -24,15 +24,15 @@ verdicts archived in the session record). Citation keys resolve in
 > the saturated periodic delayed loop by maximal saturation-free
 > admissible sets on a sampled-data semi-discretization lifting —
 > implementation-exact (control rate, computation delay, amplifier
-> bound), matching a nonlinear simulator's clip onset within 2% — and
-> swept into a permissible depth-of-cut envelope under a declared
-> surface-defect tolerance. On a plate benchmark validated against
-> published measurements, certification overturns the linear ranking:
-> the scheduled design's 3.2x linear worst-position advantage over the
-> best fixed-gain design becomes 2.7x at 1 um tolerance and inverts to
-> 0.79x at 20 um, while at the hardest position it cuts vibration by
-> 58% at 49% of the fixed design's voltage with fifty-fold less
-> clipping — converting saturation from a hidden failure mode into a
+> bound), matching a nonlinear simulator's clip onset within 2% at
+> reference points — and swept into a permissible depth-of-cut envelope
+> under a declared surface-defect tolerance. On a benchmark validated
+> against published measurements, certification overturns the linear
+> ranking: the scheduled design's 3.2x linear worst-position advantage
+> over the best fixed-gain design collapses to 1.3x at 1 um tolerance
+> and inverts to 0.79x at 20 um, while at the hardest position it cuts
+> vibration by 58% at 49% of its RMS voltage, clipping fifty-fold
+> less — converting saturation from a hidden failure mode into a
 > certified planning constraint.
 
 **Fill-in provenance (placeholder discipline honored):** every number
@@ -121,9 +121,9 @@ response, with the PHASE-RESOLVED voltage headroom as the deadzone
 bound — to a finite-dimensional periodic system whose maximal
 saturation-free admissible set (Gilbert-Tan lineage, extended to the
 periodic voltage constraint) is computed exactly, solver-free, and is
-EXACT in the reported perturbation direction — validated to 0.2-2 %
+EXACT in the reported perturbation direction — validated to 0.01-1.8 %
 against the independent nonlinear simulator's measured clip onset for
-both perturbation signs; the invariant sets of [wu2016adaptive], by
+both perturbation signs at the reference validation points; the invariant sets of [wu2016adaptive], by
 contrast, are neither computed nor maximized and hold for a bespoke law
 on averaged dynamics. (The generalized-sector extension certifying
 operation BEYOND the clip boundary, where anti-windup becomes active,
@@ -138,8 +138,8 @@ uncertified describing-function analysis [ozsoy2025mssp] into an
 a-priori certified and avoidable planning constraint; across the
 operating grid, under identical certificate machinery, certification is
 shown to OVERTURN the linear ranking of scheduled versus fixed-gain
-designs as the declared tolerance grows (2.7× at 1 µm inverting to
-0.79× at 20 µm) — a tolerance-dependent ranking that linear analysis
+designs as the declared tolerance grows (at most 1.32× at 1 µm,
+inverting to 0.79× at 20 µm, against a 3.2× linear advantage) — a tolerance-dependent ranking that linear analysis
 cannot see, and, to the authors' knowledge, the first quantified
 demonstration — simulation-based, on a measurement-anchored benchmark —
 that linear stability margins can misrank milling controllers under
@@ -306,34 +306,43 @@ assessed statistically per KPI 10).
 
 **Validation against the independent nonlinear simulator** (100 kHz,
 noise off, loss-of-contact off, PS-LPV at x_T = 50 mm; onset = smallest
-injected surface step that clips):
+injected surface step that clips, bisected to 6 nm resolution — far
+below the quoted agreement):
 
 | a_p | certificate (±) | model +h / −h | simulator +h / −h |
 |---|---|---|---|
-| 0.3 mm | 56.8 µm | 97.7 / 56.8 µm | 97.7 / 57.0 µm |
-| 1.0 mm | 6.9 µm | 45.1 / 6.9 µm | 44.5 / 7.0 µm |
+| 0.3 mm | 56.8 µm | 97.68 / 56.81 µm | 97.57 / 56.80 µm |
+| 1.0 mm | 6.9 µm | 45.10 / 6.90 µm | 45.07 / 7.03 µm |
 
-Agreement 0.02–1.9 % for both signs; the certificate equals the binding
-(negative-step) onset — tight, not merely sound.
+Agreement 0.01–1.8 % for both signs at these reference points (one
+controller, one position, two depths — the validation's declared
+scope); the certificate equals the binding (negative-step) onset —
+tight, not merely sound.
 
 **Certified worst-position depths** (4.9 krpm, x_T ∈ {5, 25, 50, 75,
 95} mm, a_p ≤ 5 mm search cap, h_req = declared tolerance; "linear" =
-sampled-loop Floquet boundary from the same lifting):
+sampled-loop Floquet boundary from the same lifting; certified depths
+are PREFIX-CONNECTED — the lower edge of the first refusal, so a
+feasible pocket above a refused band is never reported as the
+certified depth):
 
-| strategy | linear worst | cert. @ 1 µm | @ 5 µm | @ 10 µm | @ 20 µm | @ 50 µm |
-|---|---|---|---|---|---|---|
-| best frozen H∞ | 0.98 mm (x=95) | 0.98 | 0.98 | 0.92 | 0.645 | 0.35 |
-| PS-LPV | 3.09 mm (x=5) | 2.66 | 0.92 | 0.72 | 0.508 | 0.29 |
-| ratio (Y) | 3.16× | **2.72×** | 0.94× | 0.79× | **0.79×** | 0.83× |
+| strategy | linear worst | cert. @ 1 µm | @ 2 µm | @ 5 µm | @ 10 µm | @ 20 µm | @ 50 µm |
+|---|---|---|---|---|---|---|---|
+| best frozen H∞ | 0.98 mm (x=95) | 0.99 | 0.99 | 0.99 | 0.91 | 0.650 | 0.36 |
+| PS-LPV | 3.09 mm (x=5) | 1.30 | 1.16 | 0.93 | 0.73 | 0.513 | 0.29 |
+| ratio (Y) | 3.16× | **1.32×** | 1.18× | 0.94× | 0.79× | **0.79×** | 0.79× |
 
-The headline finding of the campaign: the scheduled design's linear
-advantage survives certification only at tight tolerance (≤ ~2 µm);
-from ~5 µm upward the ranking INVERTS because the scheduled
-controller's higher authority amplifies both the forced tooth-passing
-voltage ripple and the voltage response to surface defects, consuming
-headroom precisely where the linear analysis promises depth — the
-compounding mechanism of §P2, now quantified. At 20 µm both strategies
-are certified only to ~0.5–0.65 mm: the certified-vs-linear gap (up to
+(all worst positions bind at x = 95 mm)
+
+The headline finding of the campaign: the scheduled design's 3.2×
+linear worst-position advantage collapses to at most 1.32× the moment
+saturation is certified — even at the tightest 1 µm tolerance — and
+INVERTS to 0.79× from ~5 µm upward, because the scheduled controller's
+higher authority amplifies both the forced tooth-passing voltage
+ripple and the voltage response to surface defects, consuming headroom
+precisely where the linear analysis promises depth — the compounding
+mechanism of §P2, now quantified. At 20 µm both strategies are
+certified only to ~0.5–0.65 mm: the certified-vs-linear gap (up to
 10× for PS-LPV) IS the saturation-island exposure of KPI 4.
 
 **Hard-condition sims** (companion protocol: x_T = 95 mm, 4.9 krpm,
@@ -397,8 +406,8 @@ high-gain clipping onset of [ozsoy2025mssp]. Within the model, the
 post-onset response grows beyond the model's amplitude validity —
 reported as chatter occurrence (as measured in [ozsoy2025mssp]), not
 as a characterized limit cycle. The certified h_max at the island
-points (1.9 µm / 0.02 µm) sits 20–2500× below the island onset:
-the certificate's refusal-to-clip conservatism, quantified.
+points (1.88 µm / 0.016 µm) sits 20× and ~3100× below the island
+onsets: the certificate's refusal-to-clip conservatism, quantified.
 
 **Deviations from the WP outline (declared).** WP2's periodic
 generalized-sector SDP is memory-infeasible at lifted dimension on

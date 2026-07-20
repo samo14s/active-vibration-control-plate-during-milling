@@ -52,14 +52,14 @@ foundational text with filled numbers in
   delay, ±150 V deadzone at the DAC); the maximal saturation-free
   admissible set (Gilbert–Tan O∞, phase-resolved headroom) gives the
   largest surface-step h_max certified for both signs — closed-form, no
-  SDP, and **validated to 0.2–2 % against the nonlinear simulator's
-  measured clip onset**.
+  SDP, and **validated to 0.01–1.8 % against the nonlinear simulator's
+  measured clip onset** at the reference validation points.
 - **Headline finding**: certification overturns the linear ranking —
   PS-LPV's 3.2× linear worst-position advantage over the best frozen
-  design becomes 2.7× at 1 µm certified tolerance and **inverts to
-  0.79× at 20 µm**; forced-orbit saturation zones appear only for the
-  high-authority scheduled design (the Ozsoy-type island mechanism,
-  in-family).
+  design collapses to 1.3× at 1 µm certified tolerance and **inverts
+  to 0.79× at 20 µm**; forced-orbit saturation zones appear only for
+  the high-authority scheduled design (the Ozsoy-type island
+  mechanism, in-family).
 - At the hard condition (x = 95 mm, a_p = 2 mm) the frozen design
   operates 14.7 % clipped vs 0.28 % for PS-LPV, which cuts vibration
   by 58 % at 49 % of the voltage (RMS).

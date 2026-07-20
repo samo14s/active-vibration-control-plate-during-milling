@@ -1,7 +1,7 @@
 """Validation of the SatCERT lifted models and certificates.
 
 The decisive end-to-end validation (certificate h_max vs the 100 kHz
-nonlinear simulator's clip-onset step height, agreement 0.02-1.8 % for
+nonlinear simulator's clip-onset step height, agreement 0.01-1.8 % for
 both step signs) runs in scripts/satcert_campaign.py stage `validate`;
 the checks here are the fast structural invariants.
 """

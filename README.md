@@ -60,6 +60,12 @@ foundational text with filled numbers in
 - At the hard condition (x = 95 mm, a_p = 2 mm) the frozen design
   operates 14.7 % clipped vs 0.28 % for PS-LPV, which cuts vibration
   by 58 % at 49 % of the voltage (RMS).
+- **Two saturation islands demonstrated with causal attribution**
+  (`scripts/satcert_islands.py`): at linearly stable points (ρ ≈ 0.955)
+  a −38/−50 µm surface step triggers chatter growth at 99 % clip duty,
+  and the SAME step decays once the ±150 V bound is lifted — islands
+  appear only for the high-authority scheduled controller; the frozen
+  design survives ±500 µm. Figure: `docs/figures/satcert_campaign.png`.
 
 ## The idea in one paragraph
 

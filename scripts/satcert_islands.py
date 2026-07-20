@@ -49,7 +49,15 @@ POINTS = (
     ("FROZEN", 0.095, 0.9e-3),
     ("FROZEN", 0.05, 2.0e-3),
 )
-LADDER = (1.0, 2.0, 5.0, 10.0, 20.0, 50.0)     # x clip-onset scale
+LADDER = (1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0)  # x base scale
+H_BASE_MIN = 1e-6      # floor of the ladder base [m]
+H_CAP = 500e-6
+# SIGN MATTERS with the unilateral chip: a POSITIVE step thins the chip
+# until the tool cuts air (self-limiting: force clamped at zero by loss
+# of contact), whereas a NEGATIVE step thickens the chip — unbounded
+# force, voltage demand, clipping. The negative sign is also the
+# certificate's binding one (h_minus < h_plus); test it first.
+SIGNS = (-1.0, +1.0)
 
 
 def log(msg):
@@ -103,36 +111,41 @@ def main():
             rec["verdict"] = "not-linear-stable (skip)"
             out["points"][key] = rec
             continue
-        h0 = cert.h_max if cert.feasible and cert.h_max > 0 else 5e-6
+        h0 = max(cert.h_max if cert.feasible else 0.0, H_BASE_MIN)
         island_h = None
+        done = False
         for mult in LADDER:
-            h = min(h0 * mult, 500e-6)
-            r_on = run_once(mm, K, ap, x, h, V_MAX, tau)
-            verdict = classify(r_on)
-            rec["runs"][f"{mult:g}x_sat"] = {k: v for k, v in r_on.items()
-                                             if k != "trace"}
-            log(f"  h={h*1e6:7.2f}um sat-on : {verdict} "
-                f"(ratio {r_on['ratio']:.2f}, clip {r_on['clip_frac_post']:.3f})")
-            if verdict != "decays":
-                island_h = h
-                rec["island_trace_on"] = r_on["trace"]
-                # causal control: same h, bound lifted
-                r_off = run_once(mm, K, ap, x, h, 1e9, tau)
-                v_off = classify(r_off)
-                rec["runs"][f"{mult:g}x_nosat"] = {
-                    k: v for k, v in r_off.items() if k != "trace"}
-                rec["island_trace_off"] = r_off["trace"]
-                log(f"  h={h*1e6:7.2f}um sat-OFF: {v_off} "
-                    f"(ratio {r_off['ratio']:.2f})")
-                rec["verdict"] = ("ISLAND CONFIRMED (saturation-induced)"
-                                  if v_off == "decays" else
-                                  f"instability not saturation-specific "
-                                  f"({v_off} without bound)")
-                break
-            if h >= 500e-6:
+            for sign in SIGNS:
+                h = sign * min(h0 * mult, H_CAP)
+                r_on = run_once(mm, K, ap, x, h, V_MAX, tau)
+                verdict = classify(r_on)
+                rec["runs"][f"{sign*mult:+g}x_sat"] = {
+                    k: v for k, v in r_on.items() if k != "trace"}
+                log(f"  h={h*1e6:+8.2f}um sat-on : {verdict} "
+                    f"(ratio {r_on['ratio']:.2f}, "
+                    f"clip {r_on['clip_frac_post']:.3f})")
+                if verdict != "decays":
+                    island_h = h
+                    rec["island_trace_on"] = r_on["trace"]
+                    r_off = run_once(mm, K, ap, x, h, 1e9, tau)
+                    v_off = classify(r_off)
+                    rec["runs"][f"{sign*mult:+g}x_nosat"] = {
+                        k: v for k, v in r_off.items() if k != "trace"}
+                    rec["island_trace_off"] = r_off["trace"]
+                    log(f"  h={h*1e6:+8.2f}um sat-OFF: {v_off} "
+                        f"(ratio {r_off['ratio']:.2f})")
+                    rec["verdict"] = (
+                        "ISLAND CONFIRMED (saturation-induced)"
+                        if v_off == "decays" else
+                        f"instability not saturation-specific "
+                        f"({v_off} without bound)")
+                    done = True
+                    break
+            if done or abs(h) >= H_CAP:
                 break
         if island_h is None:
-            rec["verdict"] = "no island found up to 500 um"
+            rec["verdict"] = (f"no island found up to +/-"
+                              f"{min(h0*LADDER[-1], H_CAP)*1e6:.0f} um")
         rec["island_h_um"] = island_h * 1e6 if island_h else None
         out["points"][key] = rec
 

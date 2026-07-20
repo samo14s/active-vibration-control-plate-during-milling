@@ -346,6 +346,40 @@ x = 95 mm: 1.7–1.8 mm) — high-authority scheduling, not weak fixed
 gains, is what drives the loop into the rail, consistent with the
 high-gain clipping onset mechanism of [ozsoy2025mssp].
 
+**Saturation islands: causal demonstration** (WP4;
+`scripts/satcert_islands.py`, `results/satcert_islands.json`, figure
+`docs/figures/satcert_campaign.png` panel d). Protocol: settle 150
+tooth periods, inject a surface step, observe 150 periods; escalate |h|
+over a signed ladder; an island is claimed only when the SAME
+perturbation decays with the amplifier bound lifted — the causal
+control that attributes the instability to saturation and nothing else.
+Sign matters through the unilateral chip h_chip = sinφ·(ft + w − w_τ):
+a POSITIVE step thins the chip into air cutting (self-limiting, force
+clamped at zero — no clipping observed up to +500 µm anywhere), whereas
+a NEGATIVE step thickens the chip (unbounded force demand); the
+negative sign is also the certificate's binding one (h₋ < h₊). Results
+at 4.9 krpm (loss-of-contact ON, noise off, deterministic):
+
+| point | ρ (linear) | decays up to | island at | with bound lifted |
+|---|---|---|---|---|
+| PS-LPV, x=50 mm, a_p=1.5 mm | 0.955 | ±18.8 µm | −37.6 µm → chatter growth, 99.4 % clip duty | decays |
+| PS-LPV, x=50 mm, a_p=2.0 mm | 0.955 | ±20 µm | −50 µm → chatter growth, 99.5 % clip duty | decays |
+| frozen, x=95 mm, a_p=0.9 mm | 0.966 | ±500 µm (max tested; ≤ 2.9 % transient clipping) | none | — |
+| frozen, x=50 mm, a_p=2.0 mm | 0.698 | ±500 µm (max tested; ≤ 4.5 % transient clipping) | none | — |
+
+Two saturation islands CONFIRMED with causal attribution — both for
+the high-authority scheduled controller, none for the moderate-gain
+frozen design even at 25× larger perturbations with transient clipping
+tolerated. This completes the mechanism chain: the census's
+forced-saturated zones, the certified-depth inversion, and the islands
+all trace to the same authority-vs-headroom trade, consistent with the
+high-gain clipping onset of [ozsoy2025mssp]. Within the model, the
+post-onset response grows beyond the model's amplitude validity —
+reported as chatter occurrence (as measured in [ozsoy2025mssp]), not
+as a characterized limit cycle. The certified h_max at the island
+points (1.9 µm / 0.02 µm) sits 20–2500× below the island onset:
+the certificate's refusal-to-clip conservatism, quantified.
+
 **Deviations from the WP outline (declared).** WP2's periodic
 generalized-sector SDP is memory-infeasible at lifted dimension on
 commodity hardware (Clarabel ≈ 3.6 GB & 97 s per solve at N = 61 with
@@ -355,7 +389,7 @@ the reported direction, at the declared price that certified
 trajectories never clip. Consequently WP5 (anti-windup line search) is
 deferred to the saturated-regime extension: within a region-of-linearity
 certificate an AW gain never activates and cannot change the certified
-set. WP4's external reproduction of the published SDOF saturation-island
-configuration remains open; the island MECHANISM (linear-stable,
-certificate-refused, forced-saturated zones) is reproduced in-family in
-the census above.
+set. WP4's island mechanism is demonstrated in-family with causal
+attribution (above); the external re-simulation of the published SDOF
+configuration of [ozsoy2025mssp] under a matched-authority protocol
+remains open for the manuscript stage.

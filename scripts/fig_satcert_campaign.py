@@ -88,7 +88,8 @@ def main():
                    label="certified depth"),
         plt.Line2D([], [], marker="o", ls="", mfc="w", c="k",
                    label="linear boundary")],
-        fontsize=5.6, loc="lower right", ncol=2, framealpha=0.95)
+        fontsize=6.0, loc="upper center", bbox_to_anchor=(0.5, -0.13),
+        ncol=3, framealpha=0.95)
 
     # ---------------- (b) h_req sensitivity --------------------------
     hs = (1, 2, 5, 10, 20, 50)
@@ -142,23 +143,37 @@ def main():
             if "ISLAND CONFIRMED" in str(rec.get("verdict", "")) and \
                     "island_trace_on" in rec:
                 tr_on, tr_off = rec["island_trace_on"], rec["island_trace_off"]
-                t0 = isl["settle_periods"] * 60.0 / (3 * isl["rpm"])
-                t_on = np.array(tr_on["t"]) - t0
-                t_off = np.array(tr_off["t"]) - t0
-                axd.plot(t_off * 1e3, tr_off["w_um"], lw=0.7,
-                         color="#4c72b0",
-                         label="bound lifted → decays")
-                axd.plot(t_on * 1e3, tr_on["w_um"], lw=0.7,
-                         color="#c44e52",
-                         label="±150 V active → sustained chatter")
+                tau = 60.0 / (3 * isl["rpm"])
+                t0 = isl["settle_periods"] * tau
+
+                def envelope(tr):
+                    t = np.array(tr["t"]) - t0
+                    w = np.abs(np.array(tr["w_um"]))
+                    nb = max(1, int((t[-1] - t[0]) / (2 * tau)))
+                    edges = np.linspace(t[0], t[-1], nb + 1)
+                    idx = np.clip(np.searchsorted(edges, t) - 1, 0, nb - 1)
+                    env = np.zeros(nb)
+                    np.maximum.at(env, idx, w)
+                    mid = 0.5 * (edges[:-1] + edges[1:])
+                    keep = mid >= -0.15
+                    return mid[keep] * 1e3, np.maximum(env[keep], 1e-4)
+
+                for tr, c, lab in ((tr_off, "#4c72b0",
+                                    "bound lifted → decays"),
+                                   (tr_on, "#c44e52",
+                                    "±150 V active → chatter growth "
+                                    "(clip duty 99 %)")):
+                    tm, env = envelope(tr)
+                    axd.semilogy(tm, env, lw=1.2, color=c, label=lab)
                 axd.axvline(0.0, color="k", lw=0.7, ls=":")
-                axd.text(0.02, 0.03,
+                axd.text(0.98, 0.32,
                          f"{key}\nlinearly stable ($\\rho$="
                          f"{rec['rho']:.3f}); step h="
                          f"{rec['island_h_um']:.0f} µm",
-                         transform=axd.transAxes, fontsize=6.2, va="bottom")
+                         transform=axd.transAxes, fontsize=6.2,
+                         va="bottom", ha="right")
                 axd.set_xlabel("time after surface step [ms]")
-                axd.set_ylabel("milling-point deflection [µm]")
+                axd.set_ylabel("deflection envelope |w| [µm]")
                 axd.legend(fontsize=6.5, loc="upper left")
                 shown = True
                 break

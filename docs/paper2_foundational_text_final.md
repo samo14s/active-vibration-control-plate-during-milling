@@ -11,14 +11,14 @@ verdicts archived in the session record). Citation keys resolve in
 ## 1. Abstract (≤200 words; placeholders X, Y, Z to be filled from THIS
 ## paper's certified campaign — see note below)
 
-> Regenerative chatter, not machine capability, commonly caps the
+> Regenerative chatter, not machine capability, caps the
 > material removal rate (MRR) of milled thin-walled aerospace parts.
 > Active vibration control can raise that cap, yet industrial uptake
 > remains marginal: mainstream designs assume a linear actuator of
 > unbounded authority and a time-invariant workpiece, whereas shop-floor
 > piezoelectric actuators saturate at aggressive depths of cut and the
-> structural dynamics at the cutting point vary continuously with tool
-> position and material removal. This paper develops a saturation-aware,
+> cutting-point dynamics vary continuously with tool position and
+> material removal. This paper develops a saturation-aware,
 > position-scheduled control strategy treating both nonidealities as
 > design objects: a gain-scheduled H-infinity controller, synthesized over
 > the NC-known tool-path and removal schedule, is augmented with an
@@ -27,8 +27,8 @@ verdicts archived in the session record). Citation keys resolve in
 > generalized-sector Lyapunov conditions on a semi-discretization lifting.
 > Sweeping the certificates yields a permissible depth-of-cut envelope
 > maximizing stability-limited MRR under a declared perturbation
-> tolerance. In a simulation campaign on a plate
-> benchmark validated against published measurements, the strategy raises
+> tolerance. In simulations on a plate benchmark validated against
+> published measurements, the strategy raises
 > the certified worst-position depth of cut by $Y\times$ over the best
 > fixed-gain design of the same family, cutting its vibration by $X\%$ at
 > $Z\%$ of its voltage at the hardest tool position — converting actuator

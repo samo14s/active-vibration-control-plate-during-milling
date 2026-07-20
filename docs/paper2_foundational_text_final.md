@@ -492,35 +492,62 @@ UNSTABLE in the implementation-exact lift (rho = 1.41): its bounded
 contact-losing) equilibrium — quantifying how misleading the linear
 picture is there.
 
-**6.4 SDOF (Ozsoy-class) re-simulation under the matched protocol.**
-Full-text access to the published parameter set is blocked by this
-session's network policy (whiterose eprints, ScienceDirect, SSRN,
-ResearchGate, CORE, Semantic Scholar API — all HTTP 403; the paper
-postdates the local scholarly corpus), so the study runs on a
-clearly-labeled class-representative stand-in (25 Hz / 3 % robot-class
-mode, DVF ×16 damping, 60 N bound; `avc/sdof.py` documents the
-drop-in slot and URLs for the published values). Two variants at
-2–4 krpm: ideal force source (DVF boundary > 5 mm cap vs open-loop
-0.31–0.47 mm) and 10 Hz proof-mass actuator dynamics (boundary drops
-to 2.1–2.6 mm — the actuator high-pass consumes linear margin).
-Result: **no saturation island in either variant** up to ±500 µm
-surface steps — at matched clipping depth D ≈ 2.7–4 where the plate's
-scheduled H∞ latched into chatter (D = 2.80 / 4.14), the clipped DVF
-always recovered (≤ 3.7 % transient clip duty). Mechanism: a clipped
-velocity feedback still outputs a force of sign −ẋ — dissipative even
-at the rail (dry-friction-like) — whereas the clipped high-gain
-model-based H∞ loses its stabilizing phase; with the 10 Hz proof-mass
-the phase distortion at 2.5× the actuator resonance is still too mild
-to break dissipativity. The measured islands of the published rig must
-therefore hinge on ingredients the stand-in lacks — the published
-parameter regime (mode/actuator frequency ratio, immersion, gain), and
-plausibly the proof-mass STROKE limit (displacement saturation, a
-harsher nonlinearity than force clipping) — a ranked hypothesis list
-that the drop-in re-run can settle. Matched-authority protocol as
-implemented: U = forced utilization (plate islands: 0.91 / 0.999;
-SDOF class: ≤ 0.29 — forced-dominated vs transient-dominated rigs)
-and D = unclipped transient demand at the island step over the bound
-(the like-for-like clipping depth; rig-agnostic).
+**6.4 SDOF (Ozsoy) re-simulation — EXECUTED on the published
+parameters.** The paper's OA PDF (user-supplied; the session network
+policy had blocked every online full-text route) supplies Tables 1–2
+and Eq. (2): flexure mode f_n = 128.1 Hz / ζ = 1.48 % /
+k = 1.13·10⁷ N/m (m = 17.44 kg), 4-tooth Ø16 45°-helix half-immersion
+down milling of Al 7075-T6, f_t = 0.05 mm, K_t = 660, K_n = 180 MPa,
+DVF gain 253 V/(m/s) through the 8.4 Hz / 0.15 proof-mass actuator
+(3 N/V), saturation threshold 27 N (`avc/sdof.py::OZSOY_PUBLISHED`;
+edge coefficients are untabulated → zero, DVF rate 10 kHz assumed,
+single mode — all declared). The directional projection follows the
+paper's Eq. (4) y-force; the regenerative sign (absent from their
+regeneration-free model) is calibrated once against the published
+UNCONTROLLED boundary and declared: the calibrated model reproduces
+its shape — high left flank 14–18 mm at 1800–1950 rpm, collapse to
+~2 mm above 2050 rpm, 0.9 mm at 2800 rpm vs the published 1.2 mm.
+Reproduction results (`scripts/ozsoy_reproduction.py`,
+`results/ozsoy_reproduction.json`,
+`docs/figures/ozsoy_reproduction.png`):
+
+- **Quantitative force-map validation**: forced actuator-force
+  amplitudes vs the 13 measured cell values printed in the paper's
+  Fig. 10 — median model/measured = **1.04** (cell-wise within
+  ~±30 %; the residual is consistent with the untabulated edge
+  coefficients, measured runout, and the single-mode reduction).
+- **Both saturation islands of their Fig. 12 reproduced in place**
+  by the certificate census's forced-saturated (S) zones: the central
+  island at 1900–1950 rpm / 4–8 mm and the upper island at ~18 mm,
+  with the saturation-free region between (10–16 mm) that the paper
+  highlights. Their third band ("Sat (chatter)" cells at
+  2050–2250 rpm / 4–6 mm) lies exactly along the model's DVF
+  stability boundary — marginal chatter interacting with saturation,
+  as they describe.
+- **Causal probes**: at the central-island cell (1900 rpm / 5 mm) the
+  bound-active loop runs at 44.6 % clip duty with only mildly
+  degraded RMS (43 vs 40 µm with the bound lifted) and no chatter —
+  matching the paper's "Sat (marginal)" designations there; chatter
+  cells in their data sit at the boundary band above.
+
+**6.4-bis Mechanism contrast (the class-representative null result,
+retained).** Before the PDF became available the study ran on a
+clearly-labeled stand-in with the mode BELOW the tooth-passing band
+(25 Hz vs 100–200 Hz forcing): no islands appeared up to matched
+clipping depth D ≈ 2.7–4 in either variant (ideal actuator or 10 Hz
+proof-mass), because the forced response of an out-of-band mode is
+tiny and a clipped velocity feedback stays dissipative (sign −ẋ,
+dry-friction-like). The published configuration islands precisely
+because its mode sits INSIDE the tooth-passing band (128.1 Hz vs
+113–150 Hz at 1700–2250 rpm; the first harmonic resonates at
+1921 rpm — the measured island center): the islands are
+FORCED-response saturation, i.e. exactly the census's S-zones, which
+our lifted machinery predicts with regeneration included — one
+mechanism unifying their frequency-domain model and our certificates.
+Matched-authority protocol as implemented: U = forced utilization
+(plate islands 0.91/0.999; published SDOF islands: U crosses 1 by
+definition of S) and D = unclipped transient demand over the bound
+(the like-for-like clipping depth for transient-driven rigs).
 
 **6.5 Comparative insight for the paper.** Island susceptibility is
 NOT set by clipping depth alone: the plate's scheduled H∞ islands at

@@ -1,0 +1,244 @@
+{
+ "config": "Ozsoy-Sims-Ozturk MSSP 224 (2025) 111942, Tables 1-2 (DVF saturation-island configuration)",
+ "h_req_um": 10.0,
+ "boundaries": {
+  "1700": {
+   "ol_mm": 11.3671875,
+   "dvf_mm": 12.304687500000002
+  },
+  "1750": {
+   "ol_mm": 12.83203125,
+   "dvf_mm": 13.769531249999998
+  },
+  "1800": {
+   "ol_mm": 14.414062499999998,
+   "dvf_mm": 15.29296875
+  },
+  "1850": {
+   "ol_mm": 15.996093750000002,
+   "dvf_mm": 16.875
+  },
+  "1900": {
+   "ol_mm": 17.636718750000004,
+   "dvf_mm": 18.45703125
+  },
+  "1950": {
+   "ol_mm": 17.6953125,
+   "dvf_mm": 20.09765625
+  },
+  "2000": {
+   "ol_mm": 4.39453125,
+   "dvf_mm": 14.6484375
+  },
+  "2050": {
+   "ol_mm": 2.5781249999999996,
+   "dvf_mm": 8.3203125
+  },
+  "2100": {
+   "ol_mm": 1.875,
+   "dvf_mm": 5.9765625
+  },
+  "2150": {
+   "ol_mm": 1.5234375,
+   "dvf_mm": 4.746093749999999
+  },
+  "2200": {
+   "ol_mm": 1.2890624999999998,
+   "dvf_mm": 4.042968750000001
+  },
+  "2250": {
+   "ol_mm": 1.1132812500000002,
+   "dvf_mm": 3.5742187499999996
+  }
+ },
+ "zones": {
+  "doc_mm": [
+   2.0,
+   4.0,
+   6.0,
+   8.0,
+   10.0,
+   12.0,
+   14.0,
+   16.0,
+   18.0,
+   20.0,
+   22.0,
+   24.0,
+   26.0
+  ],
+  "rpm": [
+   1700.0,
+   1750.0,
+   1800.0,
+   1850.0,
+   1900.0,
+   1950.0,
+   2000.0,
+   2050.0,
+   2100.0,
+   2150.0,
+   2200.0,
+   2250.0
+  ],
+  "rows_doc_x_rpm": [
+   "CCCCCCCCCCCC",
+   "CCCCSSCCCCCU",
+   "CCCCSSLCCUUU",
+   "CCCCSSCCUUUU",
+   "CCCCCCCUUUUU",
+   "CCCCCCCUUUUU",
+   "UUCCCCCUUUUU",
+   "UUUCCCUUUUUU",
+   "UUUUSSUUUUUU",
+   "UUUUULUUUUUU",
+   "UUUUUUUUUUUU",
+   "UUUUUUUUUUUU",
+   "UUUUUUUUUUUU"
+  ]
+ },
+ "cell_validation": {
+  "cells": [
+   {
+    "rpm": 1700,
+    "doc_mm": 20,
+    "meas_N": 13,
+    "model_N": null,
+    "note": "lin-unstable (model)"
+   },
+   {
+    "rpm": 1700,
+    "doc_mm": 10,
+    "meas_N": 10,
+    "model_N": 7.1
+   },
+   {
+    "rpm": 1700,
+    "doc_mm": 5,
+    "meas_N": 12,
+    "model_N": 11.1
+   },
+   {
+    "rpm": 1700,
+    "doc_mm": 4,
+    "meas_N": 9,
+    "model_N": 9.9
+   },
+   {
+    "rpm": 1750,
+    "doc_mm": 20,
+    "meas_N": 16,
+    "model_N": null,
+    "note": "lin-unstable (model)"
+   },
+   {
+    "rpm": 1750,
+    "doc_mm": 5,
+    "meas_N": 14,
+    "model_N": 13.8
+   },
+   {
+    "rpm": 1800,
+    "doc_mm": 10,
+    "meas_N": 15,
+    "model_N": 11.1
+   },
+   {
+    "rpm": 1800,
+    "doc_mm": 4,
+    "meas_N": 13,
+    "model_N": 15.9
+   },
+   {
+    "rpm": 1850,
+    "doc_mm": 5,
+    "meas_N": 19,
+    "model_N": 23.8
+   },
+   {
+    "rpm": 1900,
+    "doc_mm": 5,
+    "meas_N": 20,
+    "model_N": 30.9
+   },
+   {
+    "rpm": 2100,
+    "doc_mm": 5,
+    "meas_N": 16,
+    "model_N": 15.1
+   },
+   {
+    "rpm": 2150,
+    "doc_mm": 5,
+    "meas_N": 17,
+    "model_N": null,
+    "note": "lin-unstable (model)"
+   },
+   {
+    "rpm": 2200,
+    "doc_mm": 4,
+    "meas_N": 7,
+    "model_N": 9.5
+   }
+  ],
+  "median_model_over_meas": 1.042857142857143
+ },
+ "probes": {
+  "rpm=1900|doc=5mm": {
+   "tag": "central island (S)",
+   "bound_on": {
+    "rms_um": 43.11211090522641,
+    "clip_frac": 0.4458153499718521,
+    "diverged": null
+   },
+   "bound_off": {
+    "rms_um": 39.506042986425804,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "saturation_induced_degradation": false
+  },
+  "rpm=1850|doc=6mm": {
+   "tag": "central island (S)",
+   "bound_on": {
+    "rms_um": 33.15233631081432,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "bound_off": {
+    "rms_um": 33.15233631081432,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "saturation_induced_degradation": false
+  },
+  "rpm=2100|doc=5mm": {
+   "tag": "post-lobe band",
+   "bound_on": {
+    "rms_um": 18.187684787501393,
+    "clip_frac": 0.004666597531888417,
+    "diverged": null
+   },
+   "bound_off": {
+    "rms_um": 18.189207079617738,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "saturation_induced_degradation": false
+  },
+  "rpm=1750|doc=10mm": {
+   "tag": "saturation-free cell",
+   "bound_on": {
+    "rms_um": 20.444012067327275,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "bound_off": {
+    "rms_um": 20.444012067327275,
+    "clip_frac": 0.0,
+    "diverged": null
+   },
+   "saturation_induced_degradation": false
+  }
+ }
+}

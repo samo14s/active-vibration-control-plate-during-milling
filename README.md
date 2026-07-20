@@ -39,10 +39,10 @@ after 0.5–1 mm of edge recession — both findings are in the manuscript.
 
 `docs/new_strategy_satcert_outline.md` targets the verified gap
 (dossiers in `docs/gap_scouting/`): **certified regional stability under
-actuator saturation**. WP1–3 are executed and WP4 is demonstrated
-in-family with causal attribution (the external re-simulation of the
-published SDOF island configuration is deferred to the manuscript
-stage) (`avc/satcert.py`,
+actuator saturation**. WP1–5 are executed: WP4 both in-family (causal
+island attribution) and externally — the published Ozsoy SDOF island
+configuration is reproduced on its published parameters (below)
+(`avc/satcert.py`,
 `scripts/satcert_campaign.py`, `results/satcert_campaign.json`,
 foundational text with filled numbers in
 `docs/paper2_foundational_text_final.md`):
@@ -77,12 +77,19 @@ foundational text with filled numbers in
   OPEN-LOOP boundary no global sector certificate can exist (the
   sector edge contains the dead actuator) — regional certificates
   there are a necessity, not conservatism. Record: paper2 §6.
-- **SDOF (Ozsoy-class) re-simulation harness** (`avc/sdof.py`,
-  matched-authority protocol, published-parameter drop-in slot; OA
-  full texts blocked by the session network policy): NO islands up to
-  matched clipping depth D ≈ 4 in the DVF class — clipped velocity
-  feedback stays dissipative, isolating clipped-feedback PHASE
-  integrity (not clipping depth) as the island ingredient.
+- **Ozsoy (MSSP 2025) saturation islands reproduced on the PUBLISHED
+  parameters** (`avc/sdof.py::OZSOY_PUBLISHED`,
+  `scripts/ozsoy_reproduction.py`): forced actuator-force map matches
+  the paper's measured Fig.-10 amplitudes at median model/measured =
+  1.04; BOTH islands of their Fig. 12 appear in place as the
+  certificate census's forced-saturated zones (central 1900-1950 rpm /
+  4-8 mm, upper ~18 mm) with the saturation-free region between; the
+  calibrated model also reproduces the published uncontrolled boundary
+  shape. Figure: `docs/figures/ozsoy_reproduction.png`. The earlier
+  class-representative null result is retained as the mechanism
+  contrast: islands require the mode INSIDE the tooth-passing band
+  (128.1 Hz vs the 1921 rpm resonance) - they are forced-response
+  saturation, exactly the S-zones our lift predicts.
 
 ## The idea in one paragraph
 

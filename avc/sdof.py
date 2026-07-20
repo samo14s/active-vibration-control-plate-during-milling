@@ -69,6 +69,18 @@ class SDOFConfig:
     #                              phase-distortion ingredient of the
     #                              published rig class
     za: float = 0.25       # actuator damping ratio
+    radius: float = 8e-3   # tool radius [m]
+    helix_deg: float = 0.0  # helix angle [deg] (slice-lagged force)
+    n_axial: int = 16      # axial slices for the helix quadrature
+    force_conv: str = "plate-y"  # directional projection convention:
+    #   "plate-y": coef = (Kt cos + Kn sin) sin (Du-rig lineage, as in
+    #              avc.simulate.CutGeometry)
+    #   "ozsoy-y": coef = -(Kt sin - Kn cos) sin — the y-force of
+    #              Ozsoy Eq. (4) (down-milling switching, chip
+    #              h = sin(theta)(ft + w - w_tau)); the overall sign
+    #              is fixed by matching the published uncontrolled
+    #              stability boundary (declared calibration)
+    conv_sign: float = 1.0
     label: str = "sdof"
 
 
@@ -84,8 +96,36 @@ REPRESENTATIVE = SDOFConfig(
     ft=0.10e-3, g_v=3.0e3, f_max=60.0,
     label="class-representative (stand-in)")
 
-# drop-in slot for the published parameter set (fill from the OA PDF)
-OZSOY_PUBLISHED: SDOFConfig | None = None
+# PUBLISHED parameter set — Ozsoy, Sims & Ozturk, MSSP 224 (2025)
+# 111942, Tables 1-2 and Eq. (2), saturation-island configuration
+# (DVF, 1700-2250 rpm band):
+#   flexure workpiece for the island tests: fn = 128.1 Hz,
+#   zeta = 1.48 %, k = 1.13e7 N/m  =>  m = k/wn^2 = 17.44 kg;
+#   tool D16 mm, 4 teeth, 45 deg helix, Al 7075-T6, DOWN milling,
+#   half immersion (phi in [pi/2, pi]), ft = 0.05 mm;
+#   Kt = 660e6 N/m^2, Kn = 180e6 N/m^2 (=> kr = 180/660; edge
+#   coefficients Kte/Kne are not tabulated in the paper — set to zero,
+#   declared);
+#   DVF gain g_dvf = 253 (V per m/s) through the actuator
+#   f_act/V_in = 3 s^2/(s^2 + 15.834 s + 2785.6)  =>  proof-mass
+#   fa = 8.4 Hz, za = 0.15, mid-band force gain 3*253 = 759 N s/m;
+#   saturation threshold of the control signal: 27 N.
+# Implementation rate 10 kHz is OUR declared assumption (the paper's
+# Simulink Desktop Real-Time rate is not stated).
+# force_conv/conv_sign: the y-projection of the paper's Eq. (4) with
+# the overall regenerative sign CALIBRATED against the published
+# uncontrolled stability boundary (reproduces its shape: high left
+# flank ~14-18 mm at 1800-1921 rpm, collapse to ~2 mm above 2000 rpm,
+# 0.9 mm at 2800 rpm vs the published 1.2 mm) — declared calibration.
+OZSOY_PUBLISHED: SDOFConfig | None = SDOFConfig(
+    m_kg=1.13e7 / (2.0 * np.pi * 128.1) ** 2, fn_hz=128.1, zeta=0.0148,
+    kt=660e6, kr=180.0 / 660.0, n_teeth=4,
+    phi_in=np.pi / 2, phi_out=np.pi, ft=0.05e-3,
+    g_v=3.0 * 253.0, f_max=27.0, rate=10e3,
+    fa_hz=8.4, za=0.15, radius=8e-3, helix_deg=45.0,
+    force_conv="ozsoy-y", conv_sign=-1.0,
+    label="Ozsoy-Sims-Ozturk MSSP 224 (2025) 111942, Tables 1-2 "
+          "(DVF saturation-island configuration)")
 
 
 def tooth_period(cfg: SDOFConfig, rpm: float) -> float:
@@ -96,22 +136,37 @@ def tooth_period(cfg: SDOFConfig, rpm: float) -> float:
 # cutting-force directional coefficient (same slice quadrature as
 # avc.simulate.CutGeometry, x-direction SDOF)
 # ---------------------------------------------------------------------------
-def _phis(cfg: SDOFConfig, rpm: float, t, n_axial: int, ap: float,
-          helix_lag: float = 0.0):
-    Omega = 2.0 * np.pi * rpm / 60.0
+def _offsets(cfg: SDOFConfig, ap: float):
+    """Per (tooth, axial-slice) angular offsets with helix lag, and the
+    slice height dz (same quadrature as avc.simulate.CutGeometry)."""
+    na = cfg.n_axial if cfg.helix_deg != 0.0 else 1
+    z = (np.arange(na) + 0.5) * (ap / na)
+    lag = z * np.tan(np.deg2rad(cfg.helix_deg)) / cfg.radius
     j = 2.0 * np.pi * np.arange(cfg.n_teeth) / cfg.n_teeth
-    offs = j                                   # no helix lag (SDOF study)
-    return np.mod(Omega * np.asarray(t)[..., None] + offs, 2.0 * np.pi)
+    return (j[:, None] - lag[None, :]).ravel(), ap / na
+
+
+def _dir_coef(cfg: SDOFConfig, phi: np.ndarray) -> np.ndarray:
+    """Directional force coefficient WITHOUT the chip's sin factor
+    (multiply by the chip h = sin(phi)*(ft + w - w_tau))."""
+    s = np.sin(phi)
+    kn = cfg.kr * cfg.kt
+    if cfg.force_conv == "ozsoy-y":
+        coef = -(cfg.kt * s - kn * np.cos(phi))
+    else:
+        coef = cfg.kt * np.cos(phi) + kn * s
+    return cfg.conv_sign * coef
 
 
 def alpha4_time(cfg: SDOFConfig, ap: float, rpm: float,
                 t: np.ndarray) -> np.ndarray:
     """a4(t) such that F_cut = -a4(t) * (ft + x - x_tau)."""
-    phi = _phis(cfg, rpm, t, 1, ap)
+    offs, dz = _offsets(cfg, ap)
+    Omega = 2.0 * np.pi * rpm / 60.0
+    phi = np.mod(Omega * np.asarray(t)[..., None] + offs, 2.0 * np.pi)
     eng = (phi >= cfg.phi_in) & (phi <= cfg.phi_out)
-    s = np.sin(phi)
-    coef = (cfg.kt * np.cos(phi) + cfg.kr * cfg.kt * s) * s
-    return ap * np.sum(np.where(eng, coef, 0.0), axis=-1)
+    coef = _dir_coef(cfg, phi) * np.sin(phi)
+    return dz * np.sum(np.where(eng, coef, 0.0), axis=-1)
 
 
 def authority_ratio(cfg: SDOFConfig, ap: float, rpm: float,
@@ -254,7 +309,7 @@ def simulate_sdof(cfg: SDOFConfig, ap: float, rpm: float, T: float,
     D = tau * fs
     t = np.arange(n) * dt
     Omega = 2.0 * np.pi * rpm / 60.0
-    offs = 2.0 * np.pi * np.arange(cfg.n_teeth) / cfg.n_teeth
+    offs, dz_sl = _offsets(cfg, ap)
 
     x = np.zeros(n2)
     xh = np.zeros(n)
@@ -297,8 +352,7 @@ def simulate_sdof(cfg: SDOFConfig, ap: float, rpm: float, T: float,
             h = s * (cfg.ft + w - w_tau)
             if loss_of_contact:
                 h = np.maximum(h, 0.0)
-            F = float(-ap * np.sum(
-                (cfg.kt * np.cos(phi[eng]) + cfg.kr * cfg.kt * s) * h))
+            F = float(-dz_sl * np.sum(_dir_coef(cfg, phi[eng]) * h))
         fc[k] = u_hold
         x = Ad @ x + bd_u * u_hold + bd_f * F
     return {"t": t[:n], "x": xh[:n], "f_act": fc[:n],

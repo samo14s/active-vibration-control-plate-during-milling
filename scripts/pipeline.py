@@ -257,8 +257,35 @@ def stage_e():
     return cached("pipe_stageE", build)
 
 
-STAGES = {"a": stage_a, "b": stage_b, "c": stage_c, "d": stage_d,
-          "e": stage_e}
+# ---------------------------------------------------------------- stage C2
+def stage_c2():
+    """Differentiating fixed-position runs at the frozen design's weakest
+    position (end of the pass), above its local stability limit."""
+    art = stage_a()
+    mm12 = models()[0.0]["full"]
+
+    def build():
+        out = {}
+        x_hard = 0.095
+        for ap in (1.0e-3, 2.0e-3):
+            for strat in ("OL", "DPD", "FROZEN", "PS-LPV", "PS-LPV-DR"):
+                K = controller_for(strat, art, x_hard, latency=False)
+                r = simulate(mm12, RPM_REF, ap, controller=K, T=0.5,
+                             x0=x_hard, moving=False, fs=250e3, seed=3)
+                out[(ap, strat)] = {
+                    "t": r.t[:: 5], "w": r.w_mill[:: 5], "u": r.u[:: 5],
+                    "rms_w": r.rms_w(0.1), "peak_w": r.peak_w(0.1),
+                    "rms_u": r.rms_u(0.1), "peak_u": r.peak_u(0.1),
+                    "psd": r.psd_w(), "extras": r.extras}
+                log(f"C2: x=95mm ap={ap * 1e3:.1f} {strat}: "
+                    f"rms={r.rms_w(0.1) * 1e6:.2f} um "
+                    f"u={r.rms_u(0.1):.1f} V div={r.extras['diverged_at']}")
+        return out
+    return cached("pipe_stageC2", build)
+
+
+STAGES = {"a": stage_a, "b": stage_b, "c": stage_c, "c2": stage_c2,
+          "d": stage_d, "e": stage_e}
 
 if __name__ == "__main__":
     which = [s.lower() for s in sys.argv[1:]] or list(STAGES)

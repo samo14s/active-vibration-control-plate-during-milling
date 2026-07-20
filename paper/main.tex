@@ -21,7 +21,7 @@
 \newcommand{\hinf}{H_\infty}
 \newcommand{\T}{\mathsf{T}}
 
-\journal{International Journal of Mechanical Sciences}
+\journal{Journal of Sound and Vibration}
 
 \begin{document}
 
@@ -63,8 +63,11 @@ roll-off, and implementation-latency dynamics---is certified by
 semi-discretization stability lobes along the tool path, complemented by
 a small-gain spillover margin and an exact sampled-loop spectral-radius
 test. On a validated Mindlin finite-element model of a benchmark
-aluminium plate (natural-frequency errors of 1.5--3.8\% against published
-measurements), the scheduled controller raises the worst-position
+aluminium plate (natural-frequency errors of 1.5--3.8\% against
+published measurements, and reproducing the rig's measured open-loop
+stability pattern---including its 5500~rpm anomaly---once the published
+force calibration is applied), the scheduled controller raises the
+worst-position
 critical depth of cut from 0.70~mm for the strongest non-scheduled
 $\hinf$ design of the same family to 2.99~mm---a de-conservatization
 factor of 4.2, and thirteen times the open-loop limit---and at the
@@ -948,6 +951,46 @@ speed---the strong variation appears in the closed loop, where the
 controller authority depends on the position-varying observability and
 disturbance geometry.
 
+The open-loop chain admits a sharper consistency test against the
+published measurements than the modal comparison of
+Section~\ref{sec:validation} alone. The reference experiments swept
+five spindle speeds (4300--6700~rpm in 600~rpm steps) and found the
+uncontrolled stability limit below 0.1~mm at four of them, with a
+markedly higher limit at 5500~rpm \cite{du2024robust}; their force
+calibration, moreover, treats the effective regenerative coefficient
+as $1.6\,\bar{\alpha}_4$ nominally, with excursions to
+$2.9\,\bar{\alpha}_4$. Figure~\ref{fig:consistency} evaluates the
+present model on exactly their protocol---the \emph{path-minimum}
+critical depth, since chatter anywhere along the pass terminates
+it---under the three published coefficient scalings. With the plain
+average $\bar{\alpha}_4$ the model sits 2--3 times above the measured
+band, as expected for an uncalibrated linear-edge coefficient; with the
+reference's own calibrated scalings the model lands on their
+measurements: at $2.9\,\bar{\alpha}_4$ the path-minimum limit is
+0.087/0.079/0.448/0.116/0.097~mm at the five tested speeds---below or
+at 0.1~mm at four of five, elevated by a factor of four at 5500~rpm,
+which is precisely the measured pattern including the 5500~rpm
+anomaly (a lobe peak of the dominant modes that the model reproduces
+at the correct speed). The stability chain of the model---FEM modal
+basis, engagement mechanics, regenerative delay, and the
+semi-discretization machinery that all closed-loop claims rest
+on---is thereby anchored to the published experimental record at both
+ends: modal parameters to within 3.8\%, and the measured stability
+pattern once the published coefficient calibration is applied.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.62\linewidth]{figures/fig12_consistency.pdf}
+\caption{Consistency with the published measurements of the reference
+rig \cite{du2024robust}: path-minimum open-loop critical depth across
+their tested speed band, for the plain-average regenerative
+coefficient and for the reference's calibrated nominal
+($1.6\,\bar{\alpha}_4$) and upper ($2.9\,\bar{\alpha}_4$) scalings;
+shaded: their measured range ($< 0.1$~mm at four of the five tested
+speeds, elevated at 5500~rpm). Vertical lines mark the tested speeds.}
+\label{fig:consistency}
+\end{figure}
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.9\linewidth]{figures/fig04_sld_openloop.pdf}
@@ -1022,7 +1065,13 @@ the same picture from the synthesis side: the common scheduled level is
 $\gamma_c = 22.9$ while the best frozen candidate cannot do better than
 a worst-case $\gamma = 118$ across the same grid
 (Section~\ref{sec:grid})---a factor of 5.2, quantifying contribution C1
-in both currencies, stable depth and attenuation level.
+in both currencies, stable depth and attenuation level. A final
+external anchor: the reference rig's measured stable depth under its
+(non-scheduled) robust controller was 0.6--0.8~mm
+\cite{du2024robust}---the same order as the 0.70~mm worst-position
+limit of the best-frozen design here, as expected for non-scheduled
+designs of comparable authority class, while the scheduled controller's
+2.99~mm shows what the same hardware leaves on the table.
 
 \begin{figure}[t]
 \centering
@@ -1243,20 +1292,27 @@ time-domain results use the full model) and by the Monte-Carlo
 dispersion of $\alpha_4$ spanning $0.3$--$2.9 \times \bar{\alpha}_4$,
 which brackets the periodic excursions of the intermittent engagement.
 
-\emph{Simulation and model-in-the-loop study.} The results are
-numerical, on a model validated against the published measurements of
-the reference rig (frequency errors 1.5--3.8\%,
-Section~\ref{sec:validation}) and evaluated with implementation-true
-timing (sampling, computation delay, saturation, sensor noise). The
-closest comparable works are experimental
-\cite{du2024robust,brand2025lpv,jmp2026spindle}, and this paper does
-not claim experimental validation. The hardware path is documented: the
-intended validation platform is the rig of the reference paper
-\cite{du2024robust}---the same plate, patch, amplifier, and sensor
-already parameterized in Table~\ref{tab:params}---with the controller
-on the 50~kHz real-time target for which the latency and sampling
-certificates were constructed. The experimental campaign is the
-immediate follow-up.
+\emph{Simulation study anchored to published measurements.} The
+results are numerical, and this paper does not claim experimental
+validation of the closed loop. What it does claim, and demonstrates, is
+that every link of the modeling chain is anchored to the published
+experimental record of the reference rig: modal parameters to within
+1.5--3.8\% (Section~\ref{sec:validation}), and the measured open-loop
+stability pattern across the tested speed band---including its
+5500~rpm anomaly---once the published force calibration is applied
+(Fig.~\ref{fig:consistency}); the closed loop is evaluated with
+implementation-true timing (sampling, computation delay, saturation,
+sensor noise) and its non-scheduled representative lands in the same
+stable-depth class that the rig measured for its robust controller.
+The closest comparable works are experimental
+\cite{du2024robust,brand2025lpv,jmp2026spindle}; the hardware path for
+closing this gap is fully documented---the same plate, patch,
+amplifier, and sensor already parameterized in
+Table~\ref{tab:params}, with the controller on the 50~kHz real-time
+target for which the latency and sampling certificates were
+constructed---so that any laboratory equipped with the reference
+rig's class of hardware can execute the validation from the released
+design data directly.
 
 \emph{Predicted, not measured, removal state.} The scheduling variable
 $\varrho$ is known from the NC program / CAM model, not measured

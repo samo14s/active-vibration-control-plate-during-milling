@@ -5,8 +5,11 @@ and a certified assessment of regenerative-targeted delayed feedback.**
 
 This repository contains the complete model, controller synthesis, stability
 analysis, simulation campaign, and manuscript draft for a journal publication
-(target: Q1 — *Mechanical Systems and Signal Processing* / *International
-Journal of Mechanical Sciences*).
+(target: Q1 — *Journal of Sound and Vibration*; the study is
+simulation-based but anchored at every link to the published
+experimental record of the benchmark rig, including reproduction of its
+measured open-loop stability pattern under the published force
+calibration — see `paper/cover_letter.md`).
 
 **Headline results** (12-mode evaluation model, 4.9 krpm, all three
 deployment certificates passing):

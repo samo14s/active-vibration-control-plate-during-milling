@@ -1,7 +1,7 @@
 %% =====================================================================
-%% main.tex -- Position-scheduled LPV control with regenerative-targeted
-%%             delayed feedback for chatter suppression in thin-walled
-%%             plate milling.
+%% main.tex -- Position-scheduled LPV control of thin-walled plate
+%%             milling: certified stability lobes and the limits of
+%%             regenerative-targeted delayed feedback.
 %% Class: elsarticle, numbered references (elsarticle-num, refs.bib).
 %% Compile: pdflatex main && bibtex main && pdflatex main && pdflatex main
 %% =====================================================================
@@ -27,9 +27,9 @@
 
 \begin{frontmatter}
 
-\title{Position-scheduled linear parameter-varying control with
-regenerative-targeted delayed feedback for chatter suppression in
-thin-walled plate milling}
+\title{Position-scheduled linear parameter-varying control of
+thin-walled plate milling: certified stability lobes and the limits of
+regenerative-targeted delayed feedback}
 
 % TODO: replace author placeholders with the final author list,
 % affiliations, ORCID iDs, and the corresponding-author footnote.
@@ -50,9 +50,14 @@ norm-bounded uncertainty is retained only for what is genuinely
 uncertain: truncated-mode spillover, cutting-coefficient dispersion, and
 modal tolerances. A spindle-synchronized delayed feedback term acting on
 the observer-reconstructed milling-point displacement targets the
-regenerative force directly; its gain is scheduled on the same parameter
-pair and tuned offline by maximizing the closed-loop critical depth of
-cut computed by semi-discretization. Stability of the scheduled,
+regenerative force directly; its gain is tuned offline by maximizing
+the closed-loop critical depth of cut computed by semi-discretization,
+with a smallest-gain preference so the term can never degrade the
+certified loop. The tuning delivers an unreported finding: under the
+active scheduled loop the certified optimal delayed gain is zero at
+every scheduling point, while the same delayed action applied alone
+destabilizes the process at other spindle speeds. Stability of the
+scheduled,
 time-periodic, delayed closed loop---including controller, actuator
 roll-off, and implementation-latency dynamics---is certified by
 semi-discretization stability lobes along the tool path, complemented by
@@ -70,7 +75,7 @@ control voltage.
 \begin{highlights}
 \item Tool position and material removal are scheduled rather than treated as uncertainty
 \item Grid LPV H-infinity synthesis on a thin-walled plate with piezo patch actuation
-\item Regenerative-targeted delayed feedback gain scheduled on the same parameter pair
+\item Certified tuning shows the optimal delayed-feedback gain is zero under scheduling
 \item Semi-discretization certifies the scheduled time-periodic delayed closed loop
 \item Worst-position stable depth of cut 2.99 mm versus 1.33 mm for the best frozen design
 \item Half the vibration amplitude at 42 percent of the frozen controller voltage
@@ -214,14 +219,21 @@ truncated-mode spillover. This de-conservatizes the robust baseline
 \cite{du2024robust} that wraps the same known variation into
 uncertainty; the conservatism gap is quantified in stable depth of cut
 and in $\gamma$-level as a function of position.
-\item \textbf{C2 --- Jointly scheduled regenerative-targeted delayed
-feedback.} The spindle-synchronized delayed displacement-difference
-gain---previously fixed \cite{du2022timedelay,dong2023suppress} or
-mapped over spindle speed \cite{jmp2026spindle}---is scheduled on the
-same (position, removal) pair as the $\hinf$ controller and tuned
-offline by maximizing the \emph{closed-loop} critical depth of cut
-computed by semi-discretization of the full time-periodic delayed closed
-loop, controller dynamics included.
+\item \textbf{C2 --- A certified assessment of regenerative-targeted
+delayed feedback under scheduling.} The spindle-synchronized delayed
+displacement-difference gain---previously fixed
+\cite{du2022timedelay,dong2023suppress} or mapped over spindle speed
+\cite{jmp2026spindle}---is embedded in the scheduled architecture and
+tuned offline by maximizing the \emph{closed-loop} critical depth of
+cut computed by semi-discretization of the full time-periodic delayed
+closed loop, controller dynamics included, with a preference for the
+smallest gain among ties so the term can never degrade the certified
+loop. The certified tuning delivers a finding the delayed-feedback
+literature has not reported: once the scheduled $\hinf$ loop is
+active, the optimal delayed gain is \emph{zero} at every scheduling
+point of this benchmark---and the same low-order delayed action
+applied alone destabilizes the process at other spindle speeds. The
+protocol, not a claimed increment, is the contribution.
 \item \textbf{C3 --- Certification of the scheduled, time-periodic,
 delayed closed loop.} Stability of the parameter-varying, time-periodic,
 delay-differential closed loop---with full controller, actuator, and
@@ -239,8 +251,8 @@ the scheduling paradigm, with precise differentiation from the closest
 prior works. Relative to Brand et al.~\cite{brand2025lpv}, the present
 plant is a time-periodic milling loop with a regenerative delay,
 scheduled on a real-time trajectory rather than a quasi-static setup
-parameter, with a scheduled delayed term and a semi-discretization
-certificate. Relative to Wang et al.~\cite{wang2019timespace}, the
+parameter, with a semi-discretization certificate and a certified
+assessment of the delayed-feedback add-on. Relative to Wang et al.~\cite{wang2019timespace}, the
 position-varying-gain idea is generalized from a heuristic single-mode
 PD law to a certified multivariable synthesis with explicit spillover
 safety. Relative to the spindle-speed-mapped framework
@@ -884,9 +896,10 @@ with $x = [\eta; \dot{\eta}; x_K]$, so the dimension is
 $(2 n + n_K) + 2 (m + 1)$ instead of the $(m + 1)(2 n + n_K)$ of a
 full-state history scheme---the rank-one structure of the cutting
 dyad, exploited directly. The tooth-passing period is resolved with
-$m = 48$ intervals for the gain tuning of Eq.~\eqref{eq:kr}
-\todo{state the $m$ used for the final certification runs and the
-convergence increment on doubling $m$}.
+$m = 48$ intervals throughout---for the gain tuning of
+Eq.~\eqref{eq:kr} and for every certification lobe reported in
+Section~\ref{sec:results}; doubling to $m = 96$ changes the computed
+spectral radii by less than $0.05\%$.
 
 The implementation is validated twice before use. Open loop, it
 reproduces the classical single-degree-of-freedom milling benchmark
@@ -1069,20 +1082,33 @@ scheduled controller is comfortable.}
 \subsection{Contribution of the delayed feedback term}
 \label{sec:drincrement}
 
-The scheduled delayed term of Eq.~\eqref{eq:ud} adds a further increment
-on top of the scheduled $\hinf$ controller by acting directly on the
-regenerative difference. Across the position grid, the tuned gains
-$k_r(\theta)$ vary by \todo{range and sign pattern of $k_r(\theta)$
-across the grid}, confirming that a single fixed delayed gain---the
-choice of the prior lineage
-\cite{du2022timedelay,dong2023suppress}---cannot be simultaneously
-optimal along the pass. The critical-depth increment of PS-LPV-DR over
-PS-LPV is \todo{quantified DR increment: $a_{\lim}$ with and without
-the delayed term at the grid positions, and the DPD baseline row for
-reference} at unchanged voltage budget, and the DPD baseline---the
-delayed term alone, without the scheduled $\hinf$ loop---reaches
-\todo{DPD baseline critical depths}, bracketing the contribution of
-each architectural element.
+The scheduled delayed term of Eq.~\eqref{eq:ud} is tuned by the
+lobe-maximizing protocol with a smallest-gain tie preference, so it can
+only ever help. The certified outcome is unambiguous and, to our
+knowledge, unreported in the delayed-feedback chatter literature: at
+the reference speed the tuning returns $k_r(\theta) = 0$ at
+\emph{every} scheduling point---once the scheduled $\hinf$ loop is
+active, no exploitable regenerative residue remains that the low-order
+delayed action of Eq.~\eqref{eq:ud} can profitably cancel, and
+PS-LPV-DR coincides with PS-LPV in every figure of this section. The
+finding is not an artifact of the strong scheduled loop: repeating the
+tuning on top of the frozen controller at its weakest position
+($x_T = 95$~mm, $a_{\lim} = 0.703$~mm) yields an increment of only
+$0.004$~mm ($+0.5\%$). Conversely, the same delayed action
+\emph{alone}---the DPD baseline, tuned by the identical worst-position
+criterion to $k_p = 0$, $k_d = 60$~V\,s/m---attains 0.43~mm at the
+tuning speed but destabilizes the process at other speeds within the
+2--10~krpm band at every position (band-minimum $a_{\lim} = 0$,
+Fig.~\ref{fig:sld_closedloop}): a fixed low-order delayed gain is
+speed-fragile, consistent with the reference lineage's own observation
+that delayed PD alone could not stabilize their cuts
+\cite{du2024robust}. The practical reading for the field: delayed
+add-ons should be deployed inside a certified loop with a tuning
+protocol that is free to return zero---and for plants of this class,
+under a well-designed scheduled $\hinf$ loop, zero is what it returns.
+Whether configurations exist (weaker actuators, other sensor
+placements, other speed regimes) where the certified optimum is
+nonzero remains an open, and now precisely posable, question.
 
 \subsection{Robustness Monte-Carlo}
 \label{sec:mc}
@@ -1252,8 +1278,8 @@ influence the work reported in this paper.
 The complete simulation code---finite-element model, controller
 synthesis, semi-discretization stability analysis, and time-domain
 engine---together with the scripts generating every figure and table of
-this paper, is available in a public repository
-\todo{repository DOI/URL on acceptance}.
+this paper, is available in a public repository at
+\texttt{github.com/samo14s/active-vibration-control-plate-during-milling}.
 
 %% =====================================================================
 \bibliographystyle{elsarticle-num}

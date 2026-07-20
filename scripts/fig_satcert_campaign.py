@@ -93,9 +93,10 @@ def main():
 
     # ---------------- (b) h_req sensitivity --------------------------
     hs = (1, 2, 5, 10, 20, 50)
+    worst = {s: [camp["hreq_sensitivity"][f"{s}|{h}um"]["worst_mm"]
+                 for h in hs] for s in ("FROZEN", "PS-LPV")}
     for s, c, mk in (("FROZEN", "#4c72b0", "o"), ("PS-LPV", "#c44e52", "s")):
-        w = [camp["hreq_sensitivity"][f"{s}|{h}um"]["worst_mm"] for h in hs]
-        axb.plot(hs, w, marker=mk, ms=4, lw=1.4, color=c,
+        axb.plot(hs, worst[s], marker=mk, ms=4, lw=1.4, color=c,
                  label=("best frozen H$_\\infty$" if s == "FROZEN"
                         else "PS-LPV"))
     axb.set_xscale("log")
@@ -104,9 +105,13 @@ def main():
     axb.set_xlabel("declared surface-step tolerance $h_{req}$ [µm]")
     axb.set_ylabel("worst-position certified depth [mm]")
     axb.set_title("(b) certified depth vs declared tolerance", fontsize=8.5)
-    axb.annotate("2.7×", xy=(1, 2.656), xytext=(1.5, 2.3), fontsize=7,
+    y1 = worst["PS-LPV"][0] / worst["FROZEN"][0]
+    y20 = worst["PS-LPV"][hs.index(20)] / worst["FROZEN"][hs.index(20)]
+    axb.annotate(f"{y1:.1f}×", xy=(1, worst["PS-LPV"][0]),
+                 xytext=(1.5, worst["PS-LPV"][0] * 0.87), fontsize=7,
                  arrowprops=dict(arrowstyle="-", lw=0.6))
-    axb.annotate("0.79×\n(ranking inverted)", xy=(20, 0.508),
+    axb.annotate(f"{y20:.2f}×\n(ranking inverted)",
+                 xy=(20, worst["PS-LPV"][hs.index(20)]),
                  xytext=(9, 1.45), fontsize=7,
                  arrowprops=dict(arrowstyle="-", lw=0.6))
     axb.legend(fontsize=6.5)
@@ -118,6 +123,7 @@ def main():
                     f"+h, {ap}"))
         pts.append((v["cert_h_minus_um"], v["sim_onset_minus_um"],
                     f"$-$h, {ap}"))
+    devs = [abs(s / m - 1.0) * 100 for m, s, _ in pts if s]
     lim = (3, 200)
     axc.plot(lim, lim, "k--", lw=0.8, label="perfect agreement")
     for (m, s, lab), mk in zip(pts, ("o", "s", "^", "D")):
@@ -130,8 +136,8 @@ def main():
     axc.set_ylim(lim)
     axc.set_xlabel("certificate: model clip-onset step [µm]")
     axc.set_ylabel("simulator: measured clip-onset step [µm]")
-    axc.set_title("(c) certificate vs nonlinear simulator (0.02–1.9 %)",
-                  fontsize=8.5)
+    axc.set_title(f"(c) certificate vs nonlinear simulator "
+                  f"({min(devs):.2g}–{max(devs):.2g} %)", fontsize=8.5)
     axc.legend(fontsize=6.5, loc="upper left")
 
     # ---------------- (d) island demonstration -----------------------
@@ -166,6 +172,10 @@ def main():
                     tm, env = envelope(tr)
                     axd.semilogy(tm, env, lw=1.2, color=c, label=lab)
                 axd.axvline(0.0, color="k", lw=0.7, ls=":")
+                axd.axhspan(1e3, 1e7, color="0.85", alpha=0.5, zorder=0)
+                axd.text(0.35, 0.93, "beyond model amplitude validity",
+                         transform=axd.transAxes, fontsize=6.2,
+                         color="0.35", va="top")
                 axd.text(0.98, 0.32,
                          f"{key}\nlinearly stable ($\\rho$="
                          f"{rec['rho']:.3f}); step h="

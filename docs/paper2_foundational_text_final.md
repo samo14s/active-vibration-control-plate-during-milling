@@ -140,8 +140,10 @@ operating grid, under identical certificate machinery, certification is
 shown to OVERTURN the linear ranking of scheduled versus fixed-gain
 designs as the declared tolerance grows (2.7× at 1 µm inverting to
 0.79× at 20 µm) — a tolerance-dependent ranking that linear analysis
-cannot see, and the first quantified demonstration that linear
-stability margins misrank milling controllers under saturation.
+cannot see, and, to the authors' knowledge, the first quantified
+demonstration — simulation-based, on a measurement-anchored benchmark —
+that linear stability margins can misrank milling controllers under
+saturation.
 
 ## 3. Methodology outline (section flowchart)
 
@@ -288,6 +290,20 @@ provably never clipped, hence exactly linear and decaying (Floquet
 radius < 1 checked). a4 sub-averaging convergence: h_max moves < 0.1 %
 for n_sub 4→16.
 
+*Declared scope of "implementation-exact"* (stated once, applies to
+every h_max below): the lift tick is dt = τ/204, 0.04 % off the true
+20 µs control period (τ/T_s is not integer); a4 and the delayed surface
+are held per tick; both effects, together with any within-tick voltage
+excursion, are covered by the 100 kHz nonlinear-simulator onset
+validation rather than by the lift itself. h_max certifies a step whose
+edge is crossed at the lift's tick-0 phase (the simulator cross-check
+injects at the same phase); other phases are cyclic shifts of e_h, not
+minimized over. Positive-branch values h₊ above ~f_t (= 20 µm) certify
+the contact-retaining model only — the real unilateral chip goes into
+air cutting there — while the binding negative branch retains contact;
+sensor noise is excluded (deterministic certificate; robustness is
+assessed statistically per KPI 10).
+
 **Validation against the independent nonlinear simulator** (100 kHz,
 noise off, loss-of-contact off, PS-LPV at x_T = 50 mm; onset = smallest
 injected surface step that clips):
@@ -354,11 +370,15 @@ over a signed ladder; an island is claimed only when the SAME
 perturbation decays with the amplifier bound lifted — the causal
 control that attributes the instability to saturation and nothing else.
 Sign matters through the unilateral chip h_chip = sinφ·(ft + w − w_τ):
-a POSITIVE step thins the chip into air cutting (self-limiting, force
-clamped at zero — no clipping observed up to +500 µm anywhere), whereas
-a NEGATIVE step thickens the chip (unbounded force demand); the
-negative sign is also the certificate's binding one (h₋ < h₊). Results
-at 4.9 krpm (loss-of-contact ON, noise off, deterministic):
+a POSITIVE step thins the chip into air cutting (self-limiting: the
+perturbation force is clamped by contact loss), whereas a NEGATIVE step
+thickens the chip (unbounded force demand); the negative sign is also
+the certificate's binding one (h₋ < h₊). Observed: no positive-step
+chatter anywhere, with at most 0.06 % transient positive-step clip duty
+over the ranges tested (+18.8/+20 µm at the scheduled-controller
+points, where the negative branch found the island first and ended the
+ladder; +500 µm with zero clipping at the frozen points). Results at
+4.9 krpm (loss-of-contact ON, noise off, deterministic):
 
 | point | ρ (linear) | decays up to | island at | with bound lifted |
 |---|---|---|---|---|

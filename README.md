@@ -39,7 +39,10 @@ after 0.5–1 mm of edge recession — both findings are in the manuscript.
 
 `docs/new_strategy_satcert_outline.md` targets the verified gap
 (dossiers in `docs/gap_scouting/`): **certified regional stability under
-actuator saturation**. WP1–4 are now EXECUTED (`avc/satcert.py`,
+actuator saturation**. WP1–3 are executed and WP4 is demonstrated
+in-family with causal attribution (the external re-simulation of the
+published SDOF island configuration is deferred to the manuscript
+stage) (`avc/satcert.py`,
 `scripts/satcert_campaign.py`, `results/satcert_campaign.json`,
 foundational text with filled numbers in
 `docs/paper2_foundational_text_final.md`):
@@ -63,9 +66,10 @@ foundational text with filled numbers in
 - **Two saturation islands demonstrated with causal attribution**
   (`scripts/satcert_islands.py`): at linearly stable points (ρ ≈ 0.955)
   a −38/−50 µm surface step triggers chatter growth at 99 % clip duty,
-  and the SAME step decays once the ±150 V bound is lifted — islands
-  appear only for the high-authority scheduled controller; the frozen
-  design survives ±500 µm. Figure: `docs/figures/satcert_campaign.png`.
+  and the SAME step decays once the ±150 V bound is lifted. At the four
+  points tested, islands appeared only for the high-authority scheduled
+  controller; the frozen design survived ±500 µm steps. Figure:
+  `docs/figures/satcert_campaign.png`.
 
 ## The idea in one paragraph
 

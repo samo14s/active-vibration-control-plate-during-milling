@@ -90,11 +90,14 @@ def stage_validate(mm, art):
                      loss_of_contact=False, surf_step=(INJ * tau, h))
         return int(np.sum(np.abs(r.u[r.t >= INJ * tau]) >= V_MAX - 1e-9))
 
-    def onset(ap, sign, hi0=400e-6):
+    def onset(ap, sign, hi0=400e-6, iters=16):
+        # resolution hi0/2^iters ~ 6 nm — far below any quoted
+        # agreement percentage (a coarse onset search cannot back a
+        # sub-percent agreement claim)
         lo, hi = 0.0, hi0
         if clips(ap, sign * hi) == 0:
             return None
-        for _ in range(8):
+        for _ in range(iters):
             mid = 0.5 * (lo + hi)
             if clips(ap, sign * mid) > 0:
                 hi = mid
@@ -161,6 +164,27 @@ def stage_census(mm, art):
     return out
 
 
+def stage_hreq(mm, art):
+    """Worst-position PREFIX-CONNECTED certified depth vs declared
+    tolerance (the h_req sensitivity of the abstract's Y)."""
+    out = {}
+    for strat in STRATS:
+        Ks = {x: controller_for(strat, art, x, latency=False)
+              for x in X_EVAL}
+        for hreq in (1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6):
+            worst, worst_x = 1e9, None
+            for x in X_EVAL:
+                ap_c, _ = certified_depth(mm, float(x), RPM_REF, Ks[x],
+                                          V_MAX, hreq, ap_hi=AP_HI)
+                if ap_c < worst:
+                    worst, worst_x = ap_c, x
+            out[f"{strat}|{hreq*1e6:g}um"] = {"worst_mm": worst * 1e3,
+                                              "worst_x": worst_x}
+            log(f"hreq {strat} h_req={hreq*1e6:g}um: worst "
+                f"{worst*1e3:.3f} mm @ x={worst_x*1e3:.0f}mm")
+    return out
+
+
 def stage_nsub(mm, art):
     K = controller_for("PS-LPV", art, 0.05, latency=False)
     out = {}
@@ -182,6 +206,7 @@ def main():
     res["validate"] = stage_validate(mm, art)
     res["hard"] = stage_hard(mm, art)
     res["census"] = stage_census(mm, art)
+    res["hreq_sensitivity"] = stage_hreq(mm, art)
     res["nsub"] = stage_nsub(mm, art)
 
     worst = {s: min(res["table"][f"{s}|{x}"]["ap_cert_mm"] for x in X_EVAL)
@@ -192,11 +217,17 @@ def main():
     h2 = res["hard"]["2mm|FROZEN"], res["hard"]["2mm|PS-LPV"]
     res["X_rms_reduction_pct"] = (1.0 - h2[1]["rms_w_um"] / h2[0]["rms_w_um"]) \
         * 100.0
-    res["Z_voltage_fraction_pct"] = h2[1]["peak_u_V"] / h2[0]["peak_u_V"] * 100.0
+    # the published Z is the RMS-voltage fraction (peaks both reach the
+    # rail at the hard condition, so the peak ratio saturates at 100 %)
+    res["Z_rms_voltage_fraction_pct"] = \
+        h2[1]["rms_u_V"] / h2[0]["rms_u_V"] * 100.0
+    res["Z_peak_voltage_fraction_pct"] = \
+        h2[1]["peak_u_V"] / h2[0]["peak_u_V"] * 100.0
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(res, indent=1))
-    log(f"Y = {res['Y_ratio']:.2f}x   X = {res['X_rms_reduction_pct']:.1f}%   "
-        f"Z = {res['Z_voltage_fraction_pct']:.1f}%")
+    log(f"Y(20um) = {res['Y_ratio']:.2f}x   "
+        f"X = {res['X_rms_reduction_pct']:.1f}%   "
+        f"Z_rms = {res['Z_rms_voltage_fraction_pct']:.1f}%")
     log(f"written {OUT}")
 
 

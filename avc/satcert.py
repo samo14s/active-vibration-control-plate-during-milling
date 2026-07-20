@@ -441,6 +441,22 @@ def certify_sampled(lift: SampledSatLift, v_max: float,
     loop). Phase-resolved headroom:
 
         h_max = min_{j,k} (V_max - |v*_k|) / |dv_{j,k}(e_h)|.
+
+    Declared scope (state these wherever h_max is quoted):
+    - Phase convention: e_h models a surface step whose edge is crossed
+      at the lift's tick-0 phase (the simulator cross-check injects at
+      the same phase); other edge phases correspond to cyclic shifts of
+      e_h and are not minimized over here.
+    - Contact validity: the lifted model keeps the tool in cut. A
+      POSITIVE step taller than roughly the feed per tooth drives the
+      real unilateral chip into air cutting, so h_plus values above
+      ~ft certify the contact-retaining model only; the binding branch
+      in practice is the chip-thickening NEGATIVE one (h_minus), for
+      which contact is retained.
+    - Tick resolution: within-interval variation of a4 and of the
+      delayed surface is held per tick (a4 sub-averaged, n_sub); these
+      effects are covered by the 100 kHz nonlinear-simulator onset
+      validation, not by the lift itself.
     """
     rho = lift.rho()
     v_star = lift.forced_voltages()
@@ -487,26 +503,43 @@ def certify_sampled(lift: SampledSatLift, v_max: float,
 def certified_depth(mm: ModalModel, x_T: float, rpm: float,
                     controller: Controller, v_max: float,
                     h_req: float, ap_hi: float = 5e-3,
-                    tol: float = 2e-5) -> tuple:
-    """Largest ap whose implementation-exact (sampled-data) certificate
-    tolerates a surface step >= h_req in BOTH signs. `controller` must
-    be deployed WITHOUT Pade latency (latency=False). Returns
-    (ap_cert [m], CertResult at ap_cert)."""
+                    tol: float = 2e-5, coarse: float = 1e-4) -> tuple:
+    """PREFIX-CONNECTED certified depth: the largest ap such that every
+    depth below it also certifies a surface step >= h_req in BOTH
+    signs (implementation-exact sampled-data certificate). Certificate
+    feasibility is NOT monotone in ap (forced-saturated bands can be
+    followed by feasible pockets at larger ap — see the campaign
+    census), and a certified pocket above a refused band must not be
+    reported as "the" certified depth: the returned value is the lower
+    edge of the FIRST refusal, located by a coarse upward march (step
+    `coarse`) followed by bisection inside the bracketing interval.
+    `controller` must be deployed WITHOUT Pade latency (latency=False).
+    Returns (ap_cert [m], CertResult at the last certified depth)."""
     def ok(ap):
         if ap <= 0:
             return None
         return certify_sampled(lift_sampled(mm, x_T, ap, rpm, controller),
                                v_max)
 
-    lo, hi = 0.0, float(ap_hi)
-    r_lo = None
-    r = ok(hi)
-    if r is not None and r.feasible and r.h_max >= h_req:
-        return hi, r
-    while hi - lo > tol:
+    def passes(r):
+        return r is not None and r.feasible and r.h_max >= h_req
+
+    lo, r_lo = 0.0, None
+    ap = coarse
+    while ap < ap_hi + 0.5 * coarse:          # march to the FIRST refusal
+        ap = min(ap, ap_hi)
+        r = ok(ap)
+        if not passes(r):
+            break
+        lo, r_lo = ap, r
+        if ap >= ap_hi:
+            return ap_hi, r_lo
+        ap += coarse
+    hi = min(ap, ap_hi)
+    while hi - lo > tol:                      # refine the boundary
         mid = 0.5 * (lo + hi)
         r = ok(mid)
-        if r is not None and r.feasible and r.h_max >= h_req:
+        if passes(r):
             lo, r_lo = mid, r
         else:
             hi = mid

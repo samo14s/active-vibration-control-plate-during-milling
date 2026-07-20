@@ -329,6 +329,10 @@ class SampledSatLift:
     m: int
     tau: float
     dt: float
+    Gpsi: np.ndarray | None = None     # (N, m) state at period end from
+    #                                    unit deadzone psi at tick i
+    Vpsi: np.ndarray | None = None     # (m, m) within-period dv response
+    #                                    to unit psi (strictly causal)
     meta: dict = field(default_factory=dict)
 
     def forced_voltages(self) -> np.ndarray:
@@ -341,14 +345,22 @@ class SampledSatLift:
 
 def lift_sampled(mm: ModalModel, x_T: float, ap: float, rpm: float,
                  controller: Controller, m: int | None = None,
-                 n_sub: int = 8) -> SampledSatLift:
+                 n_sub: int = 8,
+                 aw_gain: np.ndarray | None = None) -> SampledSatLift:
     """Build the sampled-data lift. `controller` must be the deployed
     controller WITHOUT the Pade latency augmentation (latency=False):
     the one-control-period computation delay is modeled exactly by the
     pending-voltage state, mirroring avc.simulate. m defaults to
     round(tau / Ts) at Ts = 1/ctrl_rate_hz, so dt = tau/m deviates from
     the true control period by < 0.2 % (declared); the regenerative
-    delay is then exactly m ticks."""
+    delay is then exactly m ticks.
+
+    aw_gain: optional (nk,) anti-windup vector — the discrete controller
+    update becomes xK+ = Akd xK + Bkd y + aw_gain*(sat(v) - v)
+    = ... - aw_gain*psi (as in avc.simulate). AW leaves the LINEAR maps
+    (Phi, forced orbit, region-of-linearity certificate) untouched; it
+    only reshapes the deadzone-injection columns Gpsi/Vpsi, i.e. the
+    clip-recovery gain of `clip_recovery_gain`."""
     if controller is None or controller.gd1 is not None:
         raise ValueError("lift_sampled needs a tap-free controller")
     p = mm.params
@@ -400,11 +412,17 @@ def lift_sampled(mm: ModalModel, x_T: float, ap: float, rpm: float,
     N = n2 + nk + 1 + m                    # x_p | x_K | u_pend | hist ring
     iu = n2 + nk
     ih = iu + 1
-    # propagate identity + affine column through one period, recording
-    # the commanded-voltage rows (ring buffer: slot k%m holds w_{k-m})
-    Z = np.zeros((N, N + 1))
+    # propagate identity + affine column + m psi-injection columns
+    # through one period, recording the commanded-voltage rows
+    # (ring buffer: slot k%m holds w_{k-m}); psi column i receives its
+    # unit injection at tick i (u_pend -= 1, xK -= aw_gain), AFTER the
+    # tick-i voltage row is recorded (psi is strictly causal in dv)
+    nc = N + 1 + m
+    Z = np.zeros((N, nc))
     Z[:N, :N] = np.eye(N)
-    Vrows = np.empty((m, N + 1))
+    Vrows = np.empty((m, nc))
+    g_aw = None if aw_gain is None else \
+        np.asarray(aw_gain, float).reshape(nk)
     for k in range(m):
         Xp = Z[:n2]
         Xk = Z[n2:iu]
@@ -416,19 +434,27 @@ def lift_sampled(mm: ModalModel, x_T: float, ap: float, rpm: float,
         w_tau = Z[ih + (k % m)].copy()
         Z[ih + (k % m)] = w_now
         Z[iu] = v                          # deadzone inactive: linear maps
-        aff = np.zeros(N + 1)
+        aff = np.zeros(nc)
         aff[N] = 1.0
         Z[:n2] = (Ea[k] @ Xp + np.outer(Bcols[k][:, 0], u_apply)
                   + np.outer(Bcols[k][:, 1], w_tau)
                   + np.outer(Bcols[k][:, 2], aff))
         Z[n2:iu] = Akd @ Xk + np.outer(Bkd, y)
+        # unit psi at tick k: enters the pending voltage (and the AW
+        # path) applied over the NEXT interval
+        Z[iu, N + 1 + k] -= 1.0
+        if g_aw is not None:
+            Z[n2:iu, N + 1 + k] -= g_aw
     e_h = np.zeros(N)
     e_h[ih:] = 1.0
     return SampledSatLift(Phi=Z[:, :N].copy(), acc=Z[:, N].copy(),
                           V=Vrows[:, :N].copy(), v_aff=Vrows[:, N].copy(),
                           e_h=e_h, N=N, m=m, tau=tau, dt=dt,
+                          Gpsi=Z[:, N + 1:].copy(),
+                          Vpsi=Vrows[:, N + 1:].copy(),
                           meta={"x_T": x_T, "ap": ap, "rpm": rpm,
-                                "rate": rate, "nk": nk})
+                                "rate": rate, "nk": nk,
+                                "aw": aw_gain is not None})
 
 
 def certify_sampled(lift: SampledSatLift, v_max: float,
@@ -498,6 +524,181 @@ def certify_sampled(lift: SampledSatLift, v_max: float,
                       {**lift.meta, "h_plus": h_plus, "h_minus": h_minus,
                        "h_uniform": u_bar / v_pk, "v_peak_per_m": v_pk,
                        "forced_peak": float(np.max(np.abs(v_star)))})
+
+
+# ---------------------------------------------------------------------------
+# 4. saturated-regime extension: clip-recovery small-gain certificate
+# ---------------------------------------------------------------------------
+def clip_recovery_gain(lift: SampledSatLift, horizon: int = 4000,
+                       decay_tol: float = 1e-12) -> float:
+    """l-infinity-induced gain gamma of the strictly causal linear map
+    L from the deadzone injection psi to the variational commanded
+    voltage dv (gamma = max over output ticks of the l1 row sum of the
+    periodic impulse-response kernel).
+
+    Soundness of the certificate built on it (`certify_saturated`):
+    about the verified-unsaturated forced orbit, the saturated loop is
+    dv = dv_free + L psi with psi_k = dz_Vmax(v*_k + dv_k), which
+    satisfies the GLOBAL sector |psi_k| <= |dv_k| (clipping requires
+    |dv_k| > headroom_k >= 0 and then |psi_k| = |v*_k+dv_k| - V_max <=
+    |dv_k| - headroom_k). Hence ||dv|| <= ||dv_free|| + gamma*||dv||:
+    if gamma < 1, every trajectory of the saturated (contact-retaining)
+    lifted model is bounded by ||dv_free||/(1-gamma), the fading-memory
+    kernel forces lim dv = 0, the loop re-enters the linear regime in
+    finite time and decays — GLOBAL recovery from arbitrarily deep
+    clipping. If gamma >= 1 the certificate family degenerates exactly
+    to the region-of-linearity bound (level-set argument: allowed
+    ||dv_free|| = max over v_bar >= u_bar of v_bar - gamma*(v_bar -
+    u_bar), maximized at v_bar = u_bar when gamma >= 1).
+    """
+    if lift.Gpsi is None:
+        raise ValueError("lift built without psi-injection columns")
+    S = np.sum(np.abs(lift.Vpsi), axis=1)      # within-period rows
+    M = lift.Gpsi.copy()
+    scale0 = float(np.linalg.norm(M))
+    for _ in range(horizon):
+        S += np.sum(np.abs(lift.V @ M), axis=1)
+        M = lift.Phi @ M
+        if np.linalg.norm(M) < decay_tol * scale0:
+            break
+    return float(np.max(S))
+
+
+def _psi_transfer(lift: SampledSatLift, thetas: np.ndarray):
+    """Period-lifted transfer L(e^{i th}) from the m deadzone
+    injections to the m variational voltages: L(z) = Vpsi +
+    V (zI - Phi)^-1 Gpsi. Evaluated by eigendecomposition of Phi with
+    a direct-solve accuracy audit (falls back to LU solves when the
+    eigenbasis is too ill-conditioned)."""
+    N, m = lift.N, lift.m
+    lam, T = np.linalg.eig(lift.Phi)
+    VT = lift.V @ T                              # (m, N)
+    TG = np.linalg.solve(T, lift.Gpsi)           # (N, m)
+
+    def eig_eval(th):
+        d = 1.0 / (np.exp(1j * th) - lam)
+        return lift.Vpsi + (VT * d) @ TG
+
+    def lu_eval(th):
+        X = np.linalg.solve(np.exp(1j * th) * np.eye(N) - lift.Phi,
+                            lift.Gpsi)
+        return lift.Vpsi + lift.V @ X
+
+    rng = np.random.default_rng(0)
+    ok = True
+    for th in rng.uniform(0, 2 * np.pi, 4):
+        A, B = eig_eval(th), lu_eval(th)
+        if np.linalg.norm(A - B) > 1e-8 * max(np.linalg.norm(B), 1e-300):
+            ok = False
+            break
+    ev = eig_eval if ok else lu_eval
+    for th in thetas:
+        yield th, ev(th)
+
+
+def saturated_margins(lift: SampledSatLift, n_grid: int = 1024,
+                      n_refine: int = 24) -> dict:
+    """Frequency-domain margins of the deadzone loop dv = dv_free +
+    L psi, psi = dz(v* + dv) (componentwise sector [0, 1], strictly
+    causal within the period; hard-IQC framing on the period-lifted
+    LTI part):
+
+      circle_max  = max_th lambda_max( (L + L^H)/2 )
+      gamma_2     = max_th sigma_max( L )         (l2 small gain)
+
+    GLOBAL recovery certificate (discrete circle criterion / sector
+    IQC): if the loop is linearly stable, the forced orbit strictly
+    unsaturated, and circle_max < 1, then every trajectory of the
+    saturated contact-retaining lifted model is l2-bounded and
+    converges — recovery from arbitrarily deep clipping. gamma_2 < 1
+    implies circle_max < 1 (reported for reference; the l1/l-infinity
+    gain of `clip_recovery_gain` is far more conservative on this
+    lightly damped loop and is kept only as a diagnostic).
+
+    Frequency sampling is declared: a uniform grid of n_grid angles
+    plus n_refine-point clusters anchored at every Floquet eigenvalue
+    angle (resonance peaks sit there; width ~ (1-|lam|)), so the
+    reported maxima are grid maxima at declared resolution."""
+    lam = np.linalg.eigvals(lift.Phi)
+    thetas = list(np.linspace(0.0, 2 * np.pi, n_grid, endpoint=False))
+    for li in lam:
+        r = abs(li)
+        if r < 0.2:
+            continue
+        w = max(1.0 - r, 1e-4)
+        a = np.angle(li)
+        thetas.extend(a + np.linspace(-3 * w, 3 * w, n_refine))
+        thetas.extend(-a + np.linspace(-3 * w, 3 * w, n_refine))
+    thetas = np.mod(np.array(thetas), 2 * np.pi)
+
+    c_max, g2 = -np.inf, 0.0
+    th_c = th_g = 0.0
+    for th, L in _psi_transfer(lift, thetas):
+        H = 0.5 * (L + L.conj().T)
+        le = float(np.max(np.linalg.eigvalsh(H)))
+        if le > c_max:
+            c_max, th_c = le, float(th)
+        s = float(np.linalg.norm(L, 2))
+        if s > g2:
+            g2, th_g = s, float(th)
+    return {"circle_max": c_max, "gamma_2": g2,
+            "theta_circle": th_c, "theta_gamma2": th_g}
+
+
+def certify_saturated(lift: SampledSatLift, v_max: float,
+                      n_grid: int = 1024) -> dict:
+    """Saturated-regime dichotomy certificate (circle-criterion based).
+    Returns: circle_max, gamma_2, global_recovery (linearly stable +
+    unsaturated orbit + circle_max < 1), and the region-of-linearity
+    CertResult (the binding certificate when circle_max >= 1). Scope:
+    contact-retaining lifted model at declared frequency-sampling
+    resolution; loss of contact and within-tick effects are covered by
+    simulator cross-checks, as for certify_sampled."""
+    base = certify_sampled(lift, v_max)
+    mar = saturated_margins(lift, n_grid=n_grid)
+    ok = base.feasible and mar["circle_max"] < 1.0
+    return {"circle_max": mar["circle_max"], "gamma_2": mar["gamma_2"],
+            "global_recovery": bool(ok),
+            "linear_cert": base, **{k: mar[k] for k in
+                                    ("theta_circle", "theta_gamma2")}}
+
+
+def aw_min_gamma(mm: ModalModel, x_T: float, ap: float, rpm: float,
+                 controller: Controller,
+                 alphas=(-2.0, -1.0, -0.5, -0.2, -0.1, 0.0,
+                         0.1, 0.2, 0.5, 1.0, 2.0, 5.0)) -> tuple:
+    """Back-calculation anti-windup line search: aw_gain = alpha * Bkd
+    (the discretized controller input direction), choosing alpha to
+    minimize the circle-criterion level max_th lambda_max(Re L) — the
+    quantity whose crossing below 1 certifies global clip recovery.
+    AW cannot change any linear certificate (it acts only through
+    psi); minimizing the circle level is therefore THE certified
+    objective of the saturated regime.
+    Returns (alpha_best, circle_best, circle_no_aw, aw_gain_best)."""
+    from scipy.linalg import expm as _expm
+    nk = controller.nk
+    Ak = np.asarray(controller.Ak, float).reshape(nk, nk)
+    Bk = np.asarray(controller.Bk, float).reshape(nk)
+    p = mm.params
+    tau = p.tooth_passing_delay(rpm)
+    rate = getattr(p.design, "ctrl_rate_hz", 50e3)
+    dt = tau / int(round(tau * rate))
+    Mk = np.zeros((nk + 1, nk + 1))
+    Mk[:nk, :nk] = Ak * dt
+    Mk[:nk, nk] = Bk * dt
+    Bkd = _expm(Mk)[:nk, nk]
+
+    g0 = None
+    best = (0.0, np.inf, None)
+    for a in alphas:
+        aw = None if a == 0.0 else a * Bkd
+        lift = lift_sampled(mm, x_T, ap, rpm, controller, aw_gain=aw)
+        g = saturated_margins(lift, n_grid=512)["circle_max"]
+        if a == 0.0:
+            g0 = g
+        if g < best[1]:
+            best = (a, g, aw)
+    return best[0], best[1], g0, best[2]
 
 
 def certified_depth(mm: ModalModel, x_T: float, rpm: float,

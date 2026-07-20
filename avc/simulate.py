@@ -224,7 +224,8 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
              noise_rms: float | None = None, seed: int = 0,
              loss_of_contact: bool = True, v_max: float = 150.0,
              scheduled=None, n_axial: int = 40,
-             surf_step: tuple[float, float] | None = None) -> SimResult:
+             surf_step: tuple[float, float] | None = None,
+             aw_gain: np.ndarray | None = None) -> SimResult:
     """Simulate a milling pass of the full nonlinear LTV closed loop.
 
     Parameters
@@ -258,6 +259,10 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
         term is offset by h, emulating a step of height h left in the
         stored surface by the previous pass (the perturbation direction
         of the SatCERT certificates).
+    aw_gain : optional (nk,) anti-windup vector: the controller state
+        update gains the back-calculation term aw_gain*(sat(v) - v)
+        (active only while the output clips; mirrors avc.satcert's
+        lifted AW model).
 
     Returns
     -------
@@ -384,10 +389,13 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
                 s_hist[jc] = cd["gd1"] @ xk
                 u_raw += _delayed(s_hist, jc - Dc)
             xk = cd["Akd"] @ xk + cd["Bkd"] * y_k
+            u_cmd = float(u_raw)
             if abs(u_raw) > v_max:
                 n_sat += 1
                 u_raw = np.sign(u_raw) * v_max
             u_next = float(u_raw)
+            if aw_gain is not None and u_next != u_cmd:
+                xk = xk + aw_gain * (u_next - u_cmd)
             jc += 1
         uu[k] = u_hold
 

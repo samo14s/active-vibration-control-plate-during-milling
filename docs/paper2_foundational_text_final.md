@@ -26,8 +26,8 @@ verdicts archived in the session record). Citation keys resolve in
 > saturated, time-periodic, delayed closed loop is certified regionally by
 > generalized-sector Lyapunov conditions on a semi-discretization lifting.
 > Sweeping the certificates yields a permissible depth-of-cut envelope
-> maximizing stability-limited MRR under an explicit
-> perturbation-tolerance requirement. In a simulation campaign on a plate
+> maximizing stability-limited MRR under a declared perturbation
+> tolerance. In a simulation campaign on a plate
 > benchmark validated against published measurements, the strategy raises
 > the certified worst-position depth of cut by $Y\times$ over the best
 > fixed-gain design of the same family, cutting its vibration by $X\%$ at

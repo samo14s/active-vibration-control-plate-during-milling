@@ -1,0 +1,90 @@
+{
+ "open_loop_crit_x50_mm": 0.2532958984375,
+ "points": {
+  "PS-LPV|x=50mm|ap=1.5mm": {
+   "circle_max": 9.69391092517597,
+   "gamma_2": 23.245145670345845,
+   "global_recovery": false,
+   "rho": 0.9551675673316908,
+   "note": "island -37.6um"
+  },
+  "PS-LPV|x=50mm|ap=2mm": {
+   "circle_max": 9.694941659602001,
+   "gamma_2": 22.96048061171518,
+   "global_recovery": false,
+   "rho": 0.9551675673320957,
+   "note": "island -50um"
+  },
+  "FROZEN|x=95mm|ap=0.9mm": {
+   "circle_max": 13.429266259753572,
+   "gamma_2": 165.094101135973,
+   "global_recovery": false,
+   "rho": 0.9662431702086752,
+   "note": "no island to +/-500um"
+  },
+  "FROZEN|x=50mm|ap=2mm": {
+   "circle_max": 2.15792027471529,
+   "gamma_2": 11.14699345743257,
+   "global_recovery": false,
+   "rho": 0.6978048349352689,
+   "note": "no island to +/-500um"
+  },
+  "PS-LPV|x=95mm|ap=2mm": {
+   "circle_max": 4.465393200374928,
+   "gamma_2": 38.71742414445291,
+   "global_recovery": false,
+   "rho": 0.8723118247736384,
+   "note": "hard condition"
+  }
+ },
+ "low_depth": {
+  "FROZEN": {
+   "0.05mm": {
+    "circle_max": 1.5349750899013084,
+    "gamma_2": 16.34882536020271
+   },
+   "0.15mm": {
+    "circle_max": 1.5357005140807245,
+    "gamma_2": 15.672457172762918
+   },
+   "0.25mm": {
+    "circle_max": 1.5370531945139623,
+    "gamma_2": 15.018446695960673
+   },
+   "0.4mm": {
+    "circle_max": 1.5401746175627078,
+    "gamma_2": 14.08901194952299
+   }
+  },
+  "PS-LPV": {
+   "0.05mm": {
+    "circle_max": 9.6637187345294,
+    "gamma_2": 24.02734040802507
+   },
+   "0.15mm": {
+    "circle_max": 9.664004939962112,
+    "gamma_2": 23.970596562229286
+   },
+   "0.25mm": {
+    "circle_max": 9.664299305687415,
+    "gamma_2": 23.914697186766162
+   },
+   "0.4mm": {
+    "circle_max": 9.68947338642015,
+    "gamma_2": 23.832140205171456
+   }
+  }
+ },
+ "aw": {
+  "FROZEN": {
+   "alpha_best": 0.0,
+   "circle_best": 1.5352560406505051,
+   "circle_no_aw": 1.5352560406505051
+  },
+  "PS-LPV": {
+   "alpha_best": 0.0,
+   "circle_best": 9.66386080665475,
+   "circle_no_aw": 9.66386080665475
+  }
+ }
+}

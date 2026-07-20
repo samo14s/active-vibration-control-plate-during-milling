@@ -467,16 +467,26 @@ paper's positioning of the region-of-linearity certificate.
 | frozen x=50, ap=2.0 mm | 2.16 | 11.1 | 0.698 | no island to ±500 µm |
 | PS-LPV x=95, ap=2.0 mm | 4.47 | 38.7 | 0.872 | bounded, 0.28 % clip |
 | frozen x=50, ap ≤ 0.4 mm | 1.54 (plateau) | 14–16 | ≤ 0.7 | — |
+| PS-LPV x=50, ap ≤ 0.4 mm | 9.66 (plateau) | — | — | — |
 
 Honest reading: the sufficient tests certify globality NOWHERE on this
-rig — not even below the open-loop boundary (the structural loop of
-these high-gain H∞ designs already sits at c ≈ 1.5) — and c does not
-cleanly rank island susceptibility (the island-free frozen point at
-x = 95 has the LARGEST c): worst-case-phase conservatism dominates.
-The causal island experiments of §5 remain the ground truth; the
-identified sharpening route is Zames–Falb multipliers (the shifted
-deadzone is monotone but non-odd, so positive-kernel multipliers
-apply). The frozen x = 95 hard condition (a_p = 2 mm) is linearly
+rig — not even below the open-loop boundary (the structural loops
+already sit at c ≈ 1.5 / 9.7) — and c is essentially a CONTROLLER
+property, nearly depth-independent (frozen 1.54→2.2, PS-LPV
+9.66→9.70 from near-zero cut to the island points): the high-authority
+scheduled design carries a ×6 larger deadzone-loop level everywhere,
+qualitatively aligned with its island susceptibility, though c does
+not rank every point (the island-free frozen point at x = 95 has
+c = 13.4): worst-case-phase conservatism dominates. The causal island
+experiments of §5 remain the ground truth; the identified sharpening
+route is Zames–Falb multipliers (the shifted deadzone is monotone but
+non-odd, so positive-kernel multipliers apply). Anti-windup: the
+back-calculation line search (`aw_min_gamma`, α ∈ [−1, 1] on the Bkd
+direction) returns α = 0 for BOTH designs — a certified negative
+result: within this classic AW family and this certificate the level
+cannot be improved at all; a certified AW benefit requires richer AW
+parameterizations (full-order synthesis) or the sharper multipliers
+above, which reshape the objective itself. The frozen x = 95 hard condition (a_p = 2 mm) is linearly
 UNSTABLE in the implementation-exact lift (rho = 1.41): its bounded
 15.5 µm response in the campaign is a purely nonlinear (clipped,
 contact-losing) equilibrium — quantifying how misleading the linear

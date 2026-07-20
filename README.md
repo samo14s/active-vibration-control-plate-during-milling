@@ -35,17 +35,31 @@ at every scheduling point once the scheduled H∞ loop is active, and gain
 staleness in the *removal* axis destabilizes a point-designed loop outright
 after 0.5–1 mm of edge recession — both findings are in the manuscript.
 
-## Next paper (planned): SatCERT
+## Next paper (in progress): SatCERT
 
-`docs/new_strategy_satcert_outline.md` is the evidence-based outline of the
-NEXT strategy (gap verified fresh on 2026-07-20, dossiers in
-`docs/gap_scouting/`): **certified regional stability under actuator
-saturation** — periodic-Lyapunov/generalized-sector LMIs on the
-semi-discretization lifting yield a certified basin per operating point, a
-**certified permissible depth-of-cut envelope** (guaranteed / linear-only /
-unstable), and anti-windup synthesis maximizing the certified region;
-validated against numerical basins and the measured saturation islands of
-Ozsoy et al. (MSSP 2025) — no rig required.
+`docs/new_strategy_satcert_outline.md` targets the verified gap
+(dossiers in `docs/gap_scouting/`): **certified regional stability under
+actuator saturation**. WP1–4 are now EXECUTED (`avc/satcert.py`,
+`scripts/satcert_campaign.py`, `results/satcert_campaign.json`,
+foundational text with filled numbers in
+`docs/paper2_foundational_text_final.md`):
+
+- **Implementation-exact certificate**: sampled-data period lifting at
+  the 50 kHz control rate (ZOH controller, one-period computation
+  delay, ±150 V deadzone at the DAC); the maximal saturation-free
+  admissible set (Gilbert–Tan O∞, phase-resolved headroom) gives the
+  largest surface-step h_max certified for both signs — closed-form, no
+  SDP, and **validated to 0.2–2 % against the nonlinear simulator's
+  measured clip onset**.
+- **Headline finding**: certification overturns the linear ranking —
+  PS-LPV's 3.2× linear worst-position advantage over the best frozen
+  design becomes 2.7× at 1 µm certified tolerance and **inverts to
+  0.79× at 20 µm**; forced-orbit saturation zones appear only for the
+  high-authority scheduled design (the Ozsoy-type island mechanism,
+  in-family).
+- At the hard condition (x = 95 mm, a_p = 2 mm) the frozen design
+  operates 14.7 % clipped vs 0.28 % for PS-LPV, which cuts vibration
+  by 58 % at 49 % of the voltage (RMS).
 
 ## The idea in one paragraph
 

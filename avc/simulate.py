@@ -223,7 +223,8 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
              x1: float | None = None, moving: bool = True, fs: float = 100e3,
              noise_rms: float | None = None, seed: int = 0,
              loss_of_contact: bool = True, v_max: float = 150.0,
-             scheduled=None, n_axial: int = 40) -> SimResult:
+             scheduled=None, n_axial: int = 40,
+             surf_step: tuple[float, float] | None = None) -> SimResult:
     """Simulate a milling pass of the full nonlinear LTV closed loop.
 
     Parameters
@@ -252,6 +253,11 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
         are re-extracted and re-discretized every SCHED_PERIOD (20 ms)
         at the current tool position (controller state is kept).
     n_axial : axial slices for the engagement integration.
+    surf_step : optional (t_inj [s], h [m]) — surface-step disturbance:
+        for one tooth-passing period after t_inj the delayed-surface
+        term is offset by h, emulating a step of height h left in the
+        stored surface by the previous pass (the perturbation direction
+        of the SatCERT certificates).
 
     Returns
     -------
@@ -386,6 +392,9 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
         uu[k] = u_hold
 
         w_tau = _delayed(w_hist, k - D)
+        if surf_step is not None and \
+                surf_step[0] <= tk < surf_step[0] + tau:
+            w_tau += surf_step[1]
         Fy = geom.force(tk, w_k, w_tau, loss_of_contact)
         fm = bu * u_hold + bf * Fy
         eta, etad = (a11 * eta + a12 * etad + b1 * fm,

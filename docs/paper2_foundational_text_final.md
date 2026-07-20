@@ -11,15 +11,14 @@ verdicts archived in the session record). Citation keys resolve in
 ## 1. Abstract (≤200 words; placeholders X, Y, Z to be filled from THIS
 ## paper's certified campaign — see note below)
 
-> Thin-walled aerospace parts are milled at a fraction of their attainable
-> material removal rate (MRR) because regenerative chatter, rather than
-> machine capability, commonly sets the productivity ceiling. Active
-> vibration control can raise that ceiling, yet industrial uptake remains
-> marginal: mainstream designs assume a linear actuator of unbounded
-> authority acting on a time-invariant workpiece, whereas shop-floor
+> Regenerative chatter, not machine capability, commonly caps the
+> material removal rate (MRR) of milled thin-walled aerospace parts.
+> Active vibration control can raise that cap, yet industrial uptake
+> remains marginal: mainstream designs assume a linear actuator of
+> unbounded authority and a time-invariant workpiece, whereas shop-floor
 > piezoelectric actuators saturate at aggressive depths of cut and the
-> structural dynamics at the tool position vary continuously with feed and
-> material removal. This paper develops a saturation-aware,
+> structural dynamics at the cutting point vary continuously with tool
+> position and material removal. This paper develops a saturation-aware,
 > position-scheduled control strategy treating both nonidealities as
 > design objects: a gain-scheduled H-infinity controller, synthesized over
 > the NC-known tool-path and removal schedule, is augmented with an

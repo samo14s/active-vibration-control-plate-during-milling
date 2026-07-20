@@ -14,6 +14,7 @@ STEPS = [
     "fig_time_domain.py",
     "fig_c2.py",
     "fig_consistency.py",
+    "fig_frf_match.py",
     "fig_robustness.py",
 ]
 

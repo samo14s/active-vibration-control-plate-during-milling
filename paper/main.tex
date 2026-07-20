@@ -64,10 +64,11 @@ semi-discretization stability lobes along the tool path, complemented by
 a small-gain spillover margin and an exact sampled-loop spectral-radius
 test. On a validated Mindlin finite-element model of a benchmark
 aluminium plate (natural-frequency errors of 1.5--3.8\% against
-published measurements, and reproducing the rig's measured open-loop
-stability pattern---including its 5500~rpm anomaly---once the published
-force calibration is applied), the scheduled controller raises the
-worst-position
+published measurements, FRF-level agreement with the rig's measured
+receptance and piezoelectric transfer function, and reproduction of
+its measured open-loop stability pattern---including its 5500~rpm
+anomaly---once the published force calibration is applied), the
+scheduled controller raises the worst-position
 critical depth of cut from 0.70~mm for the strongest non-scheduled
 $\hinf$ design of the same family to 2.99~mm---a de-conservatization
 factor of 4.2, and thirteen times the open-loop limit---and at the
@@ -498,7 +499,48 @@ rig and with the reference paper's own theoretical model
 \cite{du2024robust}. The frequency errors of the present model are
 1.5--3.8\%, comparable to the 0.5--3.2\% of the reference's model.
 Mesh convergence was verified: the $40 \times 32$ mesh reproduces the
-frequencies of a $60 \times 48$ mesh within 0.15\%. Figure~\ref{fig:model_validation}
+frequencies of a $60 \times 48$ mesh within 0.15\%.
+
+The validation extends beyond tabulated frequencies to the measured
+frequency-response curves themselves. The measured receptance and the
+piezo voltage-to-displacement transfer function of the reference rig
+(its Fig.~12) were digitized (89 and 76 points, 5~Hz--5~kHz; the point
+data ship with the code repository) and are overlaid on the model in
+Figure~\ref{fig:frf_match}. Three levels of agreement result. First,
+the digitized resonance frequencies (536/1072/2779/3359/4123~Hz)
+independently confirm the tabulated measured values, and the model
+tracks them with the same 1.6--3.8\% offsets as Table~\ref{tab:modes}.
+Second, the \emph{structure} of the receptance---including the
+antiresonance placements near 0.7, 2.2, 3.0, and 3.8~kHz, which probe
+the mode-shape ratios at the measurement point rather than the
+frequencies---is reproduced across the full band once a single
+constant gain offset is fitted (the digitized amplitude axis of the
+receptance plot carries a reference ambiguity, disclosed as such);
+a scale-free check on the same curve, the relative level of the first
+two resonance peaks, agrees to 0.1~dB (measured 0.9~dB, model
+0.8~dB). Third, the actuation path is compared in \emph{absolute}
+units with no fitted parameter: with handbook piezoelectric constants
+the model's low-frequency gain is 0.053~$\mu$m/V against the measured
+0.072~$\mu$m/V ($-2.6$~dB, i.e.\ within 35\% for the complete
+electromechanical chain), and the model backbone runs through the
+measured points across the band. Digitized resonance tips
+underestimate the true peaks---a 0.2--0.6\% damping resonance is a few
+hertz wide, unresolvable from a printed plot---so peak amplitudes are
+compared as lower bounds only.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig13_frf_match.pdf}
+\caption{FRF-level validation against the measured curves of the
+reference rig (points: digitized from \cite{du2024robust}, Fig.~12):
+(a)~impact receptance at the upper corner---model with a single fitted
+backbone gain offset (axis-reference ambiguity of the digitization,
+stated in the legend); (b)~piezo voltage-to-displacement transfer
+function in absolute units with no fitted parameter.}
+\label{fig:frf_match}
+\end{figure}
+
+Figure~\ref{fig:model_validation}
 shows the mode shapes and the frequency comparison;
 Figure~\ref{fig:varying_dynamics} shows the position- and
 removal-dependence of the milling-point receptance that motivates the
@@ -1385,7 +1427,10 @@ influence the work reported in this paper.
 The complete simulation code---finite-element model, controller
 synthesis, semi-discretization stability analysis, and time-domain
 engine---together with the scripts generating every figure and table of
-this paper, is available in a public repository at
+this paper---together with the digitized measured frequency-response
+data of the reference rig used in
+Figures~\ref{fig:frf_match} and \ref{fig:consistency}---is available
+in a public repository at
 \texttt{github.com/samo14s/active-vibration-control-plate-during-milling}.
 
 %% =====================================================================

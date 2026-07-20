@@ -23,6 +23,12 @@ deployment certificates passing):
 
 \* tuned at the reference speed; destabilizes at other speeds in the band.
 
+**FRF-level experimental anchoring**: the measured receptance and piezo
+transfer function of the reference rig (digitized, `data/`) are matched
+by the model across 5 Hz-5 kHz — resonances within 1.6-3.8%,
+antiresonance placements reproduced, and the actuation chain absolute
+gain within 35% with handbook piezo constants (fig13).
+
 A certified negative result completes the picture: the lobe-maximizing
 tuning of the regenerative-targeted delayed feedback gain returns **zero**
 at every scheduling point once the scheduled H∞ loop is active, and gain

@@ -39,10 +39,14 @@ system, with the machining process as the physical carrier.
 study deliberately anchored at every link to the published experimental
 record of a benchmark rig (Du et al., *Int. J. Mech. Sci.* 274, 2024):
 identical geometry, actuator, sensor, and amplifier; modal parameters
-validated to 1.5–3.8%; and — using that paper's own force
-calibration — the model reproduces the rig's measured open-loop
-stability pattern across its tested speed band, including the anomaly
-at 5500 rpm. The closed loop is evaluated with implementation-true
+validated to 1.5–3.8%; FRF-level agreement with the rig's measured
+receptance and piezoelectric transfer function across 5 Hz–5 kHz
+(digitized measured curves, included with the released data:
+antiresonance placements reproduced, and the actuation chain's absolute
+gain within 35% using handbook piezoelectric constants with no fitted
+parameter); and — using that paper's own force calibration — the model
+reproduces the rig's measured open-loop stability pattern across its
+tested speed band, including the anomaly at 5500 rpm. The closed loop is evaluated with implementation-true
 timing (50 kHz sampling, computation delay, saturation, sensor noise),
 and the complete design data and code are released so that any
 laboratory with the reference rig's hardware class can execute the

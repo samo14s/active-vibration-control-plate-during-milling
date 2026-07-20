@@ -217,9 +217,13 @@ def stage_d(n_mc=40):
             dm = 1.0 + rng.uniform(-0.10, 0.10)      # mass-like freq shift
             dk = 1.0 + rng.uniform(-0.10, 0.10)      # stiffness-like
             dz = rng.uniform(0.8, 1.0)               # damping reduction
+            # mass perturbation also rescales the mass-normalized mode
+            # shapes (Phi ~ m^-1/2), hence bu, cs, and bf(x) coherently
+            sm = 1.0 / np.sqrt(dm)
             mm_p = dataclasses.replace(
                 mm12, omega=mm12.omega * np.sqrt(dk / dm),
-                zeta=mm12.zeta * dz)
+                zeta=mm12.zeta * dz, Phi=mm12.Phi * sm,
+                bu=mm12.bu * sm, cs=mm12.cs * sm)
             for strat in rows:
                 K = controller_for(strat, art, x_worst)
                 al = sld.critical_depth(mm_p, x_worst, RPM_REF,

@@ -28,11 +28,11 @@ signed linear evaluation model of avc.milling,
     Fy(t) = a4(t) [ w(t-tau) - w(t) ] - a4(t) ft,     a4(t) <= 0,
 
 which is the model avc.sld validates against the analytic turning
-benchmark. Note the dynamic chip-thickness sign is +w(t) - w(t-tau):
-this is the sign for which the elemental force above reproduces the
-operative linear model (the narrative line "h = [ft + w(t-tau) - w(t)]
-sin(phi)" in the avc.milling docstring has the opposite - inconsistent -
-sign; the code of avc.milling only ever computes a4 and is unaffected).
+benchmark. The dynamic chip-thickness sign is +w(t) - w(t-tau): the
+current deflection thickens the chip, the previously machined surface
+thins it, and with this orientation the elemental force reproduces the
+operative linear model exactly (consistent with the avc.milling
+docstring).
 
 Integration: the free-plate modal form is diagonal, so the exact ZOH
 propagator over one step dt is n independent 2x2 blocks (precomputed
@@ -223,7 +223,7 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
              x1: float | None = None, moving: bool = True, fs: float = 100e3,
              noise_rms: float | None = None, seed: int = 0,
              loss_of_contact: bool = True, v_max: float = 150.0,
-             scheduled=None, n_axial: int = 16) -> SimResult:
+             scheduled=None, n_axial: int = 40) -> SimResult:
     """Simulate a milling pass of the full nonlinear LTV closed loop.
 
     Parameters
@@ -306,6 +306,10 @@ def simulate(mm, rpm: float, ap: float, controller: Controller | None = None,
     # ---- controller setup ----------------------------------------------
     rate = getattr(p.design, "ctrl_rate_hz", None)
     ctrl_div = max(1, int(round(fs / rate))) if rate else CTRL_DIV
+    if rate and abs(ctrl_div * rate - fs) > 1e-6 * fs:
+        raise ValueError(
+            f"fs={fs:g} must be an integer multiple of the real-time "
+            f"controller rate ctrl_rate_hz={rate:g}")
     dt_c = ctrl_div * dt
     ctrl = scheduled.at_theta(float(x0), removal) if scheduled is not None \
         else controller

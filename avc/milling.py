@@ -5,12 +5,14 @@ Classical linear-edge force model (Altintas), tangential/radial:
 
     dFt = kt * h * dz,      dFr = kr * kt * h * dz
 
-with instantaneous chip thickness h(phi) = [ft + w(t-tau) - w(t)] *
-sin(phi), where w is the plate deflection along its normal y (the feed
-motion contributes ft per tooth and the regenerative surface difference
-w(t-tau) - w(t) adds to it; both are resolved into the chip direction by
-sin(phi)). Projecting the elemental force on y and integrating over the
-engaged helical flute segments gives the y-direction force
+with instantaneous chip thickness h(phi) = [ft + w(t) - w(t-tau)] *
+sin(phi), where w is the plate deflection along its normal y: the feed
+contributes ft per tooth, the CURRENT deflection w(t) thickens the chip
+and the surface left one tooth period ago, w(t-tau), thins it (this
+orientation is what makes the operative force below carry
+a4*(w(t-tau) - w(t)); the simulator implements exactly this h).
+Projecting the elemental force on y and integrating over the engaged
+helical flute segments gives the y-direction force
 
     Fy(t) = -a3(t) * ft - a4(t) * [ w(t) - w(t-tau) ]
 

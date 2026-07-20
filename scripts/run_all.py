@@ -12,6 +12,7 @@ STEPS = [
     "fig_design_framework.py",
     "fig_sld.py",
     "fig_time_domain.py",
+    "fig_c2.py",
     "fig_robustness.py",
 ]
 

@@ -484,7 +484,11 @@ def deploy(K: Controller, params: Params,
     Dk = Dfl @ K.Dk
     cw = None if K.c_wmill is None else np.concatenate(
         [K.c_wmill, np.zeros(nf)])
-    return Controller(Ak=Ak, Bk=Bk, Ck=Ck, Dk=Dk,
+    # delayed state taps survive composition (zero-extended over the
+    # filter states; taps add to the output voltage directly)
+    gd0 = None if K.gd0 is None else np.concatenate([K.gd0, np.zeros(nf)])
+    gd1 = None if K.gd1 is None else np.concatenate([K.gd1, np.zeros(nf)])
+    return Controller(Ak=Ak, Bk=Bk, Ck=Ck, Dk=Dk, gd0=gd0, gd1=gd1,
                       c_wmill=cw, gamma=K.gamma, label=K.label,
                       meta={**K.meta, "deployed": True,
                             "latency": bool(latency)})
@@ -503,7 +507,13 @@ def build_design_plant(mm3: ModalModel, x_T: float, ap_design: float,
     """
     p = mm3.params
     a4 = mean_alpha4(p, ap_design)
-    Ap, Bu, Bff, Cs, Cw = mm3.abcd(x_T, alpha4=a4)
+    # abcd's alpha4 argument is the coefficient of the CURRENT-time force
+    # term Fy_now = alpha4*w(t); the physical regenerative force
+    # Fy = a4*(w_tau - w) has current-time part -a4*w(t), so the design
+    # plant must be assembled with alpha4 = -a4 (softening for the signed
+    # down-milling a4 < 0), consistent with docs section 2.5 and with the
+    # SLD/simulation layers. meta records the physical signed a4.
+    Ap, Bu, Bff, Cs, Cw = mm3.abcd(x_T, alpha4=-a4)
     # actuator chain seen by the synthesis: implementation-latency Pade
     # (sampled-data model, NOT deployed) -> roll-off filter (deployed)
     T_lat = p.design.latency_factor / p.design.ctrl_rate_hz
@@ -744,7 +754,9 @@ def lqg_design(mm3: ModalModel, x_T: float, ap_design: float,
     measurement noise v_noise [m^2].
     """
     a4 = mean_alpha4(mm3.params, ap_design)
-    Ap0, Bu0, Bff0, Cs0, Cw0 = mm3.abcd(x_T, alpha4=a4)
+    # current-time regenerative part enters with alpha4 = -a4 (see
+    # build_design_plant)
+    Ap0, Bu0, Bff0, Cs0, Cw0 = mm3.abcd(x_T, alpha4=-a4)
     # include the same actuator chain as the H-infinity design plants:
     # implementation-latency Pade + mandatory roll-off filter
     T_lat = mm3.params.design.latency_factor / mm3.params.design.ctrl_rate_hz
@@ -957,12 +969,12 @@ def robust_point_design(params: Params, x_grid, ap_design: float,
     E = _truncation_residual(params, n_modes, n_full, theta, freqs)
     a4 = mean_alpha4(params, ap_design)
     mm_nom = cached_reduce_model(params, n_modes, hr_nom)
-    Ap, Bu, _bf, Cs, _cw = mm_nom.abcd(x_mid, alpha4=a4)
+    Ap, Bu, _bf, Cs, _cw = mm_nom.abcd(x_mid, alpha4=-a4)
     G_mid = _siso_frf(Ap, Bu, Cs, freqs)
     E_pos = np.zeros_like(E)
     for x, hr in theta:
         mm = cached_reduce_model(params, n_modes, hr)
-        Ax, Bx, _b, Cx, _c = mm.abcd(x, alpha4=a4)
+        Ax, Bx, _b, Cx, _c = mm.abcd(x, alpha4=-a4)
         E_pos = np.maximum(E_pos, np.abs(_siso_frf(Ax, Bx, Cx, freqs) - G_mid))
 
     Wa = _wa_ss(*_fit_overbound(freqs, E + E_pos))
@@ -1005,7 +1017,9 @@ def rs_margin(params: Params, K: Controller, Wa, theta_grid,
     for hr in sorted({float(th[1]) for th in theta_grid}):
         mm = cached_reduce_model(params, n_modes, hr)
         G = _sensor_frf(mm, freqs)
-        worst = max(worst, float(np.max(np.abs(Wm * Kf / (1.0 + G * Kf)))))
+        # loop convention is u = +K y everywhere in this codebase, so an
+        # additive plant perturbation sees K/(1 - G K), NOT K/(1 + G K)
+        worst = max(worst, float(np.max(np.abs(Wm * Kf / (1.0 - G * Kf)))))
     return worst
 
 

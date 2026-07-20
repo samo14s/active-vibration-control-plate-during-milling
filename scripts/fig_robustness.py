@@ -43,7 +43,7 @@ def main():
                 ("sched", "PS-LPV (removal-scheduled)", COLORS["PS-LPV"], "-"),
                 ("sched-fresh", "PS-LPV (fresh-plate gains)",
                  COLORS["PS-LPV"], "--"),
-                ("frozen", "frozen $H_\\infty$", COLORS["R-HINF"], "-")):
+                ("frozen", "frozen $H_\\infty$", COLORS["FROZEN"], "-")):
             vals = [E[(key, x, r)] * 1e3 for x in X_EVAL]
             ax.plot(xs_mm, vals, ls, color=c, marker="o", ms=3, label=lbl)
         ax.set_title(f"removal {r*1e3:.1f} mm", fontsize=8.5)

@@ -34,18 +34,21 @@ def main():
     savefig(fig, "fig04_sld_openloop")
 
     # ---------------- fig05: closed loop ------------------------------
-    fig, axs = plt.subplots(1, 3, figsize=(DC, 2.5), sharey=True)
+    fig, axs = plt.subplots(1, 3, figsize=(DC, 2.8), sharey=True)
     for ax, x in zip(axs, (0.005, 0.05, 0.095)):
         for strat in STRATEGIES:
+            ls = "--" if strat == "PS-LPV" else "-"
             ax.semilogy(rpms / 1e3, np.maximum(curves[(strat, x)], 1e-6) * 1e3,
-                        color=COLORS[strat], label=LABELS[strat],
+                        ls, color=COLORS[strat], label=LABELS[strat],
                         lw=1.3 if strat.startswith("PS") else 1.0)
         ax.set_xlabel("spindle speed [krpm]")
         ax.set_title(f"$x_T$ = {x*1e3:.0f} mm", fontsize=8.5)
         ax.set_ylim(0.05, 6.0)
     axs[0].set_ylabel(r"$a_{\rm lim}$ [mm]")
-    axs[0].legend(fontsize=6, loc="upper left")
-    fig.tight_layout()
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, fontsize=6.5, ncol=5,
+               loc="lower center", bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     savefig(fig, "fig05_sld_closedloop")
 
     # ---------------- fig06: a_lim vs position at RPM_REF -------------

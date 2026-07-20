@@ -308,10 +308,14 @@ at ±150 V.
 | Label | Description |
 |---|---|
 | OL | no control |
-| DPD | delayed PD on the sensor signal (single active time-delay control, as ref. Eq. (30)) |
-| R-HINF | single robust H∞ point design: nominal = path midpoint, position variation wrapped into the uncertainty budget (emulates the conservatism of the μ approach with identical weights) |
+| DPD | delayed PD on the sensor signal (single active time-delay control, as ref. Eq. (30)); gains tuned offline by the same worst-position criterion |
+| FROZEN | best frozen H∞: min-max selection over the whole scheduling grid of the strongest single (non-scheduled) controller from the same design family — the PS-LPV advantage over it is attributable to scheduling alone |
 | PS-LPV | contribution C1 only (no delayed term) |
 | PS-LPV-DR | full proposed strategy |
+
+(The originally planned "position-variation-as-uncertainty midpoint design"
+baseline survives in `synthesis.robust_point_design` for reference, but the
+campaign baseline is the stronger and fairer min-max FROZEN design.)
 
 Fairness protocol: identical weights `W_f, W_u, W_n, W_a`, identical noise
 realizations, identical saturation, identical evaluation model (full-order

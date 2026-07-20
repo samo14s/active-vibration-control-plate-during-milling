@@ -76,7 +76,8 @@ def main():
                     alpha=0.85, label=LABELS[strat])
     axs[0].set_ylabel(r"$w(x_T)$ [$\mu$m]")
     axs[0].set_title(
-        "full pass, $a_p$ = 1.0 mm (4x the frozen worst-position limit)",
+        "full pass, $a_p$ = 1.0 mm "
+        "(1.4x the frozen design's worst-position limit)",
         fontsize=8.5)
     axs[0].legend(fontsize=6.5)
     axs[1].set_ylabel("voltage [V]")

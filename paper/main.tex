@@ -1044,6 +1044,28 @@ trajectory $\theta(t)$.}
 \label{fig:moving_pass}
 \end{figure}
 
+The sharpest time-domain separation appears at the condition that the
+scheduling paradigm predicts: the end of the pass (the frozen design's
+weakest position) at a depth well above the frozen worst-position
+limit. Figure~\ref{fig:hard_condition} shows this condition
+($x_T = 95$~mm, $a_p = 2.0$~mm): the open loop and the delayed-PD
+baseline are violently unstable (loss-of-contact limit cycles), the
+frozen controller survives but labors---\todo{frozen hard-condition RMS
+and voltage}---while the scheduled controller remains comfortable at
+\todo{scheduled hard-condition RMS and voltage}, i.e.\
+\todo{ratio statement: fraction of the vibration at fraction of the
+voltage}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\linewidth]{figures/fig11_hard_condition.pdf}
+\caption{The differentiating condition at the end of the pass
+($x_T = 95$~mm, $a_p = 2.0$~mm, 4900~rpm): open loop and delayed PD are
+unstable; the frozen design survives at high amplitude and voltage; the
+scheduled controller is comfortable.}
+\label{fig:hard_condition}
+\end{figure}
+
 \subsection{Contribution of the delayed feedback term}
 \label{sec:drincrement}
 
@@ -1175,6 +1197,18 @@ removal prediction) is covered by the retained additive uncertainty
 block and the parametric Monte-Carlo. This division---schedule on the
 known part, remain robust against the residual---is not a workaround
 but the central design principle of the paper.
+
+\emph{Delayed-tap timing in the continuous certificates.} The
+semi-discretization certification enters the delayed feedback tap of
+Eq.~\eqref{eq:ud} without the implementation latency that the simulator
+(and the hardware) apply to the total voltage, whereas the $\hinf$ path
+carries the full Pad\'e latency model. The approximation is benign at
+the tuned gain levels---the tap contributes fractions of a volt per
+micrometre of recirculated displacement, and both delayed strategies
+(PS-LPV-DR and the delayed-PD baseline) are treated identically within
+each analysis layer, so the comparisons are internally consistent---but
+a latency-exact tap certification is a straightforward refinement and
+is noted for the experimental follow-up.
 
 \section{Conclusion}
 \label{sec:conclusion}

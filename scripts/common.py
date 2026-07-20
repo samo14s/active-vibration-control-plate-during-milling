@@ -48,14 +48,14 @@ DC = 7.2
 COLORS = {
     "OL": "#7f7f7f",
     "DPD": "#9467bd",
-    "R-HINF": "#d62728",
+    "FROZEN": "#d62728",
     "PS-LPV": "#1f77b4",
     "PS-LPV-DR": "#2ca02c",
 }
 LABELS = {
     "OL": "no control",
-    "DPD": "delayed PD",
-    "R-HINF": "robust $H_\\infty$ (position as uncertainty)",
+    "DPD": "delayed PD (single time-delay control)",
+    "FROZEN": "best frozen $H_\\infty$ (non-scheduled)",
     "PS-LPV": "PS-LPV (proposed, C1)",
     "PS-LPV-DR": "PS-LPV-DR (proposed, full)",
 }

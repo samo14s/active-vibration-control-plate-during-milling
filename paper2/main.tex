@@ -98,9 +98,10 @@ the delayed periodic loop.
 Neither simplification survives contact with production economics,
 because both bind exactly where productivity is decided. Saturation
 binds first at high depth of cut: recent measurements document
-``saturation islands'' in which chatter erupts \emph{below} the
-linearly predicted stability boundary once the actuator clips
-\cite{ozsoy2025mssp}, so a linearly certified envelope overstates the
+``saturation islands'' below the linear stability boundary in which
+the actuator clips --- and in some of which the resulting
+nonlinearity triggers chatter below the linearly predicted boundary
+\cite{ozsoy2025mssp} --- so a linearly certified envelope overstates the
 safe region precisely where the removal rate is highest --- an
 unacceptable failure mode for unattended machining. Existing responses
 either avoid the constraint through gain maps optimized to remain
@@ -230,14 +231,17 @@ follow from the affine period map. All certificates are formulated on
 the variational dynamics about $z^*$, which is required to be
 strictly unsaturated; the phase-resolved headroom
 $\bar u_k = V_{\max}-|v^*_k|$ then bounds the shifted deadzone. The
-lifted forced voltages are validated against the settled nonlinear
-simulator to 0.02--1.2\% across the operating range; this accuracy is
-load-bearing, because near the envelope boundary a 1\% error in the
-forced peak is a tenfold error in headroom. (A continuous-time lift
-with a Pad\'e latency model, used for cross-validation against
+lifted forced voltages match the settled nonlinear simulator at
+the reference points (regression-tested to a 3\% tolerance; the
+clip-onset validation of Table~\ref{tab:validation} constrains the
+same quantity indirectly to sub-percent accuracy at the validation
+points, since a headroom error maps directly into an onset error).
+This accuracy is load-bearing: near the envelope boundary a 1\% error
+in the forced peak is a tenfold error in headroom. (A continuous-time
+lift with a Pad\'e latency model, used for cross-validation against
 semi-discretization stability lobes, underestimates the forced peak
-by 5--13\% as depth grows and is therefore \emph{not} used for
-certification.)
+by $\approx$5--13\% as depth grows and is therefore \emph{not} used
+for certification.)
 
 \subsection{Region-of-linearity certificate}
 
@@ -278,9 +282,13 @@ simulator validation below.
 The ground truth is an independent 100\,kHz nonlinear time-domain
 simulator (loss-of-contact chip nonlinearity, discrete controller,
 saturation, measurement chain) inherited from \cite{companion} and
-extended with surface-step injection. The onset of clipping ---
+extended with surface-step injection; for this cross-check sensor
+noise and loss of contact are disabled, matching the certificate's
+contact-retaining scope (the island and hard-condition simulations
+below use their own declared switches). The onset of clipping ---
 the smallest injected step that saturates the amplifier --- is
-bisected to 6\,nm resolution and compared with the certificate:
+bisected to 6\,nm resolution and compared with the certificate in
+Table~\ref{tab:validation}:
 
 \begin{table}[htbp]
 \centering\small
@@ -309,12 +317,12 @@ of this cross-check).
 \section{Certified envelopes and the collapse of the linear ranking}
 \label{sec:envelope}
 
-Sweeping Eq.~\eqref{eq:hmax} over the operating grid yields, per
-controller, a three-zone envelope: \emph{certified} at the declared
-tolerance $h_{\mathrm{req}}$, \emph{linear-only} (linearly stable but
-certificate-refused --- the exposure zone where islands can live),
+Sweeping Eq.~\eqref{eq:hmax} over the operating grid partitions it,
+per controller, into four regions: \emph{certified} at the declared
+tolerance $h_{\mathrm{req}}$; \emph{linear-only} (linearly stable but
+certificate-refused --- the exposure zone where islands can live);
 \emph{forced-saturated} (the orbit itself clips: refused at any
-tolerance), and linearly unstable
+tolerance); and linearly unstable
 (Fig.~\ref{fig:campaign}a). Certified depths are prefix-connected:
 the reported value is the lower edge of the first refusal, so a
 feasible pocket above a refused band is never reported as ``the''
@@ -335,9 +343,12 @@ with the $\pm150$\,V bound active.}
 
 \begin{table}[htbp]
 \centering\small
-\caption{Worst-position depths [mm] at 4.9\,krpm ($x_T\in\{5,25,50,
-75,95\}$\,mm; all worst positions bind at $x_T=95$\,mm). ``Linear'' =
-sampled-loop Floquet boundary from the same lifting.}
+\caption{Worst-position depths [mm] at 4.9\,krpm,
+$x_T\in\{5,25,50,75,95\}$\,mm. All \emph{certified} worst positions
+bind at $x_T=95$\,mm; the PS-LPV \emph{linear} worst binds at
+$x_T=5$\,mm (its linear boundary exceeds the declared 5\,mm search
+cap at the other positions). ``Linear'' = sampled-loop Floquet
+boundary from the same lifting.}
 \label{tab:ranking}
 \begin{tabular}{lccccccc}
 \toprule
@@ -355,8 +366,9 @@ ratio             & 3.16$\times$ & \textbf{1.32$\times$} &
 Table~\ref{tab:ranking} is the headline result. The scheduled
 design's 3.2$\times$ linear worst-position advantage collapses to at
 most 1.32$\times$ the moment saturation is certified --- even at the
-tightest 1\um{} tolerance --- and inverts to 0.79$\times$ from
-$\sim$5\um{} upward: the scheduled controller's higher authority
+tightest 1\um{} tolerance --- crossing below parity at $\sim$5\um{}
+(0.94$\times$) and settling at 0.79$\times$ from 10\um{} upward: the
+scheduled controller's higher authority
 amplifies both the forced tooth-passing voltage ripple and the
 voltage response to surface defects, consuming headroom precisely
 where the linear analysis promises depth. Forced-saturated zones
@@ -421,23 +433,27 @@ $x_T=50$\,mm) no global sector-$[0,1]$ certificate can exist for any
 controller --- the sector's upper edge contains the fully-clipped,
 i.e.\ open, loop --- so regional certificates above that depth are a
 necessity, not a conservatism artifact. Second, the measured levels
-are essentially \emph{controller properties}, nearly
-depth-independent: $c\approx1.54$ for the frozen design and
-$c\approx9.7$ for PS-LPV from near-zero cut up to the island points
---- a $6\times$ larger deadzone-loop level for the island-prone
-high-authority design, qualitatively aligned with its susceptibility,
-although $c$ does not rank every point (worst-case-phase conservatism
-dominates; the causal experiments of Section~\ref{sec:islands} remain
-the ground truth, and Zames--Falb multipliers --- applicable since the
-shifted deadzone is monotone though non-odd --- are the identified
-sharpening route). Third, a certified \emph{anti-windup negative
-result}: back-calculation anti-windup enters the lift only through
-the deadzone-injection columns and provably cannot change any linear
-certificate; a line search on its gain returns zero improvement of
-$c$ for \emph{both} designs --- within the classic anti-windup family
-and this certificate, no benefit is available, and a certified
-anti-windup gain requires richer parameterizations or the multipliers
-above.
+are dominated by the \emph{controller}: along the $x_T=50$\,mm slice
+$c$ moves only from 1.54 to 2.16 (frozen) and from 9.66 to 9.70
+(PS-LPV) between near-zero cut and the island depth --- a $6\times$
+larger deadzone-loop level for the island-prone high-authority design
+at low depth ($4.5\times$ at the island depth), qualitatively aligned
+with its susceptibility. The ranking is not universal: the island-free
+frozen point at $x_T=95$\,mm carries the largest level of all
+($c=13.4$) --- the explicit counterexample showing that
+worst-case-phase conservatism dominates; the causal experiments of
+Section~\ref{sec:islands} remain the ground truth, and Zames--Falb
+multipliers --- applicable since the shifted deadzone is monotone
+though non-odd --- are the identified sharpening route. Third, a
+certified \emph{anti-windup negative result}: back-calculation
+anti-windup enters the lift only through the deadzone-injection
+columns and provably cannot change any linear certificate; a line
+search on its gain at the representative low-depth point
+($x_T=50$\,mm, $a_p=0.1$\,mm) returns zero improvement of $c$ for
+\emph{both} designs --- within the classic anti-windup family and
+this certificate, no benefit is available at the audited point, and a
+certified anti-windup gain requires richer parameterizations or the
+multipliers above.
 
 %% ====================================================================
 \section{External validation: the published saturation islands}
@@ -455,10 +471,13 @@ published parameters with the same lifting and certificates
 from the published regeneration-free model --- calibrated once
 against the published uncontrolled boundary; all declared). The
 calibrated model reproduces the published uncontrolled boundary shape
-(high left flank of 14--18\,mm at 1800--1950\,rpm collapsing to
-$\sim$2\,mm above 2050\,rpm; 0.9\,mm at 2800\,rpm vs.\ the published
-1.2\,mm), and then, with no further tuning
-(Fig.~\ref{fig:ozsoy}):
+in the island band --- a high left flank (model 14--18\,mm at
+1800--1950\,rpm against the published flank rising to $\sim$24\,mm at
+1950\,rpm: a declared underestimate) collapsing to $\sim$2\,mm above
+2050\,rpm in both --- and, as a cross-configuration consistency check
+only, gives 0.9\,mm at 2800\,rpm against the 1.2\,mm the paper
+reports for its earlier (129.3\,Hz) clamping configuration. With no
+further tuning (Fig.~\ref{fig:ozsoy}):
 
 \begin{figure}[htbp]
 \centering
@@ -472,21 +491,30 @@ the predicted islands.}
 \end{figure}
 
 \begin{itemize}
-\item the forced actuator-force amplitudes match the thirteen
-measured values printed in the paper's island figure at a median
-model/measured ratio of \textbf{1.04} (cell-wise within
-$\sim\pm30$\%, consistent with the untabulated edge coefficients,
-measured runout, and the single-mode reduction);
-\item \emph{both} published islands appear in place as the
-certificate census's forced-saturated zones --- the central island at
-1900--1950\,rpm\,/\,4--8\,mm and the upper island at $\sim$18\,mm ---
-with the saturation-free region between (10--16\,mm) that the paper
-highlights; the paper's third band of marginal-chatter cells at
-2050--2250\,rpm lies along the model's stability boundary, as
-described there;
-\item causal probes at the central island run at 44.6\% clip duty
-with mildly degraded RMS and no chatter, matching the paper's
-``saturated (marginal)'' designations.
+\item of the thirteen measured amplitudes printed in the paper's
+island figure, ten admit a forced-response comparison (the other
+three lie above the calibrated model's linear boundary where the
+experiment measured cuts --- a declared discrepancy of the
+single-mode reduction); over the ten, the median model/measured ratio
+is \textbf{1.04}, eight cells within $\pm30$\% and a worst case of
+$+55$\% at 1900\,rpm\,/\,5\,mm, consistent with the untabulated edge
+coefficients and measured runout;
+\item \emph{both} published islands appear as the certificate
+census's forced-saturated zones: the central island at its
+4--8\,mm rows (model 1900--1950\,rpm; the published extent reaches
+$\sim$1850--2000\,rpm and includes measured saturation at the
+10\,mm row that the model certifies saturation-free --- a declared
+miss), and the upper island at 18\,mm against the published
+$\sim$20\,mm (where the single-mode model is already linearly
+unstable); the saturation-free band between them, which the paper
+highlights at $\sim$15\,mm, appears in the model at 10--16\,mm; the
+paper's third band of marginal-chatter cells at 2050--2250\,rpm lies
+along the model's stability boundary, as described there;
+\item a causal probe at 1900\,rpm\,/\,5\,mm runs at 44.6\% clip duty
+with mildly degraded RMS and no chatter --- consistent with the
+paper's saturated-but-stable designations in the island interior
+(this is also the $+55$\% worst cell above: the paper's measured
+20\,N there sits below the threshold the model crosses).
 \end{itemize}
 
 The reproduction also settles the mechanism: the published islands
@@ -497,8 +525,9 @@ forced-saturated zones our machinery predicts, with regeneration
 included where the published frequency-domain model omits it. A
 class-representative counterfactual with the mode \emph{below} the
 band (25\,Hz vs.\ 100--200\,Hz forcing) produced \emph{no} island up
-to matched clipping depths where the plate's scheduled \hinf{}
-latched into chatter: a clipped velocity feedback still outputs a
+to $\pm500\um$ surface steps ($\le$4\% transient clip duty), a step
+range in which the plate's scheduled \hinf{} had long since latched
+into chatter: a clipped velocity feedback still outputs a
 dissipative $-\dot x$-signed force, whereas a clipped high-gain
 model-based loop loses its stabilizing phase. Island susceptibility
 is therefore set not by clipping depth but by the \emph{phase
@@ -546,10 +575,11 @@ conservatism against them. (4)~In the saturated regime, a structural
 impossibility result scopes what any global certificate can promise
 above the open-loop boundary, and a certified negative result shows
 classic back-calculation anti-windup cannot improve the
-circle-criterion level for either design. (5)~The published
-saturation islands of \cite{ozsoy2025mssp} were reproduced
-quantitatively on their published parameters (median forced-force
-ratio 1.04; both islands in place), unifying their frequency-domain
+circle-criterion level for either design at the audited point.
+(5)~The published saturation islands of \cite{ozsoy2025mssp} were
+reproduced quantitatively on their published parameters (median
+forced-force ratio 1.04 over the ten comparable measured cells; both
+islands present, with declared placement misses), unifying their frequency-domain
 saturation model with the present certificates and isolating the
 island mechanism: forced-response saturation of a mode inside the
 tooth-passing band, aggravated by loss of phase integrity of the

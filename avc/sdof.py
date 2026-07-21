@@ -97,8 +97,11 @@ REPRESENTATIVE = SDOFConfig(
     label="class-representative (stand-in)")
 
 # PUBLISHED parameter set — Ozsoy, Sims & Ozturk, MSSP 224 (2025)
-# 111942, Tables 1-2 and Eq. (2), saturation-island configuration
-# (DVF, 1700-2250 rpm band):
+# 111942, saturation-island configuration (DVF, 1700-2250 rpm band).
+# Provenance: the island-test flexure parameters come from the
+# paper's Section 3.2 TEXT (its Table 2 lists the earlier preloaded
+# configuration, 129.3 Hz / 1.34 % / 1.34e7 N/m); tool, cutting
+# coefficients, actuator and DVF gain from Tables 1-2 and Eq. (2):
 #   flexure workpiece for the island tests: fn = 128.1 Hz,
 #   zeta = 1.48 %, k = 1.13e7 N/m  =>  m = k/wn^2 = 17.44 kg;
 #   tool D16 mm, 4 teeth, 45 deg helix, Al 7075-T6, DOWN milling,
@@ -124,8 +127,8 @@ OZSOY_PUBLISHED: SDOFConfig | None = SDOFConfig(
     g_v=3.0 * 253.0, f_max=27.0, rate=10e3,
     fa_hz=8.4, za=0.15, radius=8e-3, helix_deg=45.0,
     force_conv="ozsoy-y", conv_sign=-1.0,
-    label="Ozsoy-Sims-Ozturk MSSP 224 (2025) 111942, Tables 1-2 "
-          "(DVF saturation-island configuration)")
+    label="Ozsoy-Sims-Ozturk MSSP 224 (2025) 111942, Sec. 3.2 flexure "
+          "+ Tables 1-2 + Eq. (2) (DVF saturation-island config)")
 
 
 def tooth_period(cfg: SDOFConfig, rpm: float) -> float:

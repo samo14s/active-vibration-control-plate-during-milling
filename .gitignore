@@ -227,3 +227,11 @@ paper/*.blg
 paper/*.out
 paper/*.spl
 paper/main.bbl
+
+# paper2 LaTeX build artifacts (keep main.pdf)
+paper2/*.aux
+paper2/*.log
+paper2/*.blg
+paper2/*.out
+paper2/*.spl
+paper2/main.bbl

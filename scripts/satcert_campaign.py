@@ -35,7 +35,7 @@ OUT = ROOT / "results" / "satcert_campaign.json"
 V_MAX = 150.0
 H_REQ = 20e-6                  # declared required tolerance [m]
 AP_HI = 5e-3
-STRATS = ("FROZEN", "PS-LPV")
+STRATS = ("FROZEN", "PS-LPV", "PS-LPV-SA")
 
 
 def log(msg):
@@ -142,9 +142,14 @@ def stage_hard(mm, art):
 
 
 def stage_census(mm, art):
+    # the census map is a 2-design diagnostic (frozen vs the naively
+    # weighted schedule): it localizes the forced-saturated bands and the
+    # island-prone linear-only zones that motivate the co-design. The
+    # co-designed schedule's certified gains are reported in the h_req
+    # table and the co-design figure instead.
     aps = np.arange(0.1e-3, 3.55e-3, 0.1e-3)
     out = {"ap_grid_mm": (aps * 1e3).round(2).tolist(), "zones": {}}
-    for strat in STRATS:
+    for strat in ("FROZEN", "PS-LPV"):
         for x in X_EVAL:
             K = controller_for(strat, art, x, latency=False)
             zones = []
@@ -211,23 +216,42 @@ def main():
 
     worst = {s: min(res["table"][f"{s}|{x}"]["ap_cert_mm"] for x in X_EVAL)
              for s in STRATS}
+    lin_worst = {s: min(res["table"][f"{s}|{x}"]["ap_lin_mm"] for x in X_EVAL)
+                 for s in STRATS}
     res["worst_position_cert_mm"] = worst
-    res["Y_ratio"] = worst["PS-LPV"] / worst["FROZEN"] if worst["FROZEN"] > 0 \
-        else None
-    h2 = res["hard"]["2mm|FROZEN"], res["hard"]["2mm|PS-LPV"]
-    res["X_rms_reduction_pct"] = (1.0 - h2[1]["rms_w_um"] / h2[0]["rms_w_um"]) \
+    res["worst_position_lin_mm"] = lin_worst
+    # naive PS-LPV inverts (certified worst BELOW frozen despite 3x the
+    # linear limit); the saturation-aware co-design reverses it
+    res["ratio_naive_over_frozen"] = (worst["PS-LPV"] / worst["FROZEN"]
+                                      if worst["FROZEN"] > 0 else None)
+    res["ratio_sa_over_frozen"] = (worst["PS-LPV-SA"] / worst["FROZEN"]
+                                   if worst["FROZEN"] > 0 else None)
+    res["ratio_sa_over_naive"] = (worst["PS-LPV-SA"] / worst["PS-LPV"]
+                                  if worst["PS-LPV"] > 0 else None)
+    res["lin_ratio_sa_over_frozen"] = (lin_worst["PS-LPV-SA"]
+                                       / lin_worst["FROZEN"]
+                                       if lin_worst["FROZEN"] > 0 else None)
+    hf = res["hard"]["2mm|FROZEN"]
+    hn = res["hard"]["2mm|PS-LPV"]
+    hs = res["hard"]["2mm|PS-LPV-SA"]
+    # hard-condition displacement rejection (SA vs frozen)
+    res["hard_rms_reduction_pct"] = (1.0 - hs["rms_w_um"] / hf["rms_w_um"]) \
         * 100.0
-    # the published Z is the RMS-voltage fraction (peaks both reach the
-    # rail at the hard condition, so the peak ratio saturates at 100 %)
-    res["Z_rms_voltage_fraction_pct"] = \
-        h2[1]["rms_u_V"] / h2[0]["rms_u_V"] * 100.0
-    res["Z_peak_voltage_fraction_pct"] = \
-        h2[1]["peak_u_V"] / h2[0]["peak_u_V"] * 100.0
+    # actuator headroom: naive PS-LPV rides the rail; SA leaves margin
+    res["hard_peak_V"] = {"FROZEN": hf["peak_u_V"],
+                          "naive": hn["peak_u_V"], "SA": hs["peak_u_V"]}
+    res["hard_clip_pct"] = {"FROZEN": hf["sat_frac"] * 100,
+                            "naive": hn["sat_frac"] * 100,
+                            "SA": hs["sat_frac"] * 100}
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(res, indent=1))
-    log(f"Y(20um) = {res['Y_ratio']:.2f}x   "
-        f"X = {res['X_rms_reduction_pct']:.1f}%   "
-        f"Z_rms = {res['Z_rms_voltage_fraction_pct']:.1f}%")
+    log(f"cert worst  frozen={worst['FROZEN']:.3f}  naive={worst['PS-LPV']:.3f}"
+        f"  SA={worst['PS-LPV-SA']:.3f} mm")
+    log(f"SA/frozen = {res['ratio_sa_over_frozen']:.2f}x   "
+        f"SA/naive = {res['ratio_sa_over_naive']:.2f}x   "
+        f"lin SA/frozen = {res['lin_ratio_sa_over_frozen']:.2f}x")
+    log(f"hard peak V: naive={hn['peak_u_V']:.0f} SA={hs['peak_u_V']:.0f}  "
+        f"clip%: naive={hn['sat_frac']*100:.2f} SA={hs['sat_frac']*100:.2f}")
     log(f"written {OUT}")
 
 

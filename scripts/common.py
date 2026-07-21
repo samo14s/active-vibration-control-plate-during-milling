@@ -50,13 +50,15 @@ COLORS = {
     "DPD": "#9467bd",
     "FROZEN": "#d62728",
     "PS-LPV": "#1f77b4",
+    "PS-LPV-SA": "#ff7f0e",
     "PS-LPV-DR": "#2ca02c",
 }
 LABELS = {
     "OL": "no control",
     "DPD": "delayed PD (single time-delay control)",
     "FROZEN": "best frozen $H_\\infty$ (non-scheduled)",
-    "PS-LPV": "PS-LPV (proposed, C1)",
+    "PS-LPV": "PS-LPV (performance-weighted)",
+    "PS-LPV-SA": "PS-LPV-SA (saturation-aware, proposed)",
     "PS-LPV-DR": "PS-LPV-DR (proposed, full)",
 }
 

@@ -41,6 +41,16 @@ RPMS = np.linspace(2000.0, 10000.0, 33)
 AP_DESIGN = 0.3e-3
 AP_HI = 5.0e-3
 
+# saturation-aware co-design: the control-effort weight Wu is scaled by
+# WU_SA_MULT relative to the nominal 1/V_max. The multiplier is selected
+# to maximize the (saturation-agnostic) linear stability limit over the
+# scheduling grid - a single 1-D sweep with a broad interior optimum near
+# 24/V_max (scripts/fig_satcert_codesign.py). At that performance-optimal
+# weight the deployed schedule also reverses the naive design's saturation
+# inversion, certifying ~1.4x the frozen saturation-free depth while
+# leaving ~50 V of actuator headroom at the worst position.
+WU_SA_MULT = 24.0
+
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -118,6 +128,20 @@ def stage_a():
     return cached("pipe_stageA", build)
 
 
+def sa_schedule(mult: float = WU_SA_MULT):
+    """Saturation-aware position schedule: identical synthesis to the
+    nominal PS-LPV grid, but with the control-effort weight Wu scaled by
+    `mult` (co-design against the saturation certificate). Cached per
+    multiplier so the sweep figure and the deployed controller share
+    artifacts."""
+    def build():
+        Psa = dataclasses.replace(
+            P, design=dataclasses.replace(P.design,
+                                          wu_gain=P.design.wu_gain * mult))
+        return gain_schedule(Psa, X_GRID, (0.0,), AP_DESIGN, n_modes=N_D)
+    return cached(f"pipe_sa_sched_x{mult:g}", build)
+
+
 def controller_for(strategy, art, x, removal=0.0, latency=True):
     """Deployed controller (analysis flavour) for a strategy at theta."""
     if strategy == "OL":
@@ -130,6 +154,9 @@ def controller_for(strategy, art, x, removal=0.0, latency=True):
     if strategy == "PS-LPV":
         return art["sched"].at_theta(float(x), float(removal),
                                      latency=latency)
+    if strategy == "PS-LPV-SA":
+        # co-designed schedule; built at removal 0 (saturation study)
+        return sa_schedule().at_theta(float(x), 0.0, latency=latency)
     if strategy == "PS-LPV-DR":
         K = art["sched"].at_theta(float(x), float(removal), latency=latency)
         xs = np.array(sorted(art["kr_map"]))

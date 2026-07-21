@@ -42,10 +42,16 @@ OUT = ROOT / "results" / "satcert_islands.json"
 V_MAX = 150.0
 SETTLE, OBSERVE = 150, 150
 
-# candidates: linear-only ("L") census cells of both strategies
+# candidates: linear-only ("L") census cells. The PS-LPV-SA rows probe
+# the SAME (x, ap) points at which the naive schedule islands, to
+# quantify how far the co-design pushes the island onset (it does NOT
+# eliminate islands -- above the certified depth a large enough negative
+# defect always latches -- but it enlarges the margin by ~2-5x).
 POINTS = (
     ("PS-LPV", 0.05, 1.5e-3),
     ("PS-LPV", 0.05, 2.0e-3),
+    ("PS-LPV-SA", 0.05, 1.5e-3),
+    ("PS-LPV-SA", 0.05, 2.0e-3),
     ("FROZEN", 0.095, 0.9e-3),
     ("FROZEN", 0.05, 2.0e-3),
 )

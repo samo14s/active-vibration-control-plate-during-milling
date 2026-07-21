@@ -93,28 +93,35 @@ def main():
 
     # ---------------- (b) h_req sensitivity --------------------------
     hs = (1, 2, 5, 10, 20, 50)
+    strat_b = [s for s in ("FROZEN", "PS-LPV", "PS-LPV-SA")
+               if f"{s}|1um" in camp["hreq_sensitivity"]]
     worst = {s: [camp["hreq_sensitivity"][f"{s}|{h}um"]["worst_mm"]
-                 for h in hs] for s in ("FROZEN", "PS-LPV")}
-    for s, c, mk in (("FROZEN", "#4c72b0", "o"), ("PS-LPV", "#c44e52", "s")):
-        axb.plot(hs, worst[s], marker=mk, ms=4, lw=1.4, color=c,
-                 label=("best frozen H$_\\infty$" if s == "FROZEN"
-                        else "PS-LPV"))
+                 for h in hs] for s in strat_b}
+    style = {"FROZEN": ("#4c72b0", "o", "best frozen H$_\\infty$"),
+             "PS-LPV": ("#c44e52", "s", "PS-LPV (naive weight)"),
+             "PS-LPV-SA": ("#dd8452", "D", "PS-LPV-SA (co-designed)")}
+    for s in strat_b:
+        c, mk, lab = style[s]
+        axb.plot(hs, worst[s], marker=mk, ms=4, lw=1.4, color=c, label=lab)
     axb.set_xscale("log")
     axb.set_xticks(hs)
     axb.set_xticklabels([str(h) for h in hs])
     axb.set_xlabel("declared surface-step tolerance $h_{req}$ [µm]")
     axb.set_ylabel("worst-position certified depth [mm]")
     axb.set_title("(b) certified depth vs declared tolerance", fontsize=8.5)
-    y1 = worst["PS-LPV"][0] / worst["FROZEN"][0]
-    y20 = worst["PS-LPV"][hs.index(20)] / worst["FROZEN"][hs.index(20)]
-    axb.annotate(f"{y1:.1f}×", xy=(1, worst["PS-LPV"][0]),
-                 xytext=(1.5, worst["PS-LPV"][0] * 0.87), fontsize=7,
-                 arrowprops=dict(arrowstyle="-", lw=0.6))
-    axb.annotate(f"{y20:.2f}×\n(ranking inverted)",
-                 xy=(20, worst["PS-LPV"][hs.index(20)]),
-                 xytext=(22, 0.62 * max(worst["FROZEN"])), fontsize=7,
-                 arrowprops=dict(arrowstyle="-", lw=0.6))
-    axb.legend(fontsize=6.5)
+    i20 = hs.index(20)
+    yn = worst["PS-LPV"][i20] / worst["FROZEN"][i20]
+    axb.annotate(f"naive {yn:.2f}×\n(inverted)",
+                 xy=(20, worst["PS-LPV"][i20]),
+                 xytext=(24, worst["PS-LPV"][i20] * 0.55), fontsize=6.5,
+                 color="#c44e52", arrowprops=dict(arrowstyle="-", lw=0.6))
+    if "PS-LPV-SA" in worst:
+        ys = worst["PS-LPV-SA"][i20] / worst["FROZEN"][i20]
+        axb.annotate(f"co-design {ys:.2f}×\n(reversed)",
+                     xy=(20, worst["PS-LPV-SA"][i20]),
+                     xytext=(6, worst["PS-LPV-SA"][i20] * 1.02), fontsize=6.5,
+                     color="#dd8452", arrowprops=dict(arrowstyle="-", lw=0.6))
+    axb.legend(fontsize=6.2, loc="upper right")
 
     # ---------------- (c) validation parity --------------------------
     pts = []

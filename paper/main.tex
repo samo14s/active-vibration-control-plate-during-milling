@@ -82,15 +82,23 @@ certified against actuator saturation: a sampled-data period lifting
 gives, solver-free, the largest surface-defect perturbation for which
 the amplifier provably never clips, matching an independent nonlinear
 simulator's measured clip onset to $0.01$--$1.8\%$. Swept into a
-certified permissible depth-of-cut envelope, the certificate reorders
-the two designs: the scheduled controller's linear worst-position
-advantage (4.2-fold above; 3.2-fold in the sampled-data lift used
-here) inverts, in \emph{guaranteed saturation-free depth}, to
-0.79-fold at a loose 20~$\mu$m tolerance, even as its realized
-vibration and voltage superiority persists---and two causal saturation
-islands, reproduced also on a separate published rig, turn actuator
-saturation from a hidden failure mode into a certified planning
-constraint.
+certified permissible depth-of-cut envelope, the certificate first
+exposes a failure the linear analysis hides: the naively weighted
+scheduled design (control-effort weight $1/V_{\max}$) over-drives the
+amplifier, so its 3.2-fold linear worst-position advantage inverts, in
+\emph{guaranteed saturation-free depth}, to 0.79-fold at a 20~$\mu$m
+tolerance. The certificate is therefore promoted from a diagnostic to a
+design objective: re-synthesizing the schedule against it---a single
+control-effort-weight sweep with a broad interior optimum---reverses the
+inversion. The co-designed schedule certifies $1.4\times$ the frozen
+design's saturation-free depth ($1.8\times$ the naive schedule) while
+retaining nearly its full linear advantage (a factor of five over the
+frozen design), cutting the worst-position peak drive from the
+$\pm 150$~V rail to 99~V at unchanged vibration rejection, and pushing
+the onset of the naive schedule's two causal saturation
+islands---reproduced on a separate published rig---several-fold further
+out in defect size. Actuator saturation thus becomes not a hidden
+failure mode but a quantitative controller-design objective.
 \end{abstract}
 
 \begin{highlights}
@@ -98,7 +106,7 @@ constraint.
 \item Certified tuning shows the optimal delayed-feedback gain is zero under scheduling
 \item Worst-position stable depth of cut 2.99 mm versus 0.70 mm for the best frozen design
 \item Solver-free saturation certificate matches the measured clip onset within 2 percent
-\item Saturation certification overturns the linear ranking and predicts saturation islands
+\item Co-designing against that certificate wins on both the linear and the guaranteed depth
 \end{highlights}
 
 \begin{keyword}
@@ -280,16 +288,24 @@ the loop provably never clips. The certificate is
 implementation-exact---control rate, computation delay, and
 amplifier bound---and matches an independent nonlinear simulator's
 measured clip onset to $0.01$--$1.8\%$; its sweep is a certified
-permissible depth-of-cut envelope that is shown to \emph{overturn} the
+permissible depth-of-cut envelope that first \emph{overturns} the
 linear controller ranking as the declared surface-defect tolerance
-grows. The certificate predicts and explains saturation islands, and
+grows, exposing that the naively weighted scheduled design over-drives
+the amplifier. The certificate is then \emph{closed into the design}:
+a single control-effort-weight sweep---selecting the weight that
+maximizes the linear stability limit, a broad interior optimum---yields
+a saturation-aware schedule that reverses the inversion, dominating the
+frozen design on \emph{both} the linear ($\approx 5\times$) and the
+certified saturation-free ($1.4\times$) limit while leaving $\sim 50$~V
+of amplifier headroom at the worst position, and the margin to its
+saturation islands is enlarged several-fold. The certificate also
 reproduces the published island measurements of a separate
-rig~\cite{ozsoy2025mssp} on their own parameters. This extends the
-maximal-output-admissible-set construction \cite{gilbert1991maximal}
-and the saturated-delay certificate lineage
+rig~\cite{ozsoy2025mssp} on their own parameters. This extends the maximal-output-admissible-set construction
+\cite{gilbert1991maximal} and the saturated-delay certificate lineage
 \cite{tarbouriech2011book,fu2013delay,altshuller2008siam} to milling
 for the first time, on the true time-periodic delayed dynamics rather
-than the averaged model of \cite{wu2016adaptive}.
+than the averaged model of \cite{wu2016adaptive}, and turns it from a
+verification tool into a controller-design objective.
 \end{enumerate}
 
 Every individual ingredient---LPV scheduling, $\hinf$ synthesis, delayed
@@ -1496,50 +1512,71 @@ reported as the certified depth.
 \begin{table}[t]
 \centering\small
 \caption{Worst-position depths [mm] at 4900~rpm
-($x_T \in \{5,25,50,75,95\}$~mm). All \emph{certified} worst positions
-bind at $x_T = 95$~mm; the PS-LPV \emph{linear} worst binds at
-$x_T = 5$~mm (its linear boundary exceeds the declared 5~mm search cap
-at the other positions). ``Linear'' is the sampled-loop Floquet
-boundary of the same lift.}
+($x_T \in \{5,25,50,75,95\}$~mm). The frozen and naive-PS-LPV certified
+worst positions bind at $x_T = 95$~mm; the co-designed PS-LPV-SA binds
+at $x_T = 95$~mm for the two tightest tolerances and shifts to
+$x_T = 5$~mm for tolerances $\ge 5~\mu$m; the two scheduled designs'
+\emph{linear} worst binds at $x_T = 5$~mm (their linear boundary exceeds
+the declared 5~mm search cap at the other positions). ``Linear'' is the
+sampled-loop Floquet boundary of the same lift. The naively weighted
+schedule inverts below the frozen design ($0.79\times$) while the
+co-designed schedule certifies \emph{above} it at every tolerance
+($1.40$--$4.86\times$).}
 \label{tab:satranking}
 \begin{tabular}{lccccccc}
 \toprule
  & linear & @1$\mu$m & @2$\mu$m & @5$\mu$m & @10$\mu$m & @20$\mu$m &
 @50$\mu$m \\
 \midrule
-best frozen $\hinf$ & 0.98 & 0.99 & 0.99 & 0.99 & 0.91 & 0.650 & 0.36\\
-PS-LPV              & 3.09 & 1.30 & 1.16 & 0.93 & 0.73 & 0.513 & 0.29\\
-ratio & 3.16$\times$ & \textbf{1.32$\times$} & 1.18$\times$ &
-0.94$\times$ & 0.79$\times$ & \textbf{0.79$\times$} & 0.79$\times$ \\
+best frozen $\hinf$        & 0.98 & 0.99 & 0.99 & 0.99 & 0.91 & 0.650 & 0.36\\
+PS-LPV (naive weight)      & 3.09 & 1.30 & 1.16 & 0.93 & 0.73 & 0.513 & 0.29\\
+PS-LPV-SA (co-designed)    & 4.75 & 4.71 & 3.99 & 1.89 & 1.31 & 0.913 & 0.51\\
+\midrule
+naive / frozen & 3.16$\times$ & 1.32$\times$ & 1.18$\times$ &
+0.94$\times$ & \textbf{0.79$\times$} & \textbf{0.79$\times$} &
+0.79$\times$ \\
+SA / frozen & \textbf{4.86$\times$} & \textbf{4.77$\times$} &
+\textbf{4.03$\times$} & \textbf{1.91$\times$} & \textbf{1.44$\times$} &
+\textbf{1.40$\times$} & \textbf{1.41$\times$} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:satranking} is the central saturation result. The
-sampled-data lift used here gives a linear worst-position ratio of
-$3.2\times$ (PS-LPV 3.09~mm at $x_T = 5$~mm versus best-frozen 0.98~mm
-at $x_T = 95$~mm), close to the continuous-model $4.2\times$ of
+Table~\ref{tab:satranking} is the diagnostic that drives the rest of
+this section. The sampled-data lift used here gives a linear
+worst-position ratio of $3.2\times$ for the naively weighted schedule
+(PS-LPV 3.09~mm at $x_T = 5$~mm versus best-frozen 0.98~mm at
+$x_T = 95$~mm), close to the continuous-model $4.2\times$ of
 Section~\ref{sec:clsld}---the difference is the sampled-loop versus
-continuous discretization, and every saturation number below is
+continuous discretization, and every saturation number here is
 computed within the single sampled-data lift for internal consistency.
-Once saturation is certified, that $3.2\times$ advantage collapses to
-at most $1.32\times$---even at the tightest $1~\mu$m tolerance---and
-crosses below parity at a $\sim$5~$\mu$m tolerance ($0.94\times$),
-settling at $0.79\times$ from 10~$\mu$m upward: the scheduled
-controller's higher authority amplifies both the forced tooth-passing
-voltage ripple and the voltage response to surface defects, consuming
-headroom precisely where the linear analysis promises depth.
-Forced-saturated zones appear only for the scheduled design
-(Fig.~\ref{fig:satcert}a). This does not reverse the operational
-verdict: at the hard condition ($x_T = 95$~mm, $a_p = 2$~mm) the
-scheduled design still dominates in realized vibration and voltage
-(Section~\ref{sec:timedomain}, Fig.~\ref{fig:hard_condition}); but the
-certificate adds what the linear picture hides---there the frozen
-design operates $14.7\%$ clipped against $0.28\%$ for the scheduled
-design (a $\approx$50-fold difference), and the frozen loop is in fact
-linearly \emph{unstable} in the implementation-exact lift
-($\rho = 1.41$), its bounded response a purely nonlinear clipped
-equilibrium.
+Once saturation is certified, that $3.2\times$ advantage collapses:
+for this naive schedule it crosses below parity at a $\sim$5~$\mu$m
+tolerance ($0.94\times$) and settles at $0.79\times$ from 10~$\mu$m
+upward. The mechanism is over-actuation. The naive control-effort
+weight $\gamma_u = 1/V_{\max}$ (Eq.~\eqref{eq:weights}) barely penalizes
+voltage, so the synthesis buys the linear-depth advantage with an
+aggressive voltage law that amplifies both the forced tooth-passing
+ripple and the voltage response to surface defects, consuming headroom
+precisely where the linear analysis promises depth---which is why
+forced-saturated zones and the saturation islands of
+Section~\ref{sec:satisland} appear \emph{only} for this design
+(Fig.~\ref{fig:satcert}a). Two consequences follow, and they set up the
+rest of the section. First, the inversion is a certified-\emph{headroom}
+statement, not an operational one: at the hard condition
+($x_T = 95$~mm, $a_p = 2$~mm) the naive scheduled design still dominates
+in realized vibration and voltage (Section~\ref{sec:timedomain},
+Fig.~\ref{fig:hard_condition})---the frozen design there operates
+$14.7\%$ clipped and is in fact linearly \emph{unstable} in the
+implementation-exact lift ($\rho = 1.41$), its bounded response a purely
+nonlinear clipped equilibrium, against $0.28\%$ clip for the scheduled
+design. Second, and decisively, the deficiency the certificate exposes
+belongs to the \emph{weighting}, not to scheduling: because $\gamma_u$
+is a free design lever, the certificate can be closed back into the
+synthesis. That co-design (Section~\ref{sec:codesign}) removes the
+inversion outright---the PS-LPV-SA row of
+Table~\ref{tab:satranking} certifies \emph{above} the frozen design at
+every tolerance while enlarging the linear advantage.
 
 \subsection{Causal saturation islands}
 \label{sec:satisland}
@@ -1555,7 +1592,12 @@ step latches into chatter growth at $99.4\%$ clip duty; at
 $a_p = 2.0$~mm the same occurs at $-50~\mu$m ($99.5\%$). In both cases
 the identical step decays with the bound lifted
 (Fig.~\ref{fig:satcert}d). The frozen design produced no island at the
-tested points up to $\pm 500~\mu$m steps. The certified $h_{\max}$ at
+tested points up to $\pm 500~\mu$m steps. The co-designed schedule of
+Section~\ref{sec:codesign} still islands at these points---above the
+certified depth the linear-only zone cannot be abolished---but only
+under a far larger defect, which is exactly the margin the co-design
+buys and is quantified in Section~\ref{sec:codesign}. The certified
+$h_{\max}$ at
 the island points ($1.88$ and $0.016~\mu$m) sits $20\times$ and
 $\sim$3100$\times$ below the island onsets, quantifying the
 certificate's refuse-to-clip conservatism against the true basin.
@@ -1565,15 +1607,94 @@ certificate's refuse-to-clip conservatism against the true basin.
 \includegraphics[width=\linewidth]{figures/fig14_satcert_campaign.pdf}
 \caption{Saturation-aware certification at 4900~rpm.
 (a)~Certified envelope census ($h_{\mathrm{req}} = 20~\mu$m):
-certified / linear-only / forced-saturated / unstable zones for both
-deployed designs.
+certified / linear-only / forced-saturated / unstable zones for the
+frozen and naively weighted scheduled designs (the forced-saturated and
+island-prone zones appear only for the naive schedule).
 (b)~Worst-position certified depth versus declared surface-defect
-tolerance---the ranking inversion.
+tolerance: the naive schedule inverts below the frozen design, and the
+co-designed schedule (Section~\ref{sec:codesign}) reverses the inversion
+at every tolerance.
 (c)~Certificate versus nonlinear-simulator clip onset, both step signs.
 (d)~Saturation island, causal demonstration: the same $-38~\mu$m step
 decays with the amplifier bound lifted and grows into chatter at
 $99\%$ clip duty with the $\pm 150$~V bound active.}
 \label{fig:satcert}
+\end{figure}
+
+\subsection{Saturation-aware co-design}
+\label{sec:codesign}
+
+The certificate does more than rank fixed designs. Because the certified
+margin $h_{\max}$ of Eq.~\eqref{eq:hmax} is an explicit functional of the
+deployed loop, it can be turned from a verdict into an objective, and the
+diagnosis of Section~\ref{sec:satenvelope} points to the single lever
+that matters: the control-effort weight $\gamma_u$ of the generalized
+plant (Eq.~\eqref{eq:weights}). The naive normalization
+$\gamma_u = 1/V_{\max}$ barely penalizes voltage---which is precisely
+what over-drives the amplifier---so we re-synthesize the \emph{entire}
+scheduled grid over a family $\gamma_u = \kappa/V_{\max}$ and re-certify,
+a one-parameter sweep (Fig.~\ref{fig:codesign}a). Nothing else in the
+design, the plant, or the certificate changes.
+
+Two quantities move together as $\kappa$ grows. The sampled-loop linear
+limit rises to a broad interior maximum near $\kappa = 24$ (worst
+position 4.75~mm, versus 3.09~mm for the naive schedule and 0.98~mm for
+the frozen design): a less aggressive controller carries better
+sampled-data phase and gain margins, so its Floquet boundary is higher,
+not lower. Simultaneously the certified saturation-free depth rises
+monotonically, crossing above the frozen design near $\kappa = 4$ and
+reaching 0.91~mm at $\kappa = 24$. We select $\kappa = 24$, the
+linear-optimal weight: it maximizes the linear limit while already
+certifying $1.4\times$ the frozen saturation-free depth. Raising the
+weight further keeps increasing the certified depth---the certified
+curve does not turn over in the swept range---but now at the cost of
+linear margin, so $\kappa = 24$ is the natural operating point whenever
+the linear limit is the binding constraint, and the certified depth
+remains a lever the practitioner can trade against it.
+
+At this operating point the co-designed schedule (PS-LPV-SA, the third
+row of Table~\ref{tab:satranking}) dominates on every axis. It certifies
+$1.40\times$ the frozen design's worst-position saturation-free depth and
+$1.78\times$ the naive schedule's, while its linear limit is $4.9\times$
+the frozen design's---the linear advantage is not merely retained but
+enlarged, and the inversion of Section~\ref{sec:satenvelope} is reversed
+at every tolerance in Table~\ref{tab:satranking}. The mechanism is
+explicit at the hard condition (Fig.~\ref{fig:codesign}b): where the
+naive schedule rides the $\pm 150$~V rail (150~V peak, $0.28\%$ clip),
+the co-design draws only 99~V ($0.06\%$ clip) for the \emph{same}
+vibration rejection (6.6 versus 6.5~$\mu$m RMS)---about 50~V of recovered
+headroom, which is exactly the certified margin of panel~(a). The
+small-gain spillover margin improves in step (0.106 versus 0.184,
+Eq.~\eqref{eq:smallgain}). The saturation islands of
+Section~\ref{sec:satisland} are not abolished---above the certified
+depth a deep enough negative surface defect can always latch the
+actuator (Section~\ref{sec:satregime})---but the co-design pushes their
+onset far out. At $x_T = 50$~mm the island that the naive schedule
+triggers at a $-37.6~\mu$m step ($a_p = 1.5$~mm) or a $-50~\mu$m step
+($a_p = 2.0$~mm) now requires $-167$ and $-94~\mu$m respectively---a
+$4.5\times$ and $1.9\times$ larger defect---while the certified safe
+headroom grows from 1.9 to 16.7~$\mu$m and from 0.02 to 9.4~$\mu$m.
+The certificate's role is therefore to maximize the margin to the
+island, not to remove the possibility of one; the saturation
+certificate is not a verdict on the controller but an instruction for
+building a better one.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig16_codesign.pdf}
+\caption{Saturation-aware co-design at 4900~rpm.
+(a)~Worst-position certified saturation-free depth and linear (Floquet)
+limit versus the control-effort weight $\gamma_u/\gamma_{u0}$
+($\gamma_{u0} = 1/V_{\max}$). At the naive weight (multiplier 1) the
+certified depth dips below the frozen design---the inversion---while the
+linear limit has a broad interior maximum near multiplier 24 that also
+delivers $1.4\times$ the frozen certified depth. The deployed PS-LPV-SA
+sits at the marked weight.
+(b)~Worst-position peak control voltage at a fixed hard cut
+($x_T = 95$~mm, $a_p = 2$~mm): the naive schedule rides the $\pm 150$~V
+rail; the co-design leaves $\sim 50$~V of headroom at unchanged
+vibration rejection.}
+\label{fig:codesign}
 \end{figure}
 
 \subsection{The saturated regime: recovery margins, a structural
@@ -1700,7 +1821,11 @@ family; its methodological point---that linear margins can misrank
 controllers under saturation, and that the certified ranking depends on
 the declared tolerance---is general, and the tolerance-resolved
 certified envelope is proposed as the object that active
-chatter-control studies should report alongside stability lobes.
+chatter-control studies should report alongside stability lobes, and
+to design against: Section~\ref{sec:codesign} shows the control-effort
+weight that maximizes the certified envelope is a free and effective
+lever, so the certificate is actionable at synthesis time and not only
+at audit time.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -1731,17 +1856,23 @@ point---and the same low-order delayed action alone destabilizes the
 process across the speed band---so delayed add-ons belong inside a
 certified loop, with a tuning free to say no. Certifying the same
 deployed loop against its finite amplifier turned actuator saturation
-from a hidden failure mode into a planning constraint: a solver-free
-maximal-admissible-set certificate, tight to the measured clip onset
-within $1.8\%$, sweeps into a permissible depth-of-cut envelope that reorders the two
-designs in \emph{guaranteed saturation-free depth}---the scheduled
-controller's sampled-loop linear advantage ($3.2\times$, the same
-worst-position comparison that is $4.2\times$ in continuous-model
-depth) collapsing to $1.32\times$ and inverting to $0.79\times$ at
-loose tolerance, even though its realized performance advantage
-persists---predicts and causally confirms saturation islands, and
-reproduces the published island measurements of a separate rig
-(\ref{sec:ozsoy}) on their own parameters. The quantified conclusion is methodological and
+from a hidden failure mode into a controller-design objective. A
+solver-free maximal-admissible-set certificate, tight to the measured
+clip onset within $1.8\%$, first exposed that the naively weighted
+schedule over-drives the amplifier: its sampled-loop linear advantage
+($3.2\times$, the same worst-position comparison that is $4.2\times$ in
+continuous-model depth) inverts to $0.79\times$ in \emph{guaranteed
+saturation-free depth} at loose tolerance, even though its realized
+performance advantage persists. Closing that certificate back into the
+synthesis through a single control-effort-weight sweep produced a
+saturation-aware schedule that reverses the inversion---dominating the
+frozen design on \emph{both} the linear ($4.9\times$) and the certified
+saturation-free ($1.4\times$) worst-position limit while drawing 99~V
+against the naive schedule's $\pm 150$~V rail at unchanged vibration
+rejection, and pushing the onset of the causal saturation
+islands---which the naive schedule exhibits and a separate published rig
+(\ref{sec:ozsoy}) measures on its own parameters---several-fold further
+out in defect size. The quantified conclusion is methodological and
 transfers beyond this rig: in
 thin-wall milling, the dominant plant variation is known, and a
 controller that schedules on it recovers the depth of cut and the

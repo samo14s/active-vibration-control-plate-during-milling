@@ -8,6 +8,7 @@
 \documentclass[preprint,12pt]{elsarticle}
 
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 
@@ -28,7 +29,8 @@
 \begin{frontmatter}
 
 \title{Position-scheduled linear parameter-varying control of
-thin-walled plate milling: certified stability lobes and the limits of
+thin-walled plate milling: certified stability lobes,
+saturation-aware certificates, and the limits of
 regenerative-targeted delayed feedback}
 
 % TODO: replace author placeholders with the final author list,
@@ -75,6 +77,20 @@ factor of 4.2, and thirteen times the open-loop limit---and at the
 end-of-pass condition where the frozen design is weakest it sustains
 nearly three times that design's local stability limit with 42\% of the
 vibration amplitude at half the control voltage.
+Because that voltage budget is finite, the deployed loop is then
+certified against actuator saturation: a sampled-data period lifting
+yields the maximal saturation-free admissible set of the amplifier
+deadzone---implementation-exact in control rate, computation delay,
+and bound, and matching an independent nonlinear simulator's measured
+clip onset to 0.01--1.8\%---whose sweep is a certified permissible
+depth-of-cut envelope under a declared surface-defect tolerance. This
+certification overturns the linear ranking: the scheduled design's
+3.2-fold linear worst-position advantage collapses to 1.3-fold at a
+1~$\mu$m tolerance and inverts to 0.79-fold at 20~$\mu$m, two causal
+saturation islands are demonstrated, and the certificate reproduces
+the published saturation-island measurements of a separate rig on
+their own parameters---turning actuator saturation from a hidden
+failure mode into a certified planning constraint.
 \end{abstract}
 
 \begin{highlights}
@@ -84,12 +100,15 @@ vibration amplitude at half the control voltage.
 \item Semi-discretization certifies the scheduled time-periodic delayed closed loop
 \item Worst-position stable depth of cut 2.99 mm versus 0.70 mm for the best frozen design
 \item 42 percent of the vibration at half the voltage where the frozen design is weakest
+\item A solver-free saturation certificate matches the measured clip onset to under 2 percent
+\item Saturation certification overturns the linear controller ranking and predicts saturation islands
 \end{highlights}
 
 \begin{keyword}
 Milling chatter \sep thin-walled workpiece \sep active vibration control
 \sep linear parameter-varying control \sep delayed feedback \sep
-semi-discretization
+semi-discretization \sep actuator saturation \sep maximal output
+admissible set \sep saturation island
 \end{keyword}
 
 \end{frontmatter}
@@ -210,8 +229,16 @@ a known monotone function of that position through the CAM model. A
 controller that schedules on these variables does not need to buy
 robustness against them. The present paper therefore replaces the
 prevailing ``known variation as uncertainty'' treatment with ``known
-variation as scheduling, residual variation as uncertainty,'' and makes
-three contributions.
+variation as scheduling, residual variation as uncertainty.'' It then
+confronts a second idealization that binds precisely where the first
+pays off---at aggressive depth of cut: the design and its stability
+certificates assume a linear actuator, whereas the piezoelectric
+amplifier is bounded and saturates under demand, a regime in which
+recent measurements report ``saturation islands'' of chatter erupting
+below the linearly predicted boundary once the actuator
+clips~\cite{ozsoy2025mssp}. The deployed loop is accordingly certified
+against its own amplifier bound, and the two themes---scheduling and
+saturation---together make four contributions.
 
 \begin{enumerate}
 \item \textbf{C1 --- Known variation as scheduling, residual variation
@@ -247,6 +274,25 @@ along the tool path under a bounded scheduling rate. This certificate,
 not the grid LPV synthesis itself, is the formal stability guarantee,
 extending closed-loop stability-lobe practice
 \cite{zhang2019discrete,lehotzky2021milling} to scheduled controllers.
+\item \textbf{C4 --- Saturation-aware certification of the deployed
+loop.} The same deployed controllers are certified against the
+amplifier deadzone by a sampled-data period lifting whose maximal
+saturation-free admissible set gives, in closed form and without a
+semidefinite solver, the largest surface-defect perturbation for which
+the loop provably never clips. The certificate is
+implementation-exact---control rate, computation delay, and
+amplifier bound---and matches an independent nonlinear simulator's
+measured clip onset to $0.01$--$1.8\%$; its sweep is a certified
+permissible depth-of-cut envelope that is shown to \emph{overturn} the
+linear controller ranking as the declared surface-defect tolerance
+grows. The certificate predicts and explains saturation islands, and
+reproduces the published island measurements of a separate
+rig~\cite{ozsoy2025mssp} on their own parameters. This extends the
+maximal-output-admissible-set construction \cite{gilbert1991maximal}
+and the saturated-delay certificate lineage
+\cite{tarbouriech2011book,fu2013delay,altshuller2008siam} to milling
+for the first time, on the true time-periodic delayed dynamics rather
+than the averaged model of \cite{wu2016adaptive}.
 \end{enumerate}
 
 Every individual ingredient---LPV scheduling, $\hinf$ synthesis, delayed
@@ -268,7 +314,13 @@ al.~\cite{du2024robust}, the same plant and actuator are retained and
 the entire contribution is the quantified de-conservatization. Relative
 to Maslo et al.~\cite{maslo2020improving}, the LPV description of
 thin-wall milling dynamics is taken from modeling into certified active
-control synthesis.
+control synthesis. Finally, relative to the saturation-island
+measurements of Ozsoy et al.~\cite{ozsoy2025mssp} and the
+constraint-avoiding, spindle-speed-mapped gain maps
+of~\cite{jmp2026spindle}, the present work supplies the missing regional
+guarantee: a computable, maximized saturation-free set for a
+\emph{given} controller behind a \emph{given} amplifier on the
+unaveraged time-periodic delayed dynamics.
 
 The remainder of the paper is organized as follows.
 Section~\ref{sec:model} develops the electromechanical model and its
@@ -276,9 +328,12 @@ validation. Section~\ref{sec:synthesis} presents the controller
 synthesis, the scheduled delayed feedback term, the deployment
 certificates, and the baselines. Section~\ref{sec:stability} details the
 semi-discretization analysis of the scheduled delayed closed loop.
-Section~\ref{sec:results} reports the results,
-Section~\ref{sec:discussion} discusses limitations, and
-Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:results} reports the linear closed-loop results,
+Section~\ref{sec:saturation} develops and applies the saturation-aware
+certification, Section~\ref{sec:discussion} discusses limitations, and
+Section~\ref{sec:conclusion} concludes;
+\ref{sec:ozsoy} reports the external reproduction of the
+published saturation islands.
 
 %% =====================================================================
 \section{Electromechanical model of thin-walled plate milling}
@@ -1302,10 +1357,259 @@ the frozen versus removal-scheduled controllers.}
 \end{figure}
 
 %% =====================================================================
+\section{Saturation-aware certification of the deployed closed loop}
+\label{sec:saturation}
+
+The certificates of Section~\ref{sec:stability} govern the \emph{linear}
+scheduled loop; the piezoelectric amplifier, however, is bounded at
+$\pm V_{\max} = 150$~V (Table~\ref{tab:params}), and the evaluation
+simulations of Section~\ref{sec:results} already impose that bound.
+This section certifies the \emph{saturated} loop: for each operating
+point it computes the region of surface-defect perturbations over which
+the deployed controller provably never clips---so the loop stays the
+linearly certified loop of Section~\ref{sec:stability}---and sweeps that
+region into a certified permissible depth-of-cut envelope. Under
+identical machinery the two deployed designs of
+Section~\ref{sec:results} are then re-ranked, with a result the linear
+analysis cannot see.
+
+\subsection{Actuator deadzone and sampled-data period lifting}
+\label{sec:satlift}
+
+The amplifier applies $u = \mathrm{sat}(v) = v - \mathrm{dz}(v)$, with
+$v$ the commanded voltage of the deployed controller and $\mathrm{dz}$
+the $\pm V_{\max}$ deadzone. The closed loop is lifted per tooth-passing
+period $\tau$ at the real-time control rate $f_c = 50$~kHz:
+$m = \lfloor \tau f_c \rceil$ ticks of length $\Delta t = \tau/m$ (at
+4900~rpm, $m = 204$ and $\Delta t$ deviates from the true control period
+by $0.04\%$). The lifted state
+\begin{equation}
+z = [\,x_p;\ x_K;\ u_{\mathrm{pend}};\ w_{1:m}\,]
+\label{eq:liftstate}
+\end{equation}
+collects the plant modal state $x_p$, the discrete controller state
+$x_K$, the pending voltage $u_{\mathrm{pend}}$ (the one-period
+computation delay made explicit, as in the simulator of
+Section~\ref{sec:results}), and the ring buffer $w_{1:m}$ of
+milling-point deflections that realizes the regenerative delay of
+exactly $m$ ticks. Within each tick the plant advances by its exact
+zero-order-hold map with the per-tick-averaged coefficient
+$\alpha_4(t)$ of Eq.~\eqref{eq:force}; the controller output $v_k$ is
+computed, clipped by the deadzone $\psi_k = \mathrm{dz}(v_k)$, and
+latched into the pending slot. The homogeneous period map $\Phi$, the
+affine forced term (the static feed ripple $-\alpha_3 f_t$ of
+Eq.~\eqref{eq:force}), the voltage read-out rows $R_k$, and the
+deadzone-injection columns are assembled in one pass, so the
+nonlinearity acts exactly where the physical digital-to-analogue
+converter clips, with no intra-interval approximation.
+
+\subsection{Maximal saturation-free admissible set and the certified
+surface-step margin}
+\label{sec:oinf}
+
+Let $z^*$ be the periodic forced orbit and $v^*_k$ its commanded
+voltages; $z^*$ is required to be strictly unsaturated, so the
+phase-resolved headroom $\bar u_k = V_{\max} - |v^*_k| > 0$ bounds the
+shifted deadzone of the variational dynamics about $z^*$. Any
+variational trajectory whose commanded voltage never exceeds the local
+headroom keeps the deadzone inactive, evolves exactly linearly, and
+decays whenever the sampled Floquet radius $\rho(\Phi) < 1$. The
+maximal such region is the maximal output admissible set of Gilbert and
+Tan~\cite{gilbert1991maximal} for the period map under the periodic
+voltage constraint,
+\begin{equation}
+\mathcal{O}_\infty = \bigl\{\, \delta z : |v^*_k + R_k \Phi^{\,j}
+\delta z| \le V_{\max}\ \ \forall j \ge 0,\ k = 1..m \,\bigr\},
+\label{eq:oinf}
+\end{equation}
+invariant by the shift property since $v^*$ is periodic. Its extent
+along the physical perturbation direction $e_h$---a surface step of
+height $h$ left in the stored surface by the previous pass, the milling
+analogue of the classical initial-condition perturbation---is closed
+form and certified for both signs:
+\begin{equation}
+h_{\max} = \min_{j,k}\ \frac{V_{\max} - |v^*_k|}
+{\bigl|R_k \Phi^{\,j} e_h\bigr|},
+\label{eq:hmax}
+\end{equation}
+computed by direct propagation of the unit step in milliseconds, with
+no semidefinite solver. Periodic generalized-sector matrix-inequality
+formulations of the same certificate were attempted first and are
+memory-infeasible at the lifted dimension on commodity hardware; the
+closed form~\eqref{eq:hmax} is not a fallback but tighter in the
+reported direction. Its declared scope: the step edge crosses at the
+lift's tick-0 phase; positive-branch values above the feed per tooth
+certify the contact-retaining model only (a positive step thins the
+chip toward air cutting); sensor noise is excluded; and the per-tick
+holds of $\alpha_4$ and of the delayed surface are covered by the
+simulator validation next.
+
+\subsection{Validation against the nonlinear simulator}
+\label{sec:satvalid}
+
+The certificate is checked against the full nonlinear time-domain
+engine of Section~\ref{sec:results} (loss-of-contact chip
+nonlinearity, discrete controller, saturation), with sensor noise and
+loss of contact disabled to match the contact-retaining scope. The
+onset of clipping---the smallest injected surface step that saturates
+the amplifier---is bisected to 6~nm resolution and compared with
+$h_{\max}$ (Table~\ref{tab:satvalid}). The certificate equals the
+binding (negative-step) onset to $0.01$--$1.8\%$ at these reference
+points: it is tight, not merely sound.
+
+\begin{table}[t]
+\centering\small
+\caption{Saturation certificate versus the nonlinear simulator's
+measured clip onset (PS-LPV, $x_T = 50$~mm, 4900~rpm; both step signs,
+onset bisected to 6~nm).}
+\label{tab:satvalid}
+\begin{tabular}{lcccc}
+\toprule
+$a_p$ & certificate ($\pm$) & model $+h/-h$ & simulator $+h/-h$ &
+deviation \\
+\midrule
+0.3~mm & 56.8~$\mu$m & 97.68/56.81~$\mu$m & 97.57/56.80~$\mu$m &
+0.01--0.11\% \\
+1.0~mm & 6.9~$\mu$m  & 45.10/6.90~$\mu$m  & 45.07/7.03~$\mu$m  &
+0.05--1.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Certified permissible-depth envelope and the collapse of
+the linear ranking}
+\label{sec:satenvelope}
+
+Sweeping $h_{\max}$ over the operating grid partitions it, per
+controller, into four regions: \emph{certified} at a declared
+tolerance $h_{\mathrm{req}}$; \emph{linear-only} (linearly stable but
+certificate-refused---the exposure zone where saturation islands can
+live); \emph{forced-saturated} (the orbit itself clips, refused at any
+tolerance); and linearly unstable (Fig.~\ref{fig:satcert}a). Certified
+depths are prefix-connected: the reported value is the lower edge of
+the first refusal, so a feasible pocket above a refused band is never
+reported as the certified depth.
+
+\begin{table}[t]
+\centering\small
+\caption{Worst-position depths [mm] at 4900~rpm
+($x_T \in \{5,25,50,75,95\}$~mm). All \emph{certified} worst positions
+bind at $x_T = 95$~mm; the PS-LPV \emph{linear} worst binds at
+$x_T = 5$~mm (its linear boundary exceeds the declared 5~mm search cap
+at the other positions). ``Linear'' is the sampled-loop Floquet
+boundary of the same lift.}
+\label{tab:satranking}
+\begin{tabular}{lccccccc}
+\toprule
+ & linear & @1$\mu$m & @2$\mu$m & @5$\mu$m & @10$\mu$m & @20$\mu$m &
+@50$\mu$m \\
+\midrule
+best frozen $\hinf$ & 0.98 & 0.99 & 0.99 & 0.99 & 0.91 & 0.650 & 0.36\\
+PS-LPV              & 3.09 & 1.30 & 1.16 & 0.93 & 0.73 & 0.513 & 0.29\\
+ratio & 3.16$\times$ & \textbf{1.32$\times$} & 1.18$\times$ &
+0.94$\times$ & 0.79$\times$ & \textbf{0.79$\times$} & 0.79$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:satranking} is the central saturation result. The
+sampled-data lift used here gives a linear worst-position ratio of
+$3.2\times$ (PS-LPV 3.09~mm at $x_T = 5$~mm versus best-frozen 0.98~mm
+at $x_T = 95$~mm), close to the continuous-model $4.2\times$ of
+Section~\ref{sec:clsld}---the difference is the sampled-loop versus
+continuous discretization, and every saturation number below is
+computed within the single sampled-data lift for internal consistency.
+Once saturation is certified, that $3.2\times$ advantage collapses to
+at most $1.32\times$---even at the tightest $1~\mu$m tolerance---and
+\emph{inverts} to $0.79\times$ from a $\sim$5~$\mu$m tolerance upward:
+the scheduled controller's higher authority amplifies both the forced
+tooth-passing voltage ripple and the voltage response to surface
+defects, consuming headroom precisely where the linear analysis
+promises depth. Forced-saturated zones appear only for the scheduled
+design (Fig.~\ref{fig:satcert}a). This does not reverse the operational
+verdict of Section~\ref{sec:timedomain}: at the hard condition
+($x_T = 95$~mm, $a_p = 2$~mm) the scheduled design still dominates,
+cutting the milling-point vibration from 15.5 to 6.5~$\mu$m RMS at 41
+versus 84.5~V RMS (Fig.~\ref{fig:hard_condition}); but the certificate
+adds what the linear picture hides---there the frozen design operates
+$14.7\%$ clipped against $0.28\%$ for the scheduled design (a
+$\approx$50-fold difference), and the frozen loop is in fact linearly
+\emph{unstable} in the implementation-exact lift ($\rho = 1.41$), its
+bounded response a purely nonlinear clipped equilibrium.
+
+\subsection{Causal saturation islands}
+\label{sec:satisland}
+
+An operating point is a saturation island when it is linearly stable
+yet a finite surface-defect perturbation triggers sustained chatter,
+\emph{and} the same perturbation decays once the amplifier bound is
+lifted---the causal control that attributes the instability to
+saturation and nothing else. At 4900~rpm two islands are confirmed,
+both for the scheduled controller at $x_T = 50$~mm: at $a_p = 1.5$~mm
+the loop ($\rho = 0.955$) tolerates $\pm 18.8~\mu$m, but a $-37.6~\mu$m
+step latches into chatter growth at $99.4\%$ clip duty; at
+$a_p = 2.0$~mm the same occurs at $-50~\mu$m ($99.5\%$). In both cases
+the identical step decays with the bound lifted
+(Fig.~\ref{fig:satcert}d). The frozen design produced no island at the
+tested points up to $\pm 500~\mu$m steps. The certified $h_{\max}$ at
+the island points ($1.88$ and $0.016~\mu$m) sits $20\times$ and
+$\sim$3100$\times$ below the island onsets, quantifying the
+certificate's refuse-to-clip conservatism against the true basin.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig14_satcert_campaign.pdf}
+\caption{Saturation-aware certification at 4900~rpm.
+(a)~Certified envelope census ($h_{\mathrm{req}} = 20~\mu$m):
+certified / linear-only / forced-saturated / unstable zones for both
+deployed designs.
+(b)~Worst-position certified depth versus declared surface-defect
+tolerance---the ranking inversion.
+(c)~Certificate versus nonlinear-simulator clip onset, both step signs.
+(d)~Saturation island, causal demonstration: the same $-38~\mu$m step
+decays with the amplifier bound lifted and grows into chatter at
+$99\%$ clip duty with the $\pm 150$~V bound active.}
+\label{fig:satcert}
+\end{figure}
+
+\subsection{The saturated regime: recovery margins, a structural
+limit, and anti-windup}
+\label{sec:satregime}
+
+Beyond the clip boundary the variational loop is
+$\delta v = \delta v_{\mathrm{free}} + L\,\psi$ with
+$\psi_k = \mathrm{dz}(v^*_k + \delta v_k)$ in the componentwise sector
+$[0,1]$ and $L$ the period-lifted transfer from the deadzone injections
+to the variational voltages. The discrete circle-criterion level
+$c = \max_\theta \lambda_{\max}\!\bigl(\mathrm{Re}\,L\bigr)$, evaluated
+on an eigenvalue-anchored frequency grid, is a sufficient global test:
+$c < 1$ (with linear stability and an unsaturated orbit) certifies
+global recovery from arbitrarily deep clipping. Three findings scope
+the saturated regime honestly. First, a structural impossibility:
+above the open-loop stability boundary (0.253~mm at $x_T = 50$~mm) no
+global sector-$[0,1]$ certificate can exist for any controller---the
+sector's upper edge is the fully-clipped, i.e.\ open, loop---so
+regional certificates above that depth are a necessity, not a
+conservatism artifact. Second, the measured level is dominated by the
+controller ($c \approx 1.54$ frozen versus $9.7$ scheduled along the
+$x_T = 50$~mm slice, a sixfold-larger deadzone-loop level for the
+island-prone high-authority design), though it does not rank every
+point---the island-free frozen point at $x_T = 95$~mm carries the
+largest level of all ($c = 13.4$), so worst-case-phase conservatism
+dominates and the causal experiments of Section~\ref{sec:satisland}
+remain the ground truth. Third, a certified negative result:
+back-calculation anti-windup enters the lift only through the
+deadzone-injection columns and provably cannot change any linear
+certificate; a line search on its gain returns zero improvement of $c$
+for both designs at the audited point, so a certified anti-windup
+benefit requires richer parameterizations or Zames--Falb multipliers
+\cite{tarbouriech2011book}.
+
+%% =====================================================================
 \section{Discussion and limitations}
 \label{sec:discussion}
 
-Four limitations bound the claims of this paper, and each is stated with
+Several limitations bound the claims of this paper, each stated with
 its mitigation.
 
 \emph{Frozen-grid design with a-posteriori certification.} The grid LPV
@@ -1376,6 +1680,24 @@ each analysis layer, so the comparisons are internally consistent---but
 a latency-exact tap certification is a straightforward refinement and
 is noted for the experimental follow-up.
 
+\emph{Nominal-model, refuse-to-clip saturation certificates.} The
+saturation certificates of Section~\ref{sec:saturation} are
+nominal-model and deterministic, and they refuse rather than exploit
+clipping: they certify the region over which the loop never saturates,
+and Section~\ref{sec:satregime} shows that above the open-loop boundary
+this is the only option for a sector-global guarantee. Their
+conservatism against the true basin is quantified (a factor of $20$ to
+$\sim$3000 at the island points), robustness to cutting-coefficient and
+modal dispersion is inherited from the Monte-Carlo of
+Section~\ref{sec:mc}, and the sharper Zames--Falb multipliers and a
+latency-exact tap remain follow-ups. The tolerance-resolved ranking of
+Table~\ref{tab:satranking} is specific to this benchmark and controller
+family; its methodological point---that linear margins can misrank
+controllers under saturation, and that the certified ranking depends on
+the declared tolerance---is general, and the tolerance-resolved
+certified envelope is proposed as the object that active
+chatter-control studies should report alongside stability lobes.
+
 \section{Conclusion}
 \label{sec:conclusion}
 
@@ -1403,12 +1725,88 @@ of independent value: under an active scheduled $\hinf$ loop the
 lobe-maximizing tuning returns a zero delayed gain at every scheduling
 point---and the same low-order delayed action alone destabilizes the
 process across the speed band---so delayed add-ons belong inside a
-certified loop, with a tuning free to say no. The quantified
-conclusion is methodological and transfers beyond this rig: in
+certified loop, with a tuning free to say no. Certifying the same
+deployed loop against its finite amplifier turned actuator saturation
+from a hidden failure mode into a planning constraint: a solver-free
+maximal-admissible-set certificate, tight to the measured clip onset
+within $1.8\%$, sweeps into a permissible depth-of-cut envelope that
+\emph{overturns} the linear controller ranking as the surface-defect
+tolerance grows ($3.2\times \to 1.32\times \to 0.79\times$), predicts
+and causally confirms saturation islands, and reproduces the published
+island measurements of a separate rig (\ref{sec:ozsoy}) on
+their own parameters. The quantified conclusion is methodological and
+transfers beyond this rig: in
 thin-wall milling, the dominant plant variation is known, and a
 controller that schedules on it recovers the depth of cut and the
 voltage budget that worst-case designs spend insuring against
 information they already have.
+
+%% =====================================================================
+\appendix
+\setcounter{figure}{0}
+\section{External validation: reproduction of the published saturation
+islands}
+\label{sec:ozsoy}
+
+The saturation results of Section~\ref{sec:saturation} rest on the
+thin-walled plate benchmark alone. This appendix adds an independent
+external anchor by reproducing measured saturation islands from a
+\emph{different} rig on its own published parameters, with the same
+lifting and certificates and no plate-specific tuning.
+
+The island measurements of Ozsoy et al.~\cite{ozsoy2025mssp}---a
+robotic-milling flexure ($f_n = 128.1$~Hz, $\zeta = 1.48\%$,
+$k = 1.13\times 10^7$~N/m) under direct velocity feedback (253~V/(m/s))
+through an 8.4~Hz proof-mass actuator (3~N/V) with a 27~N saturation
+threshold, cutting Al~7075-T6 with a 4-flute $\varnothing$16~mm
+45$^\circ$-helix cutter at half-immersion down-milling,
+$f_t = 50~\mu$m---are re-simulated on the published parameters with the
+same lifting and certificates (single-mode reduction, untabulated edge
+coefficients set to zero, 10~kHz feedback rate assumed, and the
+regenerative sign, absent from the published regeneration-free model,
+calibrated once against the published uncontrolled boundary; all
+declared). The calibrated model reproduces the published uncontrolled
+boundary shape in the island band---a high left flank, model 14--18~mm
+at 1800--1950~rpm against the published flank rising to $\sim$24~mm at
+1950~rpm, collapsing to $\sim$2~mm above 2050~rpm---and then, with no
+further tuning (Fig.~\ref{fig:ozsoy}):
+
+\begin{itemize}
+\item of the thirteen measured amplitudes printed in the paper's
+island figure, ten admit a forced-response comparison (the other three
+lie above the calibrated model's linear boundary where the experiment
+measured cuts---a declared discrepancy of the single-mode reduction);
+over the ten, the median model/measured ratio is $1.04$, eight cells
+within $\pm 30\%$ and a worst case of $+55\%$ at 1900~rpm\,/\,5~mm;
+\item both published islands appear as the certificate census's
+forced-saturated zones---the central island at its 4--8~mm rows (model
+1900--1950~rpm; the published extent reaches $\sim$1850--2000~rpm and
+includes measured saturation at the 10~mm row that the model certifies
+saturation-free, a declared miss) and the upper island at 18~mm against
+the published $\sim$20~mm---with the saturation-free band the paper
+highlights ($\sim$15~mm) appearing in the model at 10--16~mm;
+\item a causal probe at 1900~rpm\,/\,5~mm runs at $44.6\%$ clip duty
+with mildly degraded RMS and no chatter, consistent with the paper's
+saturated-but-stable designations in the island interior.
+\end{itemize}
+
+The reproduction also indicates the mechanism: the published islands
+are forced-response saturation of a mode lying \emph{inside} the
+tooth-passing band (128.1~Hz; its first harmonic resonates at
+1921~rpm, the measured island center)---exactly the forced-saturated
+zones the present machinery predicts, with regeneration included where
+the published frequency-domain model omits it.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig15_ozsoy_reproduction.pdf}
+\caption{Reproduction of the published saturation islands of
+Ozsoy et al.~\cite{ozsoy2025mssp} on their own published parameters.
+Left: forced actuator-force map with the 27~N island contour and the
+measured amplitudes (circles). Right: certificate zones---the
+forced-saturated zones are the predicted islands.}
+\label{fig:ozsoy}
+\end{figure}
 
 %% =====================================================================
 \section*{CRediT authorship contribution statement}

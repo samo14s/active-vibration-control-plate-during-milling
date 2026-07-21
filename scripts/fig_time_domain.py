@@ -15,7 +15,10 @@ def main():
     C = stage_c()
 
     # ---------------- fig07: fixed position ---------------------------
-    show = ("OL", "FROZEN", "PS-LPV", "PS-LPV-DR")
+    # PS-LPV-DR is omitted: its certified delayed gain is zero
+    # (Section 5.5), so it coincides exactly with PS-LPV and would only
+    # duplicate that curve in the legend.
+    show = ("OL", "FROZEN", "PS-LPV")
     fig, axs = plt.subplots(2, 2, figsize=(DC, 4.2))
     ax = axs[0, 0]
     for strat in show:
@@ -68,7 +71,7 @@ def main():
 
     # ---------------- fig08: moving pass ------------------------------
     fig, axs = plt.subplots(2, 1, figsize=(DC, 4.0), sharex=True)
-    for strat in ("FROZEN", "PS-LPV", "PS-LPV-DR"):
+    for strat in ("FROZEN", "PS-LPV"):     # PS-LPV-DR = PS-LPV (k_r = 0)
         d = C[("pass", strat)]
         axs[0].plot(d["x"] * 1e3, d["w"] * 1e6, color=COLORS[strat],
                     lw=0.6, alpha=0.85, label=LABELS[strat])

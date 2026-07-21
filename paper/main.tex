@@ -570,6 +570,19 @@ rig and with the reference paper's own theoretical model
 Mesh convergence was verified: the $40 \times 32$ mesh reproduces the
 frequencies of a $60 \times 48$ mesh within 0.15\%.
 
+Because the measured modal frequencies are known more accurately than any
+linear-plate model predicts them, the design and certification model
+adopts them directly: the first five natural frequencies are corrected to
+the measured values---a standard modal frequency-updating step---while the
+finite-element mode shapes and the piezoelectric and sensor couplings are
+retained, and material removal is propagated onto the measured anchors by
+the finite-element frequency ratio. Table~\ref{tab:modes} reports the
+\emph{uncorrected} finite-element frequencies, so its 1.5--3.8\% agreement
+is a first-principles validation of the model rather than a fit; the
+correction then removes that residual frequency bias from every
+stability-lobe prediction below, which is speed-sensitive because the
+lobe positions scale with the modal frequencies.
+
 The validation extends beyond tabulated frequencies to the measured
 frequency-response curves themselves. The measured receptance and the
 piezo voltage-to-displacement transfer function of the reference rig

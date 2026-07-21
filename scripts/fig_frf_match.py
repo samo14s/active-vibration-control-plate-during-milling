@@ -47,7 +47,7 @@ def main():
     vlt = np.genfromtxt(
         ROOT / "data" / "measured_frf_voltage_to_displacement.csv",
         delimiter=",", skip_header=1)
-    mm12 = models(removals=(0.0,))[0.0]["full"]
+    mm12 = models(removals=(0.0,), anchor=False)[0.0]["full"]
     freqs = np.linspace(20, 5100, 6000)
 
     # ---- (a) receptance: fitted backbone offset -----------------------

@@ -82,16 +82,25 @@ def savefig(fig, name: str):
     return FIGDIR / f"{name}.png"
 
 
-def models(n_design: int = 3, n_full: int = 12, removals=(0.0,)):
+def models(n_design: int = 3, n_full: int = 12, removals=(0.0,),
+           anchor: bool | None = None):
     """Build (and cache) the modal models used across figures.
 
-    Uses the classical Warburton modal model (the plate's model of record;
-    see avc.synthesis.USE_CLASSICAL_MODEL)."""
+    The working model is the Mindlin FEM with its natural frequencies
+    corrected to the measured EMA values (avc.modal.ANCHOR_MEASURED_FREQS).
+    Pass anchor=False to obtain the raw, uncorrected FEM (used by the
+    first-principles validation figures). USE_CLASSICAL_MODEL switches the
+    whole stack to the classical Warburton model instead."""
     from avc.synthesis import USE_CLASSICAL_MODEL
     from avc.classical_plate import reduce_model_classical
-    from avc.modal import reduce_model
+    from avc.modal import ANCHOR_MEASURED_FREQS, reduce_model
     from avc.params import DEFAULT
-    rm = reduce_model_classical if USE_CLASSICAL_MODEL else reduce_model
+    anc = ANCHOR_MEASURED_FREQS if anchor is None else anchor
+
+    def rm(p, n, height_removed):
+        if USE_CLASSICAL_MODEL:
+            return reduce_model_classical(p, n, height_removed)
+        return reduce_model(p, n, height_removed, anchor=anc)
 
     def build():
         out = {}
@@ -102,7 +111,7 @@ def models(n_design: int = 3, n_full: int = 12, removals=(0.0,)):
             }
         return out
 
-    tag = "cl" if USE_CLASSICAL_MODEL else "fem"
+    tag = ("cl" if USE_CLASSICAL_MODEL else ("fem_a" if anc else "fem_raw"))
     key = (f"models_{tag}_n{n_design}_{n_full}_r"
            + "_".join(f"{r:.4g}" for r in removals))
     return cached(key, build)

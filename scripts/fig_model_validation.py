@@ -26,7 +26,7 @@ def frf_force(mm, freqs, x_in, z_in, x_out, z_out):
 
 
 def main():
-    mdl = models(removals=(0.0,))[0.0]
+    mdl = models(removals=(0.0,), anchor=False)[0.0]
     mm3, mm12 = mdl["design"], mdl["full"]
     p = DEFAULT
     xs, zs = p.sensor.xs, p.sensor.zs

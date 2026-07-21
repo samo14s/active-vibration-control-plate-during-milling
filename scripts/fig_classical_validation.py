@@ -20,7 +20,7 @@ from avc import sld, analytical_lobes as al
 
 def main():
     cl = reduce_model_classical(DEFAULT, 12, 0.0)
-    fe = reduce_model(DEFAULT, 12, 0.0)
+    fe = reduce_model(DEFAULT, 12, 0.0, anchor=False)   # raw first-principles FEM
     meas = np.array(DEFAULT.plate.f_measured)
 
     print("mode |  measured |  classical |   FEM")

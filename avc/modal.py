@@ -92,6 +92,15 @@ class ModalModel:
         return H
 
 
+# Frequency-updated FEM: the first-principles FEM natural frequencies
+# (Table 4, 1.5-3.8% of the measured EMA) are corrected to the measured
+# values, retaining the FEM mode shapes and couplings -- a standard modal
+# frequency-updating step. Material removal is propagated onto the
+# measured anchors by the FEM frequency ratio. Set False for the raw,
+# uncorrected FEM (used to report the first-principles validation).
+ANCHOR_MEASURED_FREQS = True
+
+
 def modal_damping(params: Params, n: int) -> np.ndarray:
     z = list(params.plate.zeta)
     if n <= len(z):
@@ -99,9 +108,26 @@ def modal_damping(params: Params, n: int) -> np.ndarray:
     return np.array(z + [params.plate.zeta_high] * (n - len(z)))
 
 
-def reduce_model(params: Params, n_modes: int,
-                 height_removed: float = 0.0) -> ModalModel:
-    """FEM -> reduced modal model (lowest n_modes)."""
+def _raw_fem_omega(params: Params, n_modes: int,
+                   height_removed: float) -> np.ndarray:
+    """Lowest n_modes FEM natural angular frequencies [rad/s] (no update)."""
+    fem = build_plate(params, height_removed)
+    vals = spla.eigsh(fem.K, k=n_modes, M=fem.M, sigma=0.0, which="LM",
+                      return_eigenvectors=False)
+    return np.sqrt(np.maximum(np.sort(vals), 0.0))
+
+
+def reduce_model(params: Params, n_modes: int, height_removed: float = 0.0,
+                 anchor: bool | None = None) -> ModalModel:
+    """FEM -> reduced modal model (lowest n_modes).
+
+    anchor (default: the module flag ANCHOR_MEASURED_FREQS) corrects the
+    first len(f_measured) natural frequencies to the measured EMA values
+    (scaled by the FEM removal ratio for receded geometry), keeping the
+    FEM mode shapes and piezo/sensor couplings.
+    """
+    if anchor is None:
+        anchor = ANCHOR_MEASURED_FREQS
     fem = build_plate(params, height_removed)
     # smallest eigenvalues of (K, M) via shift-invert
     vals, vecs = spla.eigsh(fem.K, k=n_modes, M=fem.M, sigma=0.0,
@@ -118,6 +144,17 @@ def reduce_model(params: Params, n_modes: int,
         s = e @ vecs[:, i]
         if s < 0:
             vecs[:, i] = -vecs[:, i]
+
+    if anchor:
+        f_meas = params.plate.f_measured
+        n_anch = min(n_modes, len(f_meas))
+        if height_removed == 0.0:
+            for i in range(n_anch):
+                omega[i] = 2.0 * np.pi * f_meas[i]
+        else:                             # scale measured anchor by FEM ratio
+            om_nom = _raw_fem_omega(params, n_modes, 0.0)
+            for i in range(n_anch):
+                omega[i] = 2.0 * np.pi * f_meas[i] * (omega[i] / om_nom[i])
 
     theta_vec = coupling_vector(fem)
     es = fem.interp_w(params.sensor.xs, min(params.sensor.zs,

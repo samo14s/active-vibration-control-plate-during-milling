@@ -33,8 +33,10 @@ def path_min(mm, rpm, scale):
 
 def main():
     art = stage_a()
-    mm = models()[0.0]["full"]
+    mm = models()[0.0]["full"]                 # working (anchored) model
     from avc.params import DEFAULT
+    from avc.modal import reduce_model
+    mm_raw = reduce_model(DEFAULT, 12, 0.0, anchor=False)  # first-principles
 
     fig, axs = plt.subplots(1, 3, figsize=(DC, 2.9))
 
@@ -60,7 +62,7 @@ def main():
     # ---- (b) open-loop stable depth across the tested speeds ----------
     ax = axs[1]
     for sc, c, mk in ((1.6, "#4c72b0", "o"), (2.9, "#c44e52", "s")):
-        vals = [path_min(mm, r, sc) * 1e3 for r in SPEEDS]
+        vals = [path_min(mm_raw, r, sc) * 1e3 for r in SPEEDS]
         ax.plot(np.array(SPEEDS) / 1e3, vals, marker=mk, ms=4, color=c,
                 label=rf"model, ${sc}\,\bar\alpha_4$")
         print(f"path-min @{sc}a4:", [round(v, 3) for v in vals])

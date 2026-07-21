@@ -23,7 +23,7 @@ XS = (0.005, 0.025, 0.05, 0.075, 0.095)
 
 
 def main():
-    mm12 = models(removals=(0.0,))[0.0]["full"]
+    mm12 = models(removals=(0.0,), anchor=False)[0.0]["full"]  # raw FEM: first-principles OL validation
     rpms = np.linspace(4300.0, 6700.0, 25)      # the reference tested band
 
     def build():

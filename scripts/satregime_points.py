@@ -22,7 +22,7 @@ OUT = ROOT / "results" / "satregime_points.json"
 
 POINTS = (("PS-LPV", 0.05, 1.5e-3, "island -37.6um"),
           ("PS-LPV", 0.05, 2.0e-3, "island -50um"),
-          ("FROZEN", 0.095, 0.9e-3, "no island to +/-500um"),
+          ("FROZEN", 0.095, 0.9e-3, "island -42um"),
           ("FROZEN", 0.05, 2.0e-3, "no island to +/-500um"),
           ("PS-LPV", 0.095, 2.0e-3, "hard condition"))
 

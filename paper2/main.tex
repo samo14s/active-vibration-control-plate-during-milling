@@ -26,9 +26,9 @@
 \begin{document}
 \begin{frontmatter}
 
-\title{Saturation-aware certification of active chatter control:
-implementation-exact admissible sets, causal saturation islands, and
-the collapse of the linear controller ranking}
+\title{Saturation-aware certification of active chatter control in
+thin-walled milling: implementation-exact admissible sets, causal
+saturation islands, and the collapse of the linear controller ranking}
 
 % TODO: final author list, affiliations, ORCID iDs, corresponding author.
 \author{Author One}
@@ -158,12 +158,15 @@ the first quantified demonstration, simulation-based on a
 measurement-anchored benchmark, that linear stability margins can
 misrank milling controllers under saturation. Two saturation islands
 are then demonstrated with \emph{causal} attribution
-(Section~\ref{sec:islands}), the saturated regime beyond the clip
+(Section~\ref{sec:islands}), and the saturated regime beyond the clip
 boundary is analysed with circle-criterion machinery including a
 structural impossibility result and a certified anti-windup negative
-result (Section~\ref{sec:satregime}), and the published island
-measurements of \cite{ozsoy2025mssp} are reproduced quantitatively on
-their published parameters (Section~\ref{sec:ozsoy}).
+result (Section~\ref{sec:satregime}). All of this is developed and
+quantified on the thin-walled plate benchmark; as an independent
+external cross-check, Appendix~\ref{sec:ozsoy} reproduces the
+published saturation-island measurements of \cite{ozsoy2025mssp} on
+their own published parameters, confirming that the same certificate
+machinery predicts a measured island pattern on a different rig.
 
 %% ====================================================================
 \section{Benchmark, models, and controllers}
@@ -456,8 +459,76 @@ certified anti-windup gain requires richer parameterizations or the
 multipliers above.
 
 %% ====================================================================
-\section{External validation: the published saturation islands}
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+The certificates delivered here refuse clipping rather than exploit
+it; Section~\ref{sec:satregime} shows that above the open-loop
+boundary this is not a weakness but the only option for
+sector-global guarantees, and quantifies the conservatism against
+true basins (20--3100$\times$ at the island points). All certificates
+are nominal-model and deterministic: robustness to
+cutting-coefficient dispersion and modal tolerance is assessed
+statistically in the companion campaign \cite{companion}; sensor
+noise is excluded from the certificate and present in the evaluation
+simulations. The external SDOF reproduction (Appendix~\ref{sec:ozsoy}) carries declared reductions
+(single mode, no edge coefficients, no runout, assumed feedback
+rate, one calibrated sign). The tolerance-resolved ranking of
+Table~\ref{tab:ranking} is specific to this benchmark and controller
+family; its methodological point --- that linear margins can misrank
+controllers under saturation, and that the certified ranking depends
+on the declared tolerance --- is general, and we propose the
+tolerance-resolved certified envelope as the object that active
+chatter control papers should report alongside stability lobes.
+
+%% ====================================================================
+\section{Conclusions}
+\label{sec:conclusions}
+
+(1)~An implementation-exact, solver-free regional certificate for
+saturated active chatter control was constructed from the maximal
+output admissible set of a sampled-data period lifting, validated to
+0.01--1.8\% against an independent nonlinear simulator's measured
+clip onset. (2)~Sweeping it yields tolerance-resolved certified
+envelopes under which the linear controller ranking collapses
+(3.2$\times$ $\to$ 1.32$\times$) and inverts (0.79$\times$ at
+20\um) --- saturation certification changes which controller wins.
+(3)~Two saturation islands were demonstrated with causal attribution
+to the amplifier bound, and the certificate quantifies its own
+conservatism against them. (4)~In the saturated regime, a structural
+impossibility result scopes what any global certificate can promise
+above the open-loop boundary, and a certified negative result shows
+classic back-calculation anti-windup cannot improve the
+circle-criterion level for either design at the audited point.
+(5)~As an independent external cross-check (Appendix~\ref{sec:ozsoy}),
+the same certificate machinery reproduces the published
+saturation-island measurements of \cite{ozsoy2025mssp} on their own
+published parameters (median forced-force ratio 1.04 over the ten
+comparable cells; both islands present, with declared placement
+misses), unifying their frequency-domain saturation model with the
+present certificates and isolating the island mechanism as
+forced-response saturation of a mode inside the tooth-passing band.
+
+%% ====================================================================
+\section*{Data availability}
+The complete model, certificates, campaigns, and every number in this
+paper are reproducible from the repository accompanying the
+manuscript (scripts and machine-readable records referenced
+throughout).
+
+\appendix
+\setcounter{figure}{0}
+%% ====================================================================
+\section{External validation: reproduction of the published
+saturation islands}
 \label{sec:ozsoy}
+
+The plate results of Sections~\ref{sec:cert}--\ref{sec:satregime}
+rest on the thin-walled benchmark alone. This appendix adds an
+independent external anchor by reproducing measured
+saturation islands from a \emph{different} rig on its own
+published parameters, with the same lifting and certificates and no
+plate-specific tuning.
 
 The island measurements of \cite{ozsoy2025mssp} --- a robotic-milling
 flexure ($f_n=128.1$\,Hz, $\zeta=1.48$\%, $k=1.13\times10^7$\,N/m)
@@ -533,64 +604,6 @@ model-based loop loses its stabilizing phase. Island susceptibility
 is therefore set not by clipping depth but by the \emph{phase
 integrity of the clipped feedback} and the spectral placement of the
 dominant mode --- a design-relevant conclusion beyond certification.
-
-%% ====================================================================
-\section{Discussion and limitations}
-\label{sec:discussion}
-
-The certificates delivered here refuse clipping rather than exploit
-it; Section~\ref{sec:satregime} shows that above the open-loop
-boundary this is not a weakness but the only option for
-sector-global guarantees, and quantifies the conservatism against
-true basins (20--3100$\times$ at the island points). All certificates
-are nominal-model and deterministic: robustness to
-cutting-coefficient dispersion and modal tolerance is assessed
-statistically in the companion campaign \cite{companion}; sensor
-noise is excluded from the certificate and present in the evaluation
-simulations. The SDOF reproduction carries declared reductions
-(single mode, no edge coefficients, no runout, assumed feedback
-rate, one calibrated sign). The tolerance-resolved ranking of
-Table~\ref{tab:ranking} is specific to this benchmark and controller
-family; its methodological point --- that linear margins can misrank
-controllers under saturation, and that the certified ranking depends
-on the declared tolerance --- is general, and we propose the
-tolerance-resolved certified envelope as the object that active
-chatter control papers should report alongside stability lobes.
-
-%% ====================================================================
-\section{Conclusions}
-\label{sec:conclusions}
-
-(1)~An implementation-exact, solver-free regional certificate for
-saturated active chatter control was constructed from the maximal
-output admissible set of a sampled-data period lifting, validated to
-0.01--1.8\% against an independent nonlinear simulator's measured
-clip onset. (2)~Sweeping it yields tolerance-resolved certified
-envelopes under which the linear controller ranking collapses
-(3.2$\times$ $\to$ 1.32$\times$) and inverts (0.79$\times$ at
-20\um) --- saturation certification changes which controller wins.
-(3)~Two saturation islands were demonstrated with causal attribution
-to the amplifier bound, and the certificate quantifies its own
-conservatism against them. (4)~In the saturated regime, a structural
-impossibility result scopes what any global certificate can promise
-above the open-loop boundary, and a certified negative result shows
-classic back-calculation anti-windup cannot improve the
-circle-criterion level for either design at the audited point.
-(5)~The published saturation islands of \cite{ozsoy2025mssp} were
-reproduced quantitatively on their published parameters (median
-forced-force ratio 1.04 over the ten comparable measured cells; both
-islands present, with declared placement misses), unifying their frequency-domain
-saturation model with the present certificates and isolating the
-island mechanism: forced-response saturation of a mode inside the
-tooth-passing band, aggravated by loss of phase integrity of the
-clipped feedback.
-
-%% ====================================================================
-\section*{Data availability}
-The complete model, certificates, campaigns, and every number in this
-paper are reproducible from the repository accompanying the
-manuscript (scripts and machine-readable records referenced
-throughout).
 
 \bibliographystyle{elsarticle-num}
 \bibliography{refs}

@@ -17,7 +17,8 @@ def main():
     D = stage_d()
 
     fig, ax = plt.subplots(figsize=(SC, 2.7))
-    strats = list(D)
+    # PS-LPV-DR = PS-LPV (certified k_r = 0); not shown as a separate box
+    strats = [s for s in D if s != "PS-LPV-DR"]
     data = [D[s] * 1e3 for s in strats]
     bp = ax.boxplot(data, tick_labels=strats, showfliers=True,
                     patch_artist=True, widths=0.5)

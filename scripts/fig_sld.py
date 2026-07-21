@@ -10,7 +10,13 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from common import COLORS, DC, LABELS, SC, savefig
-from pipeline import RPM_REF, STRATEGIES, X_EVAL, stage_b
+from pipeline import RPM_REF, X_EVAL, stage_b
+from pipeline import STRATEGIES as _ALL_STRATS
+
+# PS-LPV-DR coincides exactly with PS-LPV (its certified delayed gain is
+# zero at every scheduling point), so it is not drawn as a separate
+# series; it would only duplicate the PS-LPV curve/bar in every panel.
+STRATEGIES = tuple(s for s in _ALL_STRATS if s != "PS-LPV-DR")
 
 
 def main():

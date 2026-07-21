@@ -1663,7 +1663,11 @@ explicit at the hard condition (Fig.~\ref{fig:codesign}b): where the
 naive schedule rides the $\pm 150$~V rail (150~V peak, $0.28\%$ clip),
 the co-design draws only 99~V ($0.06\%$ clip) for the \emph{same}
 vibration rejection (6.6 versus 6.5~$\mu$m RMS)---about 50~V of recovered
-headroom, which is exactly the certified margin of panel~(a). The
+headroom, which is exactly the certified margin of panel~(a) and is
+directly visible in the time-domain traces (Fig.~\ref{fig:tdcodesign}):
+the frozen design chatters and rails while both schedules reject the
+vibration, but only PS-LPV-SA keeps the voltage clear of the amplifier
+bound. The
 small-gain spillover margin improves in step (0.106 versus 0.184,
 Eq.~\eqref{eq:smallgain}). The saturation islands of
 Section~\ref{sec:satisland} are not abolished---above the certified
@@ -1695,6 +1699,22 @@ sits at the marked weight.
 rail; the co-design leaves $\sim 50$~V of headroom at unchanged
 vibration rejection.}
 \label{fig:codesign}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig17_timedomain_codesign.pdf}
+\caption{Time-domain response at the hard end-of-pass condition
+($x_T = 95$~mm, $a_p = 2$~mm, 4900~rpm), steady-state window.
+(a)~Milling-point displacement: the frozen $\hinf$ design chatters at
+15.8~$\mu$m RMS, while both the naive and the saturation-aware schedules
+reject it to $\sim 6.5~\mu$m RMS (their traces nearly coincide).
+(b)~Control voltage: the frozen design and the naive PS-LPV both reach
+the $\pm 150$~V rail ($15.4\%$ and $0.32\%$ of the time), whereas the
+co-designed PS-LPV-SA achieves the same rejection with a $\sim 100$~V
+peak and $0.06\%$ clipping---the recovered headroom of
+Fig.~\ref{fig:codesign}, made visible in the time domain.}
+\label{fig:tdcodesign}
 \end{figure}
 
 \subsection{The saturated regime: recovery margins, a structural

@@ -655,6 +655,67 @@ across material-removal states.}
 \label{fig:varying_dynamics}
 \end{figure}
 
+\subsection{Independent classical-model cross-validation}
+\label{sec:classical}
+
+The finite-element model is cross-validated against an independent,
+mesh-free characterization built with the classical machining-dynamics
+method: a modal (receptance) representation of the plate together with
+the Altint\c{a}s--Budak analytical stability-lobe solution
+\cite{altintas1995analytical,altintas2012manufacturing}. The plate is a
+rectangular clamped-free-free-free cantilever, so its normal modes are
+taken as the classical Warburton beam products
+$\phi_{mn}(x,z) = X_m(x)\,Z_n(z)$ \cite{warburton1954vibration}, with
+$X_m$ the free-free beam eigenfunctions along the feed direction and
+$Z_n$ the clamped-free (cantilever) eigenfunctions along the span; each
+plate frequency is the thin-plate Rayleigh quotient of that product, and
+the first five are anchored to the measured modal frequencies, so the
+model carries \emph{no} finite-element mesh. The piezoelectric,
+sensor and tool-point couplings are closed-form integrals of the same
+mode shapes, and the open-loop stability limit follows from the
+single-frequency (zero-order) analytical solution on the scalar oriented
+tool-point receptance.
+
+Three checks agree (Fig.~\ref{fig:classical}). The classical natural
+frequencies reproduce the measured values by construction and the
+classical voltage-to-displacement receptance overlays the
+finite-element one at the two dominant modes; the classical open-loop
+critical depth from the Altint\c{a}s--Budak solution matches the
+semi-discretization limit at the reference speed to within $18\%$
+(0.21 versus 0.18~mm), the lobe \emph{minima} coinciding along the whole
+speed band. Away from the lobe minima the zero-order solution
+over-predicts by two- to three-fold: this is the documented accuracy
+limit of the analytical solution at the very low radial immersion of
+this finish cut ($a_e/D = 0.01$), where the intermittent cutting is
+poorly represented by the averaged directional coefficients and a
+multi-frequency or time-domain treatment is required
+\cite{altintas2012manufacturing}---which is exactly the semi-discretization
+model used for the closed-loop certificate in
+Section~\ref{sec:stability}. Because the Warburton modes are separable,
+they under-resolve the non-separable, position-varying mode content that
+the finite-element model captures and that the scheduling exploits;
+the finite-element model is therefore retained as the design and
+certification model throughout, with the classical construction serving
+as the independent, first-principles confirmation of the plant modeling
+and the open-loop limit.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig18_classical_validation.pdf}
+\caption{Independent classical-model cross-validation.
+(a)~Modal frequencies: the classical Warburton model (anchored to the
+measured EMA) against the Mindlin finite-element model and the measured
+values.
+(b)~Voltage-to-displacement receptance at the sensor: classical versus
+finite-element (overlapping at the two dominant modes).
+(c)~Open-loop stability lobes at $x_T = 50$~mm: the classical
+Altint\c{a}s--Budak zero-order solution against the semi-discretization
+limit on the same classical model; the lobe minima coincide, and the
+zero-order solution over-predicts off-lobe at this low radial immersion
+($a_e/D = 0.01$).}
+\label{fig:classical}
+\end{figure}
+
 %% =====================================================================
 \section{Controller synthesis}
 \label{sec:synthesis}

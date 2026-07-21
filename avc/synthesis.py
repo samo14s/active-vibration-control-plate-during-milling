@@ -26,10 +26,21 @@ from functools import lru_cache
 import numpy as np
 import scipy.linalg as sla
 
+from .classical_plate import reduce_model_classical
 from .controller import Controller
 from .milling import mean_alpha4
 from .modal import ModalModel, reduce_model
 from .params import Params
+
+# Controller design and certification use the high-fidelity Mindlin FEM
+# model (avc.modal), which resolves the position-varying, non-separable
+# plate dynamics that the scheduling exploits. The classical Warburton
+# modal model + Altintas-Budak analytical lobes (avc.classical_plate,
+# avc.analytical_lobes) are provided as an independent, FEM-free
+# cross-validation of the plant modeling and the open-loop stability
+# limit (see scripts/fig_classical_validation.py); set this True to run
+# the whole synthesis stack on the classical model instead.
+USE_CLASSICAL_MODEL = False
 
 _trapz = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
 
@@ -39,8 +50,14 @@ _trapz = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
 # ---------------------------------------------------------------------------
 @lru_cache(maxsize=32)
 def cached_reduce_model(params: Params, n_modes: int,
-                        height_removed: float) -> ModalModel:
-    """reduce_model with memoization (Params is frozen and hashable)."""
+                        height_removed: float):
+    """Reduced plate model (memoized; Params is frozen and hashable).
+
+    Returns the classical Warburton modal model by default (the plate's
+    model of record), or the Mindlin FEM model when USE_CLASSICAL_MODEL is
+    False (kept only for the cross-validation figure)."""
+    if USE_CLASSICAL_MODEL:
+        return reduce_model_classical(params, n_modes, height_removed)
     return reduce_model(params, n_modes, height_removed)
 
 

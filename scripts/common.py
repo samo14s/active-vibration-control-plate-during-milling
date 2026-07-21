@@ -83,18 +83,26 @@ def savefig(fig, name: str):
 
 
 def models(n_design: int = 3, n_full: int = 12, removals=(0.0,)):
-    """Build (and cache) the modal models used across figures."""
+    """Build (and cache) the modal models used across figures.
+
+    Uses the classical Warburton modal model (the plate's model of record;
+    see avc.synthesis.USE_CLASSICAL_MODEL)."""
+    from avc.synthesis import USE_CLASSICAL_MODEL
+    from avc.classical_plate import reduce_model_classical
     from avc.modal import reduce_model
     from avc.params import DEFAULT
+    rm = reduce_model_classical if USE_CLASSICAL_MODEL else reduce_model
 
     def build():
         out = {}
         for r in removals:
             out[r] = {
-                "design": reduce_model(DEFAULT, n_design, height_removed=r),
-                "full": reduce_model(DEFAULT, n_full, height_removed=r),
+                "design": rm(DEFAULT, n_design, height_removed=r),
+                "full": rm(DEFAULT, n_full, height_removed=r),
             }
         return out
 
-    key = f"models_n{n_design}_{n_full}_r" + "_".join(f"{r:.4g}" for r in removals)
+    tag = "cl" if USE_CLASSICAL_MODEL else "fem"
+    key = (f"models_{tag}_n{n_design}_{n_full}_r"
+           + "_".join(f"{r:.4g}" for r in removals))
     return cached(key, build)

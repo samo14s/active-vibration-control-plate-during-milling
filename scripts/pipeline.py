@@ -23,9 +23,10 @@ from common import RESDIR, cached  # noqa: F401  (path setup side effect)
 
 from avc.params import DEFAULT
 from avc.modal import reduce_model
-from avc.synthesis import (additive_uncertainty_weight, best_frozen_design,
-                           delayed_pd_controller, deploy, gain_schedule,
-                           rs_margin, sampled_rho)
+from avc.classical_plate import reduce_model_classical
+from avc.synthesis import (USE_CLASSICAL_MODEL, additive_uncertainty_weight,
+                           best_frozen_design, delayed_pd_controller, deploy,
+                           gain_schedule, rs_margin, sampled_rho)
 from avc.delayed_feedback import tune_kr
 from avc.simulate import simulate
 from avc import sld
@@ -58,13 +59,16 @@ def log(msg):
 
 # ---------------------------------------------------------------- stage A
 def models():
+    rm = reduce_model_classical if USE_CLASSICAL_MODEL else reduce_model
+    tag = "cl" if USE_CLASSICAL_MODEL else "fem"
+
     def build():
         out = {}
         for r in REMOVALS:
-            out[r] = {"design": reduce_model(P, N_D, height_removed=r),
-                      "full": reduce_model(P, N_F, height_removed=r)}
+            out[r] = {"design": rm(P, N_D, height_removed=r),
+                      "full": rm(P, N_F, height_removed=r)}
         return out
-    return cached("pipe_models", build)
+    return cached(f"pipe_models_{tag}", build)
 
 
 def stage_a():

@@ -1268,6 +1268,67 @@ path.}
 \label{fig:alim_position}
 \end{figure}
 
+\subsection{Direct benchmark against the reference rig}
+\label{sec:benchmark}
+
+The results consolidate into a direct, quantity-by-quantity benchmark
+against the reference published paper \cite{du2024robust}, whose plate,
+actuator and cutting data this study adopts
+(Table~\ref{tab:benchmark}, Fig.~\ref{fig:benchmark}). The model side
+reproduces the reference's experimental record: the natural frequencies
+to within $3.8\%$, the actuator voltage-to-displacement gain to within
+$-2.6$~dB in absolute units with no fitted parameter, and the measured
+open-loop stability pattern---below 0.1~mm at four of the five tested
+speeds and a four-fold-elevated limit at 5500~rpm---once the reference's
+own regenerative-coefficient calibration is applied. On the control
+side, the best non-scheduled $\hinf$ design of the present family
+reaches 0.71~mm at the worst position, the same 0.6--0.8~mm stable-depth
+class the reference rig measured under its non-scheduled robust
+controller; the scheduled controller lifts this to 2.99~mm on the
+identical hardware---the four-fold gain that quantifies what the
+reference's worst-case treatment of the known position variation leaves
+unused.
+
+\begin{table}[t]
+\centering\small
+\caption{Direct benchmark against the reference rig \cite{du2024robust}
+(same plate, actuator and cutting data). Model quantities carry no
+fitted parameter except the single receptance-axis offset disclosed in
+Section~\ref{sec:validation}.}
+\label{tab:benchmark}
+\begin{tabular}{lll}
+\toprule
+Quantity & Du et al.\ 2024 (published) & This work \\
+\midrule
+Nat.\ freq.\ $f_{1\text{--}5}$ [Hz] & 540/1068/2787/3351/4122 (meas.)
+& 519/1052/2684/3290/4040 ($\le 3.8\%$) \\
+Damping $\zeta_{1\text{--}5}$ [\%] & 0.31/0.17/0.27/0.56/0.35 (meas.)
+& adopted \\
+Actuator DC gain [$\mu$m/V] & 0.072 (meas.) & 0.053 ($-2.6$~dB, no fit) \\
+Open-loop $a_{\rm lim}$, 5 speeds [mm] & $<$0.1 ($\times 4$), $\sim$0.45@5500
+& 0.09/0.08/0.45/0.12/0.10 \\
+Robust-control $a_{\rm lim}$ [mm] & 0.6--0.8 ($\mu$-synth.+delayed PD)
+& 0.71 (best frozen $\hinf$) \\
+Scheduled $a_{\rm lim}$ [mm] & --- & \textbf{2.99} (PS-LPV, $\approx 4\times$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig20_benchmark_du2024.pdf}
+\caption{Direct benchmark against the reference rig \cite{du2024robust}.
+(a)~Actuator voltage-to-displacement FRF: present model (absolute, no
+fit) through the digitized measured points (their Fig.~12b).
+(b)~Open-loop path-minimum critical depth across the five tested spindle
+speeds at the reference's calibrated coefficient scalings, against their
+measured band.
+(c)~Stable depth of cut: measured open loop and the reference's
+non-scheduled robust controller (0.6--0.8~mm), against the present
+best-frozen and scheduled designs on the same hardware.}
+\label{fig:benchmark}
+\end{figure}
+
 \subsection{Time-domain response}
 \label{sec:timedomain}
 

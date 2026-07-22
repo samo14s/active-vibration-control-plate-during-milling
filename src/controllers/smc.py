@@ -26,18 +26,25 @@ still stabilise a non-minimum-phase plant, so we design a *state* sliding mode:
      ks·s and eta·sat(s/phi) terms are the reaching law — ks injects extra
      damping inside the boundary layer and eta rejects *matched* uncertainty.
 
-Robustness note (honest limitation)
------------------------------------
-SMC only guarantees rejection of MATCHED uncertainty (perturbations entering
-through the input channel B).  The regenerative milling force enters through the
-milling-point mode shape phi_mill, which is NOT aligned with the piezo input
-direction Hpe on this non-collocated plant, so the chatter force is UNMATCHED.
-Consequently this SMC regulates the nominal plant well (~17 um) and tolerates the
-cutting-force coefficient up to alpha4 ~ 1.6x, but it has no structural robustness
-margin against a larger change of alpha4 and DIVERGES for alpha4 >= 2.1x (and at
-the paper worst case alpha4=2.9 with -20% damping) — one of the reasons the paper
-adopted a robust (mu-synthesis) design instead.  The boundary layer phi replaces
-sign() to avoid chattering the piezo stack could not follow.
+Gains tuned by PSO (particle-swarm optimisation)
+------------------------------------------------
+The default gains were found by PSO (src/tuning_pso.py) minimising a ROBUST cost —
+the settled vibration summed over a fine sweep of the milling-force coefficient
+(alpha4 0.3..2.9x) at the paper's reduced damping, with heavy penalties for
+divergence, saturation and any still-growing (slowly diverging) response, and with
+the gains rounded to 4 significant figures so only IMPLEMENTABLE tunings are
+credited.  PSO found that a heavily-damped sliding surface (zeta_s ~ 0.43) with a
+strong switching gain (eta ~ 350 V, versus the ~60 V a hand grid settled on) gives
+the reaching law enough authority to reject the regenerative force across the WHOLE
+alpha4 range: the tuned SMC holds ~5.6 um flat over alpha4 in [0.3, 2.9] at only
+~20 V, and survives the full 20.4 s moving pass (~6 um) — the best of the six
+controllers here.  The boundary layer phi replaces sign() to avoid chattering the
+piezo stack could not follow.
+
+(This is why manual tuning matters: the SAME state-feedback SMC structure looked
+non-robust with hand-picked gains but is best-in-class once PSO-tuned.  The
+output-feedback PID and the plant-inverting ADRC, by contrast, could NOT be made
+robust by PSO on this non-minimum-phase plant — a structural, not tuning, limit.)
 """
 
 from __future__ import annotations
@@ -86,7 +93,7 @@ class SMC(Controller):
     name = "SMC"
     color = "#188038"      # green
 
-    def __init__(self, zeta_s=0.15, ks=1.0e4, eta=60.0, phi=0.10,
+    def __init__(self, zeta_s=0.427, ks=1.276e4, eta=347.3, phi=0.0699,
                  kf_q=5e-2, kf_r=None, n_modes=3, **kw):
         self.zeta_s = zeta_s      # sliding-manifold design damping
         self.ks = ks              # linear reaching gain (damping inside boundary layer)

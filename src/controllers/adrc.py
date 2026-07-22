@@ -33,6 +33,13 @@ paper's exact geometry, which is precisely the situation robust / model-based
 control (H-infinity, mu-synthesis) is needed for.  b0 defaults to the physically
 correct (negative) value so the model is faithful even though the loop cannot be
 stabilised.
+
+PSO tuning (src/tuning_pso.py) confirms this is structural, not a tuning problem:
+optimising (b0, wo, wc) against the robust cost cannot find any stable loop — the
+best swarm result still rides the 150 V actuator limit with a 100+ um residual at
+every cutting condition (cost ~3960, far above the divergence-penalty floor).
+Whereas PSO makes the STATE-feedback SMC robust across the whole alpha4 range,
+it cannot rescue the plant-inverting ADRC on a non-minimum-phase plant.
 """
 
 from __future__ import annotations

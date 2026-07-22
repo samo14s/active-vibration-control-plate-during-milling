@@ -25,18 +25,21 @@ class PID(Controller):
     # NOTE (paper NON-MINIMUM-PHASE geometry): the piezo (left-lower) and the
     # sensor (right-upper) sit on opposite sides, so u -> y has a right-half-plane
     # zero (~5 kHz).  The key to a working classical design is to keep the
-    # derivative-filter bandwidth N BELOW that RHP zone (N = 2000 rad/s ~ 320 Hz):
-    # the rate feedback then damps the 540/1068 Hz modes but rolls off before the
-    # non-minimum-phase region, so it does not fight the RHP zero.  With that
-    # rolloff a high-gain PID regulates the NOMINAL plant and the paper's combined
-    # worst-case extremely well (~5 um, better than the robust controllers).
-    # Its weakness is robustness: the gains are tuned at the nominal cutting force,
-    # and because the regenerative force is UNMATCHED (enters at the milling point,
-    # not the sensor/actuator) the loop has no guaranteed margin against a large
-    # change of the cutting-force coefficient alpha4 alone -- it degrades badly and
-    # can diverge at the extremes of the alpha4 range.  That performance-vs-
-    # robustness gap is exactly why the paper adopted robust mu-synthesis.
-    def __init__(self, Kp=2.0e4, Ki=0.0, Kd=200.0, N=2000.0, **kw):
+    # derivative-filter bandwidth N BELOW that RHP zone: the rate feedback then
+    # damps the 540/1068 Hz modes but rolls off before the non-minimum-phase
+    # region, so it does not fight the RHP zero.
+    #
+    # These gains were PSO-tuned (src/tuning_pso.py) against the same robust cost
+    # as the SMC.  PSO makes PID excellent in the MID cutting-force range
+    # (alpha4 ~ 1.1..2.4x -> ~8 um at <20 V) and, unlike the hand-tuned version,
+    # keeps it bounded at the high extreme (alpha4=2.9 -> ~20 um).  But PID is
+    # OUTPUT feedback, and PSO could NOT make it robust across the WHOLE range:
+    # at the low extreme (alpha4=0.3x) the high-gain loop rides the actuator limit
+    # (~216 um at 150 V).  The right-half-plane zero caps the achievable output-
+    # feedback gain, so no PID tuning covers the full range -- a structural limit
+    # (contrast the STATE-feedback SMC, which PSO makes robust everywhere).  This
+    # performance-vs-robustness gap is exactly why the paper adopted robust control.
+    def __init__(self, Kp=1.673e4, Ki=0.0, Kd=501.2, N=1248.0, **kw):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd

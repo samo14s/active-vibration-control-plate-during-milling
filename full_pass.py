@@ -173,7 +173,7 @@ def main():
         ax1.semilogy(d["cen"], np.maximum(d["wr"], 1e-2), lw=1.3,
                      color=_COLOR[name], label=lbl)
     ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass "
-                  "(log scale; PID/SMC/ADRC diverge, curves shoot up & stop)")
+                  "(log scale; SMC lowest — PID/ADRC diverge, curves shoot up & stop)")
     ax1.set_ylabel("RMS displacement (µm)"); ax1.set_xlabel("time (s)")
     ax1.set_xlim(0, C.T_PASS); ax1.set_ylim(1.0, 1e4); ax1.legend(ncol=3, fontsize=8)
     fig2.savefig(os.path.join(RESULTS, "fig_full_pass.png"), bbox_inches="tight")

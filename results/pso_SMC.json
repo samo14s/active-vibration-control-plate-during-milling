@@ -1,0 +1,52 @@
+{
+  "SMC": {
+    "gains": {
+      "zeta_s": 0.427,
+      "ks": 12760.0,
+      "eta": 347.3,
+      "phi": 0.0699
+    },
+    "cost": 54.76952116285921,
+    "robust": true,
+    "validation": {
+      "a4_0.3": {
+        "rms_um": 5.62,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_0.7": {
+        "rms_um": 5.63,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_1.1": {
+        "rms_um": 5.63,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_1.5": {
+        "rms_um": 5.63,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_1.9": {
+        "rms_um": 5.64,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_2.4": {
+        "rms_um": 5.66,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_2.9": {
+        "rms_um": 5.7,
+        "peak_V": 19.6,
+        "diverged": false
+      }
+    },
+    "seconds": 1367.0,
+    "robust_note": "robust = stable AND controlling (<50um, not saturating) across all alpha4 conditions",
+    "worst_condition_um": 5.7
+  }
+}

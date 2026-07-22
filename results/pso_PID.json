@@ -1,0 +1,52 @@
+{
+  "PID": {
+    "gains": {
+      "Kp": 16730.0,
+      "Ki": 0.0,
+      "Kd": 501.2,
+      "N": 1248.0
+    },
+    "cost": 1415.5785436043484,
+    "robust": false,
+    "validation": {
+      "a4_0.3": {
+        "rms_um": 216.41,
+        "peak_V": 150.0,
+        "diverged": false
+      },
+      "a4_0.7": {
+        "rms_um": 29.2,
+        "peak_V": 48.4,
+        "diverged": false
+      },
+      "a4_1.1": {
+        "rms_um": 7.8,
+        "peak_V": 17.7,
+        "diverged": false
+      },
+      "a4_1.5": {
+        "rms_um": 7.77,
+        "peak_V": 16.8,
+        "diverged": false
+      },
+      "a4_1.9": {
+        "rms_um": 8.15,
+        "peak_V": 16.3,
+        "diverged": false
+      },
+      "a4_2.4": {
+        "rms_um": 12.29,
+        "peak_V": 17.8,
+        "diverged": false
+      },
+      "a4_2.9": {
+        "rms_um": 20.18,
+        "peak_V": 39.0,
+        "diverged": false
+      }
+    },
+    "seconds": 1199.7,
+    "robust_note": "robust = stable AND controlling (<50um, not saturating) across all alpha4 conditions",
+    "worst_condition_um": 216.41
+  }
+}

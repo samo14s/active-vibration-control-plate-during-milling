@@ -63,7 +63,7 @@ def piezo_input_vector(gain=None, phi=None):
     return gain * H0 * phi
 
 
-def design_state_space(gain_piezo=None, n_modes=None):
+def design_state_space(gain_piezo=None, n_modes=None, zeta_design=None):
     """
     Nominal linear design plant (continuous-time state space):
 
@@ -77,11 +77,18 @@ def design_state_space(gain_piezo=None, n_modes=None):
     discretisable robust controllers), while the true simulated plant always
     keeps all C.N_MODES modes.
 
+    `zeta_design` overrides the modal damping used FOR DESIGN ONLY.  Designing the
+    H-infinity / mu controllers against a well-damped model (e.g. 15 %) instead of
+    the true ~0.2 % stops them from relying on a sharp pole/zero cancellation of
+    the lightly damped resonances; the resulting controllers are broadband
+    dampers that stay stable when the true modal frequencies drift (e.g. from
+    material removal).  The true simulated plant always uses the measured damping.
+
     Returns dict with A, Bu, Bd, Cy and the mode-shape / matrices used.
     """
     n = C.N_MODES if n_modes is None else int(n_modes)
     omega = C.OMEGA_N[:n]
-    zeta = C.MODE_ZETA[:n]
+    zeta = C.MODE_ZETA[:n] if zeta_design is None else np.full(n, float(zeta_design))
     K, Cd = modal_matrices(omega, zeta)
     Hpe = piezo_input_vector(gain_piezo)[:n]
     phi = C.PHI[:n]
@@ -150,12 +157,18 @@ class MillingPlant:
                               else self.alpha4_factor)
 
         n = C.N_MODES
-        # perturbed modal data
+        # perturbed modal data.  In a mass-normalised model (M = I) a modal-mass
+        # perturbation of factor (1+dmass) scales omega by 1/sqrt(1+dmass) AND the
+        # mass-normalised mode shape phi by 1/sqrt(1+dmass) (since phi^T M phi = 1).
+        # Rescaling phi is essential: it drives the regenerative gain G ~ phi phi^T,
+        # the disturbance/sensor maps Bd, Cy and the piezo input Hpe.  Omitting it
+        # would make a mass perturbation a no-op whenever dmass == dstiff (omega
+        # cancels), silently voiding the mass/stiffness part of the robustness study.
         omega = C.OMEGA_N * np.sqrt((1.0 + self.dstiff) / (1.0 + self.dmass))
         zeta  = C.MODE_ZETA * (1.0 + self.dzeta)
         K, Cd = modal_matrices(omega, zeta)
-        self.phi = C.PHI
-        self.Hpe = piezo_input_vector(self.piezo_gain)
+        self.phi = C.PHI / np.sqrt(1.0 + self.dmass)
+        self.Hpe = piezo_input_vector(self.piezo_gain, phi=self.phi)
 
         self.A = np.block([[np.zeros((n, n)), np.eye(n)],
                            [-K,               -Cd]])

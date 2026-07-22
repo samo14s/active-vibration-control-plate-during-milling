@@ -200,29 +200,45 @@ def fig_metrics_bars(met_nom, met_worst):
     plt.close(fig)
 
 
-def fig_robustness(factors):
-    """Sweep the milling-force-coefficient factor (chatter strength) and record
-    settled RMS displacement for each controller (paper: alpha4 in 0.3..2.9)."""
-    fig, ax = plt.subplots(figsize=(8.5, 5))
+def fig_robustness(factors, freq_shifts_pct):
+    """Two robustness sweeps:
+    (a) milling-force coefficient alpha4 (chatter strength; paper: 0.3..2.9),
+    (b) modal-frequency drift (material removal) — the demanding test that
+        separates broadband dampers from narrowly tuned model-based designs."""
+    fig, ax = plt.subplots(1, 2, figsize=(12.5, 5))
+
+    # (a) alpha4 sweep (frequency-preserving mass/stiffness perturbation)
     for key, ctor in CONTROLLERS:
         rmss = []
         for fac in factors:
-            c = ctor()
             r = simulate(P.MillingPlant(alpha4_factor=fac, dmass=0.08,
                                         dstiff=0.08, dzeta=-0.2),
-                         c, t_sim=0.24, meas_noise=True)
+                         ctor(), t_sim=0.24, meas_noise=True)
             m = M.compute(r)
             rmss.append(m["rms_settled_um"] if not m["diverged"] else np.nan)
-        ax.plot(factors, rmss, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
-    ax.axvspan(0.3, 2.9, color="gray", alpha=0.08)
-    ax.axvline(C.ALPHA4_NOMINAL_FACTOR, color="gray", ls=":", lw=0.8)
-    ax.text(C.ALPHA4_NOMINAL_FACTOR, ax.get_ylim()[1], " nominal",
-            fontsize=8, color="gray", va="top")
-    ax.set_title("Robustness sweep — settled RMS vs milling-force coefficient α₄\n"
-                 "(+8% mass/stiffness, −20% damping perturbation applied)")
-    ax.set_xlabel("milling-force-coefficient factor  (× average α₄)")
-    ax.set_ylabel("settled RMS displacement (µm)")
-    ax.legend(ncol=2, fontsize=8)
+        ax[0].plot(factors, rmss, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
+    ax[0].axvspan(0.3, 2.9, color="gray", alpha=0.08)
+    ax[0].axvline(C.ALPHA4_NOMINAL_FACTOR, color="gray", ls=":", lw=0.8)
+    ax[0].set_title("(a) vs milling-force coefficient α₄\n(+8% mass/stiffness, −20% damping)")
+    ax[0].set_xlabel("milling-force-coefficient factor  (× average α₄)")
+    ax[0].set_ylabel("settled RMS displacement (µm)")
+    ax[0].legend(ncol=2, fontsize=8)
+
+    # (b) modal-frequency drift: dmass shifts every omega by 1/sqrt(1+dmass)
+    for key, ctor in CONTROLLERS:
+        rmss = []
+        for pct in freq_shifts_pct:
+            dmass = 1.0 / (1.0 + pct / 100.0) ** 2 - 1.0     # omega*(1+pct/100)
+            r = simulate(P.MillingPlant(dmass=dmass, dzeta=-0.2),
+                         ctor(), t_sim=0.22, meas_noise=True)
+            m = M.compute(r)
+            rmss.append(m["rms_settled_um"] if not m["diverged"] else np.nan)
+        ax[1].plot(freq_shifts_pct, rmss, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
+    ax[1].axvline(0, color="gray", ls=":", lw=0.8)
+    ax[1].set_title("(b) vs modal-frequency drift (material removal)\n(−20% damping); flat = frequency-robust")
+    ax[1].set_xlabel("natural-frequency shift (%)")
+    ax[1].set_ylabel("settled RMS displacement (µm)")
+    ax[1].legend(ncol=2, fontsize=8)
     fig.tight_layout()
     fig.savefig(os.path.join(RESULTS, "fig_robustness.png"))
     plt.close(fig)
@@ -273,7 +289,8 @@ def main():
     fig_spectrum(runs_nom)
     fig_metrics_bars({k: met_nom[k] for k, _ in CONTROLLERS},
                      {k: met_worst[k] for k, _ in CONTROLLERS})
-    fig_robustness(np.array([0.3, 0.8, 1.3, 1.6, 2.1, 2.6, 2.9]))
+    fig_robustness(np.array([0.3, 0.8, 1.3, 1.6, 2.1, 2.6, 2.9]),
+                   np.array([-8, -4, 0, 4, 8]))
     fig_activation()
 
     # ---- summary table ----

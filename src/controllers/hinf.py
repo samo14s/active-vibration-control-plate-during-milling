@@ -33,6 +33,10 @@ from .. import design as D
 SY = 1.0e-4      # output scale (100 um)
 SU = 1.0e2       # input  scale (100 V)
 N_DESIGN_MODES = 2
+# Design damping (robustification): design against a well-damped model so the
+# controller is a broadband damper, not a sharp inverter of the lightly damped
+# resonances -> it stays stable when the true modal frequencies drift.
+ZETA_DESIGN = 0.15
 
 
 def _default_weights():
@@ -51,7 +55,7 @@ def _default_weights():
 
 
 def design_hinf(weights=None, return_info=False):
-    pl = D.design_plant(n_modes=N_DESIGN_MODES)
+    pl = D.design_plant(n_modes=N_DESIGN_MODES, zeta_design=ZETA_DESIGN)
     Gs = ct.ss(pl["A"], pl["Bu"] * SU, pl["Cy"] * (1.0 / SY), 0.0)
     W1, W2, W3 = _default_weights() if weights is None else weights
     K, CL, info = ct.mixsyn(Gs, w1=W1, w2=W2, w3=W3)

@@ -15,12 +15,13 @@ from . import config as C
 from . import plant as P
 
 
-def design_plant(n_modes=None):
+def design_plant(n_modes=None, zeta_design=None):
     """Return the nominal continuous design plant matrices (dict).
 
     n_modes=None keeps all modes; n_modes=2 gives the paper's reduced model.
+    zeta_design overrides the design damping (robustification, see plant.py).
     """
-    return P.design_state_space(n_modes=n_modes)
+    return P.design_state_space(n_modes=n_modes, zeta_design=zeta_design)
 
 
 def c2d(A, B, dt, C_=None, D=None):

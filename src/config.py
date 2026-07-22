@@ -121,6 +121,21 @@ def time_delay(rpm: float, n_teeth: int) -> float:
 FT_S  = tooth_passing_frequency(CONDITION_S["spindle_rpm"], TOOL["n_teeth"])
 TAU_S = time_delay(CONDITION_S["spindle_rpm"], TOOL["n_teeth"])
 
+# --- Full milling PASS along the free upper edge (peripheral / side milling) --- #
+# The tool advances along the edge at the feed velocity
+#   v_feed = feed_per_tooth * n_teeth * (rpm/60)
+# and traverses the whole plate length l_p, so the pass lasts T_PASS seconds.
+FEED_VELOCITY = (CONDITION_S["feed_per_tooth"] * TOOL["n_teeth"]
+                 * CONDITION_S["spindle_rpm"] / 60.0)          # m/s  (= 4.9 mm/s)
+T_PASS = PLATE["lp"] / FEED_VELOCITY                            # s    (= 20.4 s)
+
+# Material removal over the pass: peripheral milling shaves the plate thickness at
+# the free upper edge, so the modal frequencies drift upward as the tool advances.
+# The paper reports the 1st/2nd natural frequencies rising ~17 %/9 % after a whole
+# SERIES of passes; a single pass removes far less, so we drift by a small fraction
+# (scaled by FREQ_DRIFT_PASS) linearly from pass start to end.  Set to 0 to disable.
+FREQ_DRIFT_PASS = np.array([0.03, 0.02, 0.015])   # fractional rise of each omega over one pass
+
 # --------------------------------------------------------------------------- #
 # 6. Cutting-engagement geometry (non-smooth / intermittent milling)          #
 # --------------------------------------------------------------------------- #

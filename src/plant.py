@@ -123,6 +123,27 @@ def engagement(t, tau, duty=None, smooth=True):
 
 
 # --------------------------------------------------------------------------- #
+#  Spatial variation of the milling-point mode shape along the free upper edge #
+# --------------------------------------------------------------------------- #
+def edge_mode_profile(xi):
+    """
+    Multipliers (one per mode) applied to the reference mode shape as the tool
+    advances along the free upper edge, xi in [0,1] (0 = pass start, 1 = end).
+
+    These reproduce the paper's "varying dynamic characteristics" (its Fig. 7,
+    D_Pr^T D_Pr varying with milling position): the first mode is almost constant
+    along the edge, while the higher modes vary strongly (their spatial profiles
+    have nodes/antinodes along the edge).  Kept strictly positive so the modal
+    coupling never changes sign spuriously.
+    """
+    xi = np.clip(xi, 0.0, 1.0)
+    s1 = 1.0 + 0.20 * np.sin(np.pi * xi)           # mode 1: nearly constant
+    s2 = 1.0 + 0.50 * np.cos(np.pi * xi)           # mode 2: strong variation (1.5 -> 0.5)
+    s3 = 1.0 + 0.45 * np.cos(2.0 * np.pi * xi)     # mode 3: two antinodes
+    return np.array([s1, s2, s3])[:C.N_MODES]
+
+
+# --------------------------------------------------------------------------- #
 #  True (nonlinear) milling plant used for simulation                         #
 # --------------------------------------------------------------------------- #
 @dataclass
@@ -134,6 +155,16 @@ class MillingPlant:
         dmass, dstiff : fractional perturbation of modal mass / stiffness
         dzeta         : fractional perturbation of damping ratio
         alpha4_factor : milling-force-coefficient multiplier (0.3 .. 2.9)
+
+    Full-pass options (peripheral milling of the whole upper edge, ~20.4 s):
+        moving        : if True the milling contact point advances along the edge
+                        over `t_pass`, so the milling-point mode shape (and hence
+                        the regenerative coupling and the cutting excitation) vary
+                        with time -- the paper's varying dynamic characteristics.
+                        The displacement SENSOR and the piezo ACTUATOR stay fixed.
+        freq_drift    : if True the modal frequencies drift upward across the pass
+                        (material removal shaving the free-edge thickness).
+        t_pass        : pass duration [s] (defaults to C.T_PASS = 20.4 s).
     """
     cut_gain: float = None
     piezo_gain: float = None
@@ -143,6 +174,9 @@ class MillingPlant:
     dzeta: float = -0.20        # Fig.16 uses 80% of nominal damping
     alpha4_factor: float = None
     smooth_engage: bool = True
+    moving: bool = False
+    freq_drift: bool = False
+    t_pass: float = None
     seed: int = C.SEED
 
     # filled in __post_init__
@@ -164,9 +198,10 @@ class MillingPlant:
         # the disturbance/sensor maps Bd, Cy and the piezo input Hpe.  Omitting it
         # would make a mass perturbation a no-op whenever dmass == dstiff (omega
         # cancels), silently voiding the mass/stiffness part of the robustness study.
-        omega = C.OMEGA_N * np.sqrt((1.0 + self.dstiff) / (1.0 + self.dmass))
-        zeta  = C.MODE_ZETA * (1.0 + self.dzeta)
-        K, Cd = modal_matrices(omega, zeta)
+        self.omega0 = C.OMEGA_N * np.sqrt((1.0 + self.dstiff) / (1.0 + self.dmass))
+        self.zeta0  = C.MODE_ZETA * (1.0 + self.dzeta)
+        K, Cd = modal_matrices(self.omega0, self.zeta0)
+        # FIXED sensor / actuator mode shape (right-upper corner / piezo patch)
         self.phi = C.PHI / np.sqrt(1.0 + self.dmass)
         self.Hpe = piezo_input_vector(self.piezo_gain, phi=self.phi)
 
@@ -176,12 +211,15 @@ class MillingPlant:
         self.Bd = np.vstack([np.zeros((n, 1)), self.phi.reshape(-1, 1)])
         self.Cy = np.hstack([self.phi.reshape(1, -1), np.zeros((1, n))])
 
-        # regenerative modal stiffness matrix  a4 * Phi Phi^T   (N,N)
-        alpha4 = self.cut_gain * C.ALPHA4_BASE * self.alpha4_factor
-        self.G = alpha4 * np.outer(self.phi, self.phi)          # (n,n)
+        # absolute milling-force coefficient and regenerative matrix (static case)
+        self.alpha4 = self.cut_gain * C.ALPHA4_BASE * self.alpha4_factor
+        self.G = self.alpha4 * np.outer(self.phi, self.phi)     # (n,n)
 
         # static (feed) cutting force amplitude   [modal force units]
         self.f_static = C.CONDITION_S["feed_per_tooth"] * C.ALPHA4_BASE
+        self.t_pass = C.T_PASS if self.t_pass is None else self.t_pass
+        self.drift = C.FREQ_DRIFT_PASS[:n] if self.freq_drift else np.zeros(n)
+        self._time_varying = self.moving or self.freq_drift
         self.n = n
         self._rng = np.random.default_rng(self.seed)
 
@@ -198,15 +236,29 @@ class MillingPlant:
         q_tau = x_tau[:n]
         g = engagement(t, self.tau, smooth=self.smooth_engage)
 
-        xdot = self.A @ x
-        # regenerative delay feedback (destabilising), gated by engagement
-        reg = g * (self.G @ (q - q_tau))
-        xdot[n:] -= reg
-        # forced (feed) cutting excitation, gated by engagement
-        xdot[n:] += g * self.f_static * self.phi
-        # control
-        xdot[n:] += self.Hpe * u
-        return xdot
+        if not self._time_varying:
+            # ---- fixed-position fast path (single-point milling snapshot) ----
+            xdot = self.A @ x
+            xdot[n:] -= g * (self.G @ (q - q_tau))          # regenerative (destab.)
+            xdot[n:] += g * self.f_static * self.phi        # feed excitation
+            xdot[n:] += self.Hpe * u                        # control
+            return xdot
+
+        # ---- full-pass path: milling point moves, frequencies may drift ----
+        prog = np.clip(t / self.t_pass, 0.0, 1.0)
+        omega = self.omega0 * (1.0 + self.drift * prog)     # material removal
+        Kdiag = omega ** 2
+        Cdiag = 2.0 * self.zeta0 * omega
+        # milling-point mode shape (sensor/actuator remain the fixed self.phi)
+        phi_mill = self.phi * edge_mode_profile(prog) if self.moving else self.phi
+
+        qd = x[n:]
+        qdd = -Kdiag * q - Cdiag * qd                       # diagonal modal dynamics
+        proj = float(phi_mill @ (q - q_tau))                # milling-point rel. displ.
+        qdd -= g * self.alpha4 * proj * phi_mill            # regenerative (destab.)
+        qdd += g * self.f_static * phi_mill                 # feed excitation
+        qdd += self.Hpe * u                                 # control (fixed actuator)
+        return np.concatenate([qd, qdd])
 
     def measure(self, x, noise=True):
         y = float((self.Cy @ x).item())

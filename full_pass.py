@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
 Full milling-PASS simulation (~20.4 s): the tool traverses the whole free upper
-edge of the plate.  As it advances, the milling-point mode shape (hence the
-regenerative coupling and the cutting excitation) varies with position, and the
-modal frequencies drift upward from material removal -- the paper's "varying
-dynamic characteristics".  The displacement sensor and the piezo actuator stay
-fixed.  This shows each controller (designed once, at nominal) holding chatter
-down across the entire pass.
+edge (peripheral milling).  As it advances the milling-point mode shape (hence
+the regenerative coupling and the cutting excitation) varies with position, and
+the modal frequencies drift upward from material removal -- the paper's varying
+dynamic characteristics.  The displacement sensor and piezo actuator stay fixed.
 
-Run:  python full_pass.py         (takes a few minutes; 6 controllers x 20.4 s)
-Output: results/fig_full_pass.png
+Produces two figures in results/:
+  * fig14_responses.png  -- paper Fig. 14 style: displacement-vs-time (envelope)
+                            and amplitude spectrum for every method.
+  * fig_full_pass.png    -- summary: varying coupling, windowed RMS, sample trace.
+
+Run:  python full_pass.py     (a few minutes; 6 controllers x 20.4 s at 25.6 kHz)
 """
 from __future__ import annotations
 import os, warnings, time
@@ -21,6 +23,7 @@ import matplotlib.pyplot as plt
 
 from src import config as C
 from src import plant as P
+from src import metrics as M
 from src.simulate import simulate
 from src.controllers.base import ZeroController
 from src.controllers.pid import PID
@@ -35,97 +38,126 @@ CONTROLLERS = [("PID", PID), ("SMC", SMC), ("H-infinity", Hinf),
                ("mu-synthesis", MuSynthesis), ("ADRC", ADRC), ("MPC", MPC)]
 _COLOR = {"PID": "#e8710a", "SMC": "#188038", "H-infinity": "#1a73e8",
           "mu-synthesis": "#d01884", "ADRC": "#a142f4", "MPC": "#00897b",
-          "No control": "#9aa0a6"}
+          "No control": "#c9922b"}
+
+
+def envelope(t, y_um, win=0.008):
+    """Rolling (min,max) envelope over `win`-second windows."""
+    n = max(2, int(win / (t[1] - t[0])))
+    tc, ylo, yhi = [], [], []
+    for i in range(0, len(t) - n, n):
+        seg = y_um[i:i + n]
+        tc.append(t[i] + win / 2); ylo.append(seg.min()); yhi.append(seg.max())
+    return np.array(tc), np.array(ylo), np.array(yhi)
 
 
 def windowed_rms(t, y_um, win=0.3):
-    """Sliding-window RMS (non-overlapping) → (centres, rms)."""
-    centres, vals = [], []
     n = int(win / (t[1] - t[0]))
+    cen, val = [], []
     for i in range(0, len(t) - n, n):
-        seg = y_um[i:i + n]
-        centres.append(t[i] + win / 2)
-        vals.append(float(np.sqrt(np.mean(seg ** 2))))
-    return np.array(centres), np.array(vals)
+        cen.append(t[i] + win / 2)
+        val.append(float(np.sqrt(np.mean(y_um[i:i + n] ** 2))))
+    return np.array(cen), np.array(val)
 
 
 def main():
-    plt.rcParams.update({"figure.dpi": 120, "font.size": 10, "axes.grid": True,
+    plt.rcParams.update({"figure.dpi": 120, "font.size": 9, "axes.grid": True,
                          "grid.alpha": 0.3, "axes.axisbelow": True})
-    vfeed = C.FEED_VELOCITY * 1e3          # mm/s
-    print(f"Full pass: v_feed={vfeed:.2f} mm/s, length={C.PLATE['lp']*1e3:.0f} mm, "
-          f"T_pass={C.T_PASS:.1f} s, dt=1/{C.FS:.0f}s ({int(C.T_PASS*C.FS)} steps/run)")
+    print(f"Full pass: v_feed={C.FEED_VELOCITY*1e3:.2f} mm/s, T_pass={C.T_PASS:.1f} s, "
+          f"{int(C.T_PASS*C.FS)} steps/run")
 
-    results = {}
+    data = {}
     for name, ctor in CONTROLLERS:
         t0 = time.time()
         r = simulate(P.MillingPlant(moving=True, freq_drift=True), ctor(),
                      t_sim=C.T_PASS, meas_noise=True)
-        cen, wr = windowed_rms(r["t"], r["y"] * 1e6)
-        # decimate the raw trace for plotting
+        y_um = r["y"] * 1e6
+        te, ylo, yhi = envelope(r["t"], y_um)
+        # spectrum over the steady portion (after the 0.5 s start transient)
+        i0 = int(0.5 * C.FS)
+        f, a = M.spectrum(r["t"][i0:], r["y"][i0:])
+        cen, wr = windowed_rms(r["t"], y_um)
         dec = max(1, len(r["t"]) // 6000)
-        results[name] = dict(t=r["t"][::dec], y=r["y"][::dec] * 1e6,
-                             cen=cen, wr=wr, diverged=r["diverged"])
-        print(f"  {name:13s} done in {time.time()-t0:4.0f}s  "
-              f"mean RMS {np.mean(wr):5.2f} µm  max {np.max(np.abs(r['y']))*1e6:6.1f} µm"
-              f"  diverged={r['diverged']}")
+        data[name] = dict(te=te, ylo=ylo, yhi=yhi, f=f, a=a * 1e6, cen=cen, wr=wr,
+                          tdec=r["t"][::dec], ydec=y_um[::dec],
+                          peak=float(np.max(np.abs(y_um))), diverged=r["diverged"])
+        print(f"  {name:13s} {time.time()-t0:4.0f}s  meanRMS {np.mean(wr):5.2f} µm  "
+              f"peak {data[name]['peak']:6.1f} µm  div={r['diverged']}")
 
-    # uncontrolled (diverges quickly; simulate a short window to show it)
+    # uncontrolled: diverges fast -> short 0.2 s window (paper Fig 14a)
     ru = simulate(P.MillingPlant(moving=True, freq_drift=True), ZeroController(),
-                  t_sim=1.0, meas_noise=True)
+                  t_sim=0.2, meas_noise=True)
+    yu = ru["y"] * 1e6
+    fu, au = M.spectrum(ru["t"], ru["y"])
+    data["No control"] = dict(t=ru["t"], y=yu, f=fu, a=au * 1e6,
+                              peak=float(np.max(np.abs(yu))))
 
-    # ---------------- figure ----------------
-    fig = plt.figure(figsize=(12, 9))
-    gs = fig.add_gridspec(3, 1, height_ratios=[0.8, 1.2, 1.2], hspace=0.35)
+    ft = C.FT_S      # tooth-passing frequency 245 Hz
 
-    # (a) varying dynamics: milling-point coupling phi_mill^2 vs tool position
-    ax0 = fig.add_subplot(gs[0])
-    xi = np.linspace(0, 1, 200)
-    prof = np.array([P.edge_mode_profile(x) for x in xi])       # (200, n)
-    pos_mm = xi * C.PLATE["lp"] * 1e3
-    for i in range(prof.shape[1]):
-        ax0.plot(xi * C.T_PASS, prof[:, i] ** 2, lw=1.5,
-                 label=f"mode {i+1}")
-    ax0.set_title("(a) Varying dynamics — relative milling-point modal coupling "
-                  "φ_mill² as the tool advances")
-    ax0.set_ylabel("coupling (×nominal)")
-    ax0.set_xlabel("time (s)   [tool position 0 → 100 mm]")
-    ax0.legend(fontsize=8, ncol=3)
-    ax0.set_xlim(0, C.T_PASS)
+    # ================= FIGURE 1 : paper Fig. 14 style ==================
+    order = ["No control"] + [k for k, _ in CONTROLLERS]
+    nrow = len(order)
+    fig, ax = plt.subplots(nrow, 2, figsize=(12, 2.0 * nrow))
+    for i, name in enumerate(order):
+        d = data[name]
+        col = _COLOR[name]
+        axt, axf = ax[i, 0], ax[i, 1]
+        if name == "No control":
+            axt.plot(d["t"], d["y"], color=col, lw=0.5)
+            axt.set_xlim(0, 0.2)
+            axt.set_title(f"{name} — diverges (chatter)", fontsize=9)
+        else:
+            axt.fill_between(d["te"], d["ylo"], d["yhi"], color=col, alpha=0.85, lw=0)
+            axt.set_xlim(0, C.T_PASS)
+            axt.set_xticks([0, 5.1, 10.2, 15.3, 20.4])
+            lim = 1.15 * max(np.max(np.abs(d["yhi"])), np.max(np.abs(d["ylo"])))
+            axt.set_ylim(-lim, lim)
+            axt.set_title(f"{name} — full pass (RMS {np.mean(d['wr']):.2f} µm)", fontsize=9)
+        axt.set_ylabel("displ. (µm)", fontsize=8)
 
-    # (b) windowed RMS along the pass, per controller
-    ax1 = fig.add_subplot(gs[1])
-    for name, _ in CONTROLLERS:
-        d = results[name]
-        ax1.plot(d["cen"], d["wr"], lw=1.3, color=_COLOR[name], label=name)
-    ax1.set_title("(b) Chatter suppression across the whole pass — "
-                  "0.3 s windowed RMS displacement")
-    ax1.set_ylabel("RMS displacement (µm)")
-    ax1.set_xlabel("time (s)")
-    ax1.legend(ncol=3, fontsize=8)
-    ax1.set_xlim(0, C.T_PASS)
-
-    # (c) representative full traces: best (H-infinity) vs uncontrolled start
-    ax2 = fig.add_subplot(gs[2])
-    d = results["H-infinity"]
-    ax2.plot(d["t"], d["y"], lw=0.5, color=_COLOR["H-infinity"],
-             label="H-infinity (controlled, full 20.4 s)")
-    ax2.plot(ru["t"], ru["y"] * 1e6, lw=0.5, color=_COLOR["No control"],
-             label="No control (diverges in <1 s)", alpha=0.8)
-    ax2.set_title("(c) Full-pass displacement — controlled stays bounded, "
-                  "uncontrolled diverges")
-    ax2.set_ylabel("displacement (µm)")
-    ax2.set_xlabel("time (s)")
-    ax2.set_ylim(-60, 60)
-    ax2.legend(fontsize=8)
-    ax2.set_xlim(0, C.T_PASS)
-
-    fig.suptitle(f"Milling of the whole free upper edge — full {C.T_PASS:.1f} s pass "
-                 f"with varying dynamics & material removal", fontsize=12)
-    out = os.path.join(RESULTS, "fig_full_pass.png")
-    fig.savefig(out, bbox_inches="tight")
+        # spectrum
+        axf.plot(d["f"], d["a"], color=col, lw=0.8)
+        axf.set_xlim(0, 1600)
+        top = np.max(d["a"][(d["f"] > 100) & (d["f"] < 1600)]) * 1.25 + 1e-9
+        axf.set_ylim(0, top)
+        for k, lbl in [(1, "$f_t$"), (2, "$2f_t$"), (3, "$3f_t$")]:
+            axf.axvline(k * ft, color="gray", ls=":", lw=0.6)
+        if name == "No control":
+            axf.axvline(C.MODE_FREQ_HZ[1], color="red", ls="--", lw=0.7)
+            axf.annotate("$f_{c2}$ chatter", xy=(C.MODE_FREQ_HZ[1], top * 0.8),
+                         fontsize=8, color="red", ha="center")
+        axf.annotate("$f_t$", xy=(ft, top * 0.85), fontsize=8, ha="center", color="gray")
+        axf.set_ylabel("amp. (µm)", fontsize=8)
+    ax[-1, 0].set_xlabel("time (s)")
+    ax[-1, 1].set_xlabel("frequency (Hz)")
+    fig.suptitle("Milling responses over the full 20.4 s pass (paper Fig. 14 style) — "
+                 "displacement envelope (left) and spectrum (right)", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.99])
+    fig.savefig(os.path.join(RESULTS, "fig14_responses.png"))
     plt.close(fig)
-    print(f"\nWrote {out}")
+    print("wrote results/fig14_responses.png")
+
+    # ================= FIGURE 2 : summary ==================
+    fig2 = plt.figure(figsize=(12, 8))
+    gs = fig2.add_gridspec(2, 1, height_ratios=[0.8, 1.2], hspace=0.32)
+    ax0 = fig2.add_subplot(gs[0])
+    xi = np.linspace(0, 1, 200)
+    prof = np.array([P.edge_mode_profile(x) for x in xi])
+    for i in range(prof.shape[1]):
+        ax0.plot(xi * C.T_PASS, prof[:, i] ** 2, lw=1.5, label=f"mode {i+1}")
+    ax0.set_title("(a) Varying dynamics — milling-point modal coupling φ² vs tool position")
+    ax0.set_ylabel("coupling (×nominal)"); ax0.set_xlabel("time (s)  [0 → 100 mm]")
+    ax0.set_xlim(0, C.T_PASS); ax0.legend(ncol=3, fontsize=8)
+    ax1 = fig2.add_subplot(gs[1])
+    for name, _ in CONTROLLERS:
+        d = data[name]
+        ax1.plot(d["cen"], d["wr"], lw=1.3, color=_COLOR[name], label=name)
+    ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass")
+    ax1.set_ylabel("RMS displacement (µm)"); ax1.set_xlabel("time (s)")
+    ax1.set_xlim(0, C.T_PASS); ax1.legend(ncol=3, fontsize=8)
+    fig2.savefig(os.path.join(RESULTS, "fig_full_pass.png"), bbox_inches="tight")
+    plt.close(fig2)
+    print("wrote results/fig_full_pass.png")
 
 
 if __name__ == "__main__":

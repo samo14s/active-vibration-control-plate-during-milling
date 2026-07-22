@@ -127,20 +127,25 @@ def engagement(t, tau, duty=None, smooth=True):
 # --------------------------------------------------------------------------- #
 def edge_mode_profile(xi):
     """
-    Multipliers (one per mode) applied to the reference mode shape as the tool
+    Mode-shape multipliers (one per mode) at the milling point as the tool
     advances along the free upper edge, xi in [0,1] (0 = pass start, 1 = end).
 
     These reproduce the paper's "varying dynamic characteristics" (its Fig. 7,
-    D_Pr^T D_Pr varying with milling position): the first mode is almost constant
-    along the edge, while the higher modes vary strongly (their spatial profiles
-    have nodes/antinodes along the edge).  Kept strictly positive so the modal
-    coupling never changes sign spuriously.
+    D_Pr^T D_Pr varying with milling position) with physically motivated spatial
+    profiles along the free edge of a cantilever plate:
+      * mode 1 (first bending): nearly uniform along the free top edge;
+      * mode 2 (first torsion): antinodes at the two free corners, a node in the
+        middle -> its coupling phi^2 is large at BOTH ends and vanishes mid-span,
+        giving the hour-glass response envelope seen in the paper's Fig. 14(c,e);
+      * mode 3: two internal nodes.
+    Sign changes are physical (they flip the phase of the modal forcing / the
+    cross-coupling); the self-coupling enters as phi^2 and is sign-independent.
     """
     xi = np.clip(xi, 0.0, 1.0)
-    s1 = 1.0 + 0.20 * np.sin(np.pi * xi)           # mode 1: nearly constant
-    s2 = 1.0 + 0.50 * np.cos(np.pi * xi)           # mode 2: strong variation (1.5 -> 0.5)
-    s3 = 1.0 + 0.45 * np.cos(2.0 * np.pi * xi)     # mode 3: two antinodes
-    return np.array([s1, s2, s3])[:C.N_MODES]
+    p1 = 1.0 + 0.15 * np.sin(np.pi * xi)           # mode 1: ~uniform
+    p2 = np.cos(np.pi * xi)                         # mode 2: antinodes at ends, node mid
+    p3 = np.cos(2.0 * np.pi * xi)                   # mode 3: two internal nodes
+    return np.array([p1, p2, p3])[:C.N_MODES]
 
 
 # --------------------------------------------------------------------------- #

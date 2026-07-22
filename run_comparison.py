@@ -117,6 +117,30 @@ def fig_time_response(runs):
     plt.close(fig)
 
 
+def fig_time_full(runs):
+    """Full-horizon time response, one panel per controller, auto-scaled per
+    panel so the entire trajectory is visible (no clipping)."""
+    fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+    for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
+        r = runs[key]
+        y_um = r["y"] * 1e6
+        a.plot(r["t"] * 1e3, y_um, color=_COLOR[key], lw=0.6)
+        m = M.compute(r)
+        a.set_title(f"{key}   (RMS {m['rms_settled_um']:.2f} µm, "
+                    f"peak {m['peak_um']:.1f} µm)", fontsize=9)
+        a.set_ylabel("displacement (µm)", fontsize=8)
+        lim = 1.1 * float(np.max(np.abs(y_um)))
+        a.set_ylim(-lim, lim)
+    for a in axes[-1, :]:
+        a.set_xlabel("time (ms)")
+    fig.suptitle("Full time response over the whole milling pass "
+                 "(control active throughout) — per-panel vertical scale",
+                 fontsize=11)
+    fig.tight_layout()
+    fig.savefig(os.path.join(RESULTS, "fig_time_full.png"))
+    plt.close(fig)
+
+
 def fig_control_voltage(runs):
     fig, axes = plt.subplots(3, 2, figsize=(10, 7.5), sharex=True)
     for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
@@ -285,6 +309,7 @@ def main():
 
     print("  · figures ...")
     fig_time_response(runs_nom)
+    fig_time_full(runs_nom)
     fig_control_voltage(runs_nom)
     fig_spectrum(runs_nom)
     fig_metrics_bars({k: met_nom[k] for k, _ in CONTROLLERS},

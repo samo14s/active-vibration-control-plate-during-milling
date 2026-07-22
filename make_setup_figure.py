@@ -56,7 +56,8 @@ ax.add_patch(Rectangle((ax_ - pw / 2, az - ph / 2), pw, ph, facecolor="#f5a15a",
                         edgecolor="#b5651d", lw=1.8, zorder=3))
 ax.text(ax_, az, "piezo\npatch", ha="center", va="center", fontsize=8.5,
         weight="bold", color="#5a3410", zorder=4)
-ax.annotate("Piezoelectric actuator\n(right-lower corner)",
+_side = "left" if C.ACT_POS[0] < 0.5 else "right"
+ax.annotate(f"Piezoelectric actuator\n({_side}-lower corner, paper Fig. 2)",
             xy=(ax_ + pw / 2, az), xytext=(lp + 22, az - 6),
             fontsize=9.5, va="center",
             arrowprops=dict(arrowstyle="->", color="#b5651d", lw=1.4))
@@ -123,8 +124,8 @@ ax.set_ylim(-base_h - 16, hp + 42)
 ax.set_aspect("equal")
 ax.axis("off")
 ax.set_title("Active-vibration-control milling setup — thin-walled cantilever plate "
-             f"({lp:.0f}×{hp:.0f}×{C.PLATE['bp']*1e3:.0f} mm), non-collocated sensor/actuator",
-             fontsize=11)
+             f"({lp:.0f}×{hp:.0f}×{C.PLATE['bp']*1e3:.0f} mm), paper geometry "
+             "(sensor right-upper, piezo left-lower)", fontsize=11)
 fig.tight_layout()
 out = os.path.join(RESULTS, "fig_setup.png")
 fig.savefig(out, dpi=140, bbox_inches="tight")

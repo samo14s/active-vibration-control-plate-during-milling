@@ -88,13 +88,16 @@ def plate_mode_curv(xt, zt):
     z1 = _Zc2(zt, _B1, _S1); z2 = _Zc2(zt, _B2, _S2)
     return np.array([z1 * 1.0, z1 * (2.0*xt - 1.0), z2 * 1.0])[:N_MODES]
 
-# Locations (normalised x,z).  Paper Section 5 (experiments): displacement sensor
-# at the RIGHT-UPPER corner of the plate back, piezo patch at the RIGHT-LOWER
-# corner.  Both on the right side -> the torsion mode has the same sign at both,
-# so the non-collocated plant stays MINIMUM-PHASE (controllable).  Milling runs
-# along the free upper edge (z=1), x advancing with the tool.
+# Locations (normalised x,z).  EXACTLY as in the paper (Fig. 2 / Section 3-4,
+# controller-design simulations): displacement sensor at the RIGHT-UPPER corner,
+# piezo patch at the LEFT-LOWER corner.  Because sensor (right) and actuator
+# (left) sit on opposite sides, the torsion mode has OPPOSITE sign at the two
+# points, so the non-collocated plant is NON-MINIMUM-PHASE (a right-half-plane
+# transmission zero, here ~5 kHz, above the controlled modes) — the harder,
+# faithful configuration the paper's robust controller was designed for.
+# Milling runs along the free upper edge (z=1), x advancing with the tool.
 SENSOR_POS = (1.00, 1.00)        # right-upper corner
-ACT_POS    = (0.80, 0.25)        # right-lower patch centroid
+ACT_POS    = (0.15, 0.20)        # left-lower patch centroid (paper Fig. 2)
 
 # per-mode scale so |sensor mode shape| matches the calibrated PHI magnitudes
 _phi_s_raw = plate_mode_shape(*SENSOR_POS)

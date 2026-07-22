@@ -73,14 +73,22 @@ def main():
                      t_sim=C.T_PASS, meas_noise=True)
         y_um = r["y"] * 1e6
         te, ylo, yhi = envelope(r["t"], y_um)
-        # spectrum over the steady portion (after the 0.5 s start transient)
+        # spectrum over the steady portion (after the 0.5 s start transient); a
+        # diverged controller returns a truncated record, so fall back to whatever
+        # (pre-divergence) data exists and never FFT an empty slice.
         i0 = int(0.5 * C.FS)
-        f, a = M.spectrum(r["t"][i0:], r["y"][i0:])
+        if len(r["t"]) > i0 + 64:
+            f, a = M.spectrum(r["t"][i0:], r["y"][i0:])
+        elif len(r["t"]) > 64:
+            f, a = M.spectrum(r["t"], r["y"])
+        else:
+            f, a = np.array([0.0, 1.0]), np.array([0.0, 0.0])
         cen, wr = windowed_rms(r["t"], y_um)
         dec = max(1, len(r["t"]) // 6000)
         data[name] = dict(te=te, ylo=ylo, yhi=yhi, f=f, a=a * 1e6, cen=cen, wr=wr,
                           tdec=r["t"][::dec], ydec=y_um[::dec],
-                          peak=float(np.max(np.abs(y_um))), diverged=r["diverged"])
+                          peak=float(np.max(np.abs(y_um))), diverged=r["diverged"],
+                          t_end=float(r["t"][-1]) if len(r["t"]) else 0.0)
         print(f"  {name:13s} {time.time()-t0:4.0f}s  meanRMS {np.mean(wr):5.2f} µm  "
               f"peak {data[name]['peak']:6.1f} µm  div={r['diverged']}")
 
@@ -106,6 +114,15 @@ def main():
             axt.plot(d["t"], d["y"], color=col, lw=0.5)
             axt.set_xlim(0, 0.2)
             axt.set_title(f"{name} — diverges (chatter)", fontsize=9)
+        elif d.get("diverged"):
+            # unstable on the moving pass: show the envelope up to blow-up (capped
+            # scale so the growth toward divergence is visible), flag it clearly.
+            axt.fill_between(d["te"], d["ylo"], d["yhi"], color=col, alpha=0.85, lw=0)
+            axt.set_xlim(0, C.T_PASS)
+            axt.set_xticks([0, 5.1, 10.2, 15.3, 20.4])
+            axt.set_ylim(-200, 200)
+            axt.set_title(f"{name} — DIVERGES at t≈{d['t_end']:.1f}s (unstable on the "
+                          f"moving pass)", fontsize=9, color="#c5221f")
         else:
             axt.fill_between(d["te"], d["ylo"], d["yhi"], color=col, alpha=0.85, lw=0)
             axt.set_xlim(0, C.T_PASS)
@@ -118,7 +135,8 @@ def main():
         # spectrum
         axf.plot(d["f"], d["a"], color=col, lw=0.8)
         axf.set_xlim(0, 1600)
-        top = np.max(d["a"][(d["f"] > 100) & (d["f"] < 1600)]) * 1.25 + 1e-9
+        band = d["a"][(d["f"] > 100) & (d["f"] < 1600)]
+        top = (float(np.max(band)) if band.size and np.max(band) > 0 else 1.0) * 1.25 + 1e-9
         axf.set_ylim(0, top)
         for k, lbl in [(1, "$f_t$"), (2, "$2f_t$"), (3, "$3f_t$")]:
             axf.axvline(k * ft, color="gray", ls=":", lw=0.6)
@@ -151,10 +169,13 @@ def main():
     ax1 = fig2.add_subplot(gs[1])
     for name, _ in CONTROLLERS:
         d = data[name]
-        ax1.plot(d["cen"], d["wr"], lw=1.3, color=_COLOR[name], label=name)
-    ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass")
+        lbl = name + (" (diverges)" if d["diverged"] else "")
+        ax1.semilogy(d["cen"], np.maximum(d["wr"], 1e-2), lw=1.3,
+                     color=_COLOR[name], label=lbl)
+    ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass "
+                  "(log scale; PID/SMC/ADRC diverge, curves shoot up & stop)")
     ax1.set_ylabel("RMS displacement (µm)"); ax1.set_xlabel("time (s)")
-    ax1.set_xlim(0, C.T_PASS); ax1.legend(ncol=3, fontsize=8)
+    ax1.set_xlim(0, C.T_PASS); ax1.set_ylim(1.0, 1e4); ax1.legend(ncol=3, fontsize=8)
     fig2.savefig(os.path.join(RESULTS, "fig_full_pass.png"), bbox_inches="tight")
     plt.close(fig2)
     print("wrote results/fig_full_pass.png")

@@ -32,24 +32,29 @@ from .. import design as D
 
 SY = 1.0e-4      # output scale (100 um)
 SU = 1.0e2       # input  scale (100 V)
-N_DESIGN_MODES = 2
-# Design damping (robustification): design against a well-damped model so the
-# controller is a broadband damper, not a sharp inverter of the lightly damped
-# resonances -> it stays stable when the true modal frequencies drift.
-ZETA_DESIGN = 0.15
+# The paper geometry (piezo left-lower, sensor right-upper) is NON-MINIMUM-PHASE:
+# the torsion mode has opposite sign at the actuator and the sensor.  This forces
+# the FULL 3-mode model (the reduced 2-mode model misses the right-half-plane
+# zero) and a carefully phased loop; the resulting achievable performance is
+# lower than on a minimum-phase plant, and the loop must roll off below the RHP
+# zero (~5 kHz).  Design damping ~10% keeps it a broadband damper robust to the
+# modal-frequency drift of the pass.
+N_DESIGN_MODES = 3
+ZETA_DESIGN = 0.10
+FB_SIGN = -1.0   # negative-feedback wrapper sign for this NMP plant
 
 
 def _default_weights():
     s = ct.tf('s')
     tp = 2 * np.pi
-    # W1: performance/sensitivity (no pure integrator; A=0.3)
-    Ms, wb, A = 2.0, tp * 1200.0, 0.3
+    # W1: performance/sensitivity (gentle: A=0.6, non-minimum-phase limits gain)
+    Ms, wb, A = 2.0, tp * 800.0, 0.6
     W1 = (s / Ms + wb) / (s + wb * A)
     # W2: control effort
-    ku, w2z, w2p = 0.05, tp * 2000.0, tp * 8000.0
+    ku, w2z, w2p = 0.5, tp * 1500.0, tp * 6000.0
     W2 = ku * (s + w2z) / (s + w2p)
-    # W3: complementary-sensitivity rolloff ~2 kHz (below mode 3 at 2787 Hz)
-    Mt, wt = 2.5, tp * 2000.0
+    # W3: complementary-sensitivity rolloff ~2.8 kHz (below the RHP zero at ~5 kHz)
+    Mt, wt = 2.5, tp * 2800.0
     W3 = (s + wt / Mt) / (0.02 * s + wt * 4.0)
     return W1, W2, W3
 
@@ -75,4 +80,4 @@ class Hinf(LinearSSController):
         Kd = design_hinf()
         A, B, Cc, Dd = (np.asarray(Kd.A), np.asarray(Kd.B),
                         np.asarray(Kd.C), np.asarray(Kd.D))
-        super().__init__(A, B, Cc, Dd, sign=+1.0, **kw)
+        super().__init__(A, B, Cc, Dd, sign=FB_SIGN, **kw)

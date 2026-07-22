@@ -36,10 +36,11 @@ from .. import design as D
 
 SY = 1.0e-4
 SU = 1.0e2
-N_DESIGN_MODES = 2
-# Design against a well-damped model (robustification, see plant.design_state_space):
-# makes the controller a broadband damper that tolerates modal-frequency drift.
-ZETA_DESIGN = 0.15
+# Non-minimum-phase paper geometry: full 3-mode model (captures the RHP zero),
+# gentle well-damped design, negative-feedback sign (see hinf.py).
+N_DESIGN_MODES = 3
+ZETA_DESIGN = 0.10
+FB_SIGN = -1.0
 
 
 def _wpau():
@@ -60,23 +61,24 @@ def _perf_weight():
     """Performance / sensitivity weight W1(s) (shared with the H-infinity design)."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return (s / 2.0 + tp * 1200) / (s + tp * 1200 * 0.3)
+    return (s / 2.0 + tp * 800) / (s + tp * 800 * 0.6)
 
 
 def _ks_weight():
     """Control-effort (K·S) weight (shared with the H-infinity design)."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return 0.05 * (s + tp * 2000) / (s + tp * 8000)
+    return 0.5 * (s + tp * 1500) / (s + tp * 6000)
 
 
 def _rolloff_weight():
     """Complementary-sensitivity (T) weight W3(s) — the robustness channel that
     the D-scale acts on; a larger scale forces the loop to roll off earlier and
-    so shrinks the additive-uncertainty term W_Pau·K·S."""
+    so shrinks the additive-uncertainty term W_Pau·K·S.  Rolloff kept below the
+    RHP zero (~5 kHz) of the non-minimum-phase plant."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return (s + tp * 2000 / 2.5) / (0.02 * s + tp * 2000 * 4.0)
+    return (s + tp * 2800 / 2.5) / (0.02 * s + tp * 2800 * 4.0)
 
 
 def _mu_upper_bound(Gs, W1, Wa, Kss):
@@ -146,4 +148,4 @@ class MuSynthesis(LinearSSController):
         Kd = design_musyn()
         A, B, Cc, Dd = (np.asarray(Kd.A), np.asarray(Kd.B),
                         np.asarray(Kd.C), np.asarray(Kd.D))
-        super().__init__(A, B, Cc, Dd, sign=+1.0, **kw)
+        super().__init__(A, B, Cc, Dd, sign=FB_SIGN, **kw)

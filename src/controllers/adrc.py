@@ -18,6 +18,21 @@ damped 2nd-order target of bandwidth wc:
 
 The LESO is discretised exactly (ZOH) so it stays stable at the high observer
 bandwidth needed to keep up with the ~1 kHz chatter mode.
+
+Honest limitation on the paper's non-minimum-phase geometry
+-----------------------------------------------------------
+LADRC treats the plant as a pure double integrator y'' = f + b0 u and cancels the
+estimated total disturbance f — i.e. it *inverts* the plant.  With the piezo patch
+at the left-lower corner and the sensor at the right-upper corner the transfer
+function u -> y is NON-MINIMUM-PHASE (a right-half-plane zero at ~5 kHz).  Inverting
+a non-minimum-phase plant produces an internally unstable controller: the LESO's
+disturbance cancellation drives the RHP-zero dynamics and the loop diverges.  The
+input gain even changes sign here (b0 = phi_sensor . Hpe = -1.29 < 0).  No choice of
+(b0, wo, wc) stabilises this plant — LADRC is therefore reported as FAILING on the
+paper's exact geometry, which is precisely the situation robust / model-based
+control (H-infinity, mu-synthesis) is needed for.  b0 defaults to the physically
+correct (negative) value so the model is faithful even though the loop cannot be
+stabilised.
 """
 
 from __future__ import annotations
@@ -27,12 +42,18 @@ from .. import config as C
 from .. import design as D
 
 
+def _nominal_b0():
+    """Physically correct input gain b0 = phi_sensor . Hpe (u -> y'' at the sensor)."""
+    pl = D.design_plant(n_modes=C.N_MODES)
+    return float(pl["phi"] @ pl["Hpe"])
+
+
 class ADRC(Controller):
     name = "ADRC"
     color = "#a142f4"      # purple
 
-    def __init__(self, b0=26.0, wo=3.0e4, wc=4.0e3, **kw):
-        self.b0 = b0
+    def __init__(self, b0=None, wo=3.0e4, wc=4.0e3, **kw):
+        self.b0 = _nominal_b0() if b0 is None else b0   # ~ -1.29 for paper geometry
         self.wo = wo
         self.wc = wc
         super().__init__(**kw)

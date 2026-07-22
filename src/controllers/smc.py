@@ -1,47 +1,97 @@
 """
-Sliding-Mode Control (SMC) — output/boundary-layer formulation.
+Sliding-Mode Control (SMC) — state-feedback (regular-form) design.
 
-A model-inversion (equivalent-control) SMC is ill-conditioned for this plant: the
-piezo actuator is weak relative to the modal restoring forces, so forcing the
-state onto a stiff surface would demand enormous voltage.  Instead we use an
-*output sliding-mode* design, which is the robust counterpart of the velocity
-feedback that physically damps the plate.
+Why not an output sliding surface here
+--------------------------------------
+On the paper's exact geometry the piezo actuator (left-lower) and the
+displacement sensor (right-upper) sit on opposite sides of the plate, so the
+non-collocated transfer function u -> y is NON-MINIMUM-PHASE (a right-half-plane
+zero at ~5 kHz).  A high-gain *output* sliding surface  s = y_dot + lam y  is then
+destabilised by the RHP zero exactly as high-gain output feedback would be, so the
+output-SMC of the collocated case simply diverges.  State feedback, however, can
+still stabilise a non-minimum-phase plant, so we design a *state* sliding mode:
 
-A steady-state Kalman observer reconstructs the modal state from the measured
-displacement y, giving estimates y_hat and y_dot_hat.  The sliding variable
+  1. a steady-state Kalman observer reconstructs the full modal state x = [q; q']
+     from the noisy displacement y (observability is unaffected by the RHP zero);
+  2. the sliding surface  s = S x  is designed in REGULAR FORM: the plant is
+     rotated so the (scalar) piezo input appears in the last coordinate, and the
+     remaining (2n-1) "sliding" coordinates are given damped closed-loop poles by
+     pole placement (design damping `zeta_s`).  On s = 0 the state therefore slides
+     along a well-damped manifold — the damping the lightly-damped plate lacks;
+  3. the control is equivalent control + boundary-layer reaching law
 
-        s = y_dot_hat + lam * y_hat
+        u = -(S B)^{-1}( S A x_hat  +  ks·s  +  eta·sat(s/phi) ).
 
-defines a stable first-order sliding motion (y_dot = -lam y on s = 0).  The
-control enforces the reaching law  s_dot = -k s - eta sat(s/phi):
+     The S A x_hat term keeps the state on the surface (equivalent control); the
+     ks·s and eta·sat(s/phi) terms are the reaching law — ks injects extra
+     damping inside the boundary layer and eta rejects *matched* uncertainty.
 
-        u = -(1/b0) ( k s + eta sat(s/phi) )
-
-The linear term k s injects damping (the nominal action); the saturated
-switching term eta sat(s/phi) rejects the *matched* uncertainty — the
-regenerative cutting force and parameter perturbations — giving SMC its
-robustness.  The boundary layer phi replaces the discontinuous sign() to avoid
-control chattering that a piezo stack could not follow.
+Robustness note (honest limitation)
+-----------------------------------
+SMC only guarantees rejection of MATCHED uncertainty (perturbations entering
+through the input channel B).  The regenerative milling force enters through the
+milling-point mode shape phi_mill, which is NOT aligned with the piezo input
+direction Hpe on this non-collocated plant, so the chatter force is UNMATCHED.
+Consequently this SMC regulates the nominal plant well (~17 um) and tolerates the
+cutting-force coefficient up to alpha4 ~ 1.6x, but it has no structural robustness
+margin against a larger change of alpha4 and DIVERGES for alpha4 >= 2.1x (and at
+the paper worst case alpha4=2.9 with -20% damping) — one of the reasons the paper
+adopted a robust (mu-synthesis) design instead.  The boundary layer phi replaces
+sign() to avoid chattering the piezo stack could not follow.
 """
 
 from __future__ import annotations
 import numpy as np
+import scipy.linalg as sla
+from scipy.signal import place_poles
 from .base import Controller
 from .. import config as C
 from .. import design as D
+
+
+def design_sliding_surface(A, Bu, zeta_s):
+    """Regular-form sliding surface S (1 x 2n) placing the (2n-1) sliding poles at
+    damped versions of the modal frequencies (design damping zeta_s)."""
+    nx = A.shape[0]
+    n = nx // 2
+    # regular form: orthonormal T whose LAST column is Bu/|Bu| (QR completion), so
+    # T^T Bu = [0, ..., 0, b]^T and the input appears only in the last coordinate.
+    b = Bu.ravel()
+    bn = b / np.linalg.norm(b)
+    M = np.eye(nx)
+    M[:, -1] = bn
+    Q, _ = np.linalg.qr(M)
+    if np.dot(Q[:, -1], bn) < 0:
+        Q[:, -1] *= -1
+    T = Q
+    Ar = T.T @ A @ T
+    A11 = Ar[:nx - 1, :nx - 1]
+    A12 = Ar[:nx - 1, nx - 1:nx]
+    # desired sliding poles (2n-1): damped complex pairs for modes 1..n-1, one real
+    # pole for the highest mode (keeps every complex pole with its conjugate).
+    om = C.OMEGA_N[:n]
+    poles = []
+    for w in om[:n - 1]:
+        wd = w * np.sqrt(max(1.0 - zeta_s ** 2, 0.0))
+        poles += [(-zeta_s * w) + 1j * wd, (-zeta_s * w) - 1j * wd]
+    poles.append(-zeta_s * om[-1])
+    poles = np.array(poles[:nx - 1])
+    F = place_poles(A11, A12, poles).gain_matrix.ravel()      # z2 = -F z1
+    Sr = np.hstack([F, 1.0])                                   # surface in regular coords
+    S = Sr @ T.T                                              # back to physical coords
+    return S.reshape(1, -1)
 
 
 class SMC(Controller):
     name = "SMC"
     color = "#188038"      # green
 
-    def __init__(self, lam=1.0e4, k=9.0, eta=300.0, phi=0.05, b0=26.0,
+    def __init__(self, zeta_s=0.15, ks=1.0e4, eta=60.0, phi=0.10,
                  kf_q=5e-2, kf_r=None, n_modes=3, **kw):
-        self.lam = lam            # sliding-surface slope
-        self.k = k                # linear reaching gain
-        self.eta = eta            # switching (robustness) gain
-        self.phi = phi            # boundary-layer half-width (on s)
-        self.b0 = b0              # input gain  y'' ~ b0 u
+        self.zeta_s = zeta_s      # sliding-manifold design damping
+        self.ks = ks              # linear reaching gain (damping inside boundary layer)
+        self.eta = eta            # switching (matched-uncertainty) gain [V]
+        self.phi = phi            # boundary-layer half-width (on the scaled surface)
         self.kf_q = kf_q
         self.kf_r = (C.MEAS_NOISE_STD ** 2) if kf_r is None else kf_r
         self.n_modes = n_modes
@@ -50,14 +100,18 @@ class SMC(Controller):
 
     def _design(self):
         pl = D.design_plant(n_modes=self.n_modes)
-        self.A, self.Bu, self.Cy = pl["A"], pl["Bu"], pl["Cy"]
-        n = pl["n"]
-        # output rows for displacement and velocity at the sensor
-        self.Cpos = pl["Cy"]                                   # [phi, 0]
-        self.Cvel = np.hstack([np.zeros((1, n)), pl["phi"].reshape(1, -1)])  # [0, phi]
-        self.Ad, self.Bd = D.c2d(self.A, self.Bu, self.dt)
-        self.L = D.kalman_gain(self.Ad, self.Cy, self.kf_q, self.kf_r)
-        self.nx = 2 * n
+        A, Bu, Cy = pl["A"], pl["Bu"], pl["Cy"]
+        self.A, self.Bu, self.Cy = A, Bu, Cy
+        self.n = pl["n"]
+        self.nx = 2 * pl["n"]
+        S = design_sliding_surface(A, Bu, self.zeta_s).ravel()
+        SB = float(S @ Bu.ravel())
+        # normalise by S B so the equivalent control is  u_eq = -(S A / S B) x  and
+        # the reaching gains ks, eta act directly in volts.
+        self.Sn = S / SB
+        self.SAn = (S @ A).ravel() / SB
+        self.Ad, self.Bd = D.c2d(A, Bu, self.dt)
+        self.L = D.kalman_gain(self.Ad, Cy, self.kf_q, self.kf_r)
 
     def reset(self):
         super().reset()
@@ -70,12 +124,11 @@ class SMC(Controller):
 
     def _update(self, t, y):
         xh = self.xhat
-        y_hat = float((self.Cpos @ xh).item())
-        yd_hat = float((self.Cvel @ xh).item())
-        s = yd_hat + self.lam * y_hat
-        u = -(self.k * s + self.eta * self._sat(s / self.phi)) / self.b0
-        u = float(np.clip(u, -self.u_max, self.u_max))
-        # observer update with applied (saturated) input
-        yhat_meas = float((self.Cy @ xh).item())
-        self.xhat = self.Ad @ xh + self.Bd.flatten() * u + self.L.flatten() * (y - yhat_meas)
+        s = float(self.Sn @ xh)
+        u_eq = -float(self.SAn @ xh)
+        u_reach = -(self.ks * s + self.eta * self._sat(s / self.phi))
+        u = float(np.clip(u_eq + u_reach, -self.u_max, self.u_max))
+        # observer update with the applied (saturated) input
+        yhat = float((self.Cy @ xh).item())
+        self.xhat = self.Ad @ xh + self.Bd.flatten() * u + self.L.flatten() * (y - yhat)
         return u

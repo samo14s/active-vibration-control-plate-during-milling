@@ -104,10 +104,20 @@ def fig_time_response(runs):
     ax[0].set_title("(a) Uncontrolled milling — regenerative chatter grows unbounded")
     ax[0].set_ylabel("displacement (µm)")
     ax[0].set_xlabel("time (ms)")
+    excluded = []
     for key, _ in CONTROLLERS:
         r = runs[key]
-        ax[1].plot(r["t"] * 1e3, r["y"] * 1e6, color=_COLOR[key], lw=0.9, label=key)
-    ax[1].set_title("(b) Controlled milling — plate displacement with each controller")
+        y_um = r["y"] * 1e6
+        # skip controllers that fail at nominal (they rail off-scale and swamp the
+        # overlay); they are shown individually in fig_time_full.png
+        if float(np.max(np.abs(y_um))) > 100.0:
+            excluded.append(key)
+            continue
+        ax[1].plot(r["t"] * 1e3, y_um, color=_COLOR[key], lw=0.9, label=key)
+    ttl = "(b) Controlled milling — plate displacement with each controller"
+    if excluded:
+        ttl += f"\n({', '.join(excluded)} fails at nominal — see fig_time_full.png)"
+    ax[1].set_title(ttl)
     ax[1].set_ylabel("displacement (µm)")
     ax[1].set_xlabel("time (ms)")
     ax[1].legend(ncol=3, fontsize=8, loc="upper right")
@@ -168,8 +178,12 @@ def fig_spectrum(runs):
     fb, ab = M.spectrum(b["t"][:ib], b["y"][:ib])
     ax.semilogy(fb, ab * 1e6, color=_COLOR["No control"], lw=1.0,
                 label="No control", alpha=0.9)
+    excluded = []
     for key, _ in CONTROLLERS:
         r = runs[key]
+        if float(np.max(np.abs(r["y"] * 1e6))) > 100.0:   # fails at nominal (ADRC)
+            excluded.append(key)
+            continue
         f, a = M.spectrum(r["t"], r["y"])
         ax.semilogy(f, a * 1e6, color=_COLOR[key], lw=0.9, label=key)
     for fn, lbl in zip(C.MODE_FREQ_HZ[:2], ["mode 1", "mode 2"]):
@@ -178,7 +192,10 @@ def fig_spectrum(runs):
                 va="top", ha="right", fontsize=7, color="gray")
     ax.set_xlim(0, 3500)
     ax.set_ylim(1e-3, None)
-    ax.set_title("Displacement spectra — chatter peaks (≈540 & 1068 Hz) suppressed")
+    ttl = "Displacement spectra — chatter peaks (≈540 & 1068 Hz) suppressed"
+    if excluded:
+        ttl += f"  ({', '.join(excluded)} fails at nominal, omitted)"
+    ax.set_title(ttl)
     ax.set_xlabel("frequency (Hz)")
     ax.set_ylabel("amplitude (µm)")
     ax.legend(ncol=3, fontsize=8)
@@ -190,31 +207,52 @@ def fig_spectrum(runs):
 def fig_metrics_bars(met_nom, met_worst):
     keys = [k for k, _ in CONTROLLERS]
     colors = [_COLOR[k] for k in keys]
-    fig, ax = plt.subplots(2, 2, figsize=(10, 7))
+    fig, ax = plt.subplots(2, 2, figsize=(10, 7.6))
     x = np.arange(len(keys))
 
-    rms = [met_nom[k]["rms_settled_um"] for k in keys]
+    # (a) nominal settled RMS — log scale (ADRC fails by orders of magnitude)
+    rms = [max(met_nom[k]["rms_settled_um"], 1e-3) for k in keys]
     ax[0, 0].bar(x, rms, color=colors)
+    ax[0, 0].set_yscale("log")
     ax[0, 0].set_title("(a) settled RMS displacement (nominal)")
-    ax[0, 0].set_ylabel("µm")
+    ax[0, 0].set_ylabel("µm  (log)")
+    for xi, k in zip(x, keys):
+        if met_nom[k]["diverged"] or met_nom[k]["rms_settled_um"] > 100:
+            ax[0, 0].text(xi, rms[keys.index(k)] * 1.15, "✗", ha="center",
+                          fontsize=11, color="#c5221f")
 
+    # (b) nominal peak control voltage
     pv = [met_nom[k]["peak_volt"] for k in keys]
     ax[0, 1].bar(x, pv, color=colors)
     ax[0, 1].axhline(C.U_MAX, color="k", ls="--", lw=0.6, alpha=0.6)
+    ax[0, 1].text(len(keys) - 1, C.U_MAX * 0.92, "saturation", fontsize=7, ha="right")
     ax[0, 1].set_title("(b) peak control voltage (nominal)")
     ax[0, 1].set_ylabel("V")
 
-    en = [met_nom[k]["control_energy"] for k in keys]
+    # (c) nominal control energy — log scale
+    en = [max(met_nom[k]["control_energy"], 1e-4) for k in keys]
     ax[1, 0].bar(x, en, color=colors)
+    ax[1, 0].set_yscale("log")
     ax[1, 0].set_title("(c) control energy ∫u²dt (nominal)")
-    ax[1, 0].set_ylabel("V²·s")
+    ax[1, 0].set_ylabel("V²·s  (log)")
 
-    rob = [met_worst[k]["rms_settled_um"] / max(met_nom[k]["rms_settled_um"], 1e-9)
-           for k in keys]
-    ax[1, 1].bar(x, rob, color=colors)
-    ax[1, 1].axhline(1.0, color="k", ls="--", lw=0.6, alpha=0.6)
-    ax[1, 1].set_title("(d) robustness  RMS(worst-case)/RMS(nominal)\n(1.0 = perturbation-insensitive)")
-    ax[1, 1].set_ylabel("ratio")
+    # (d) paper worst case (α₄=2.9, −20% damping): settled RMS, log; diverged
+    #     controllers drawn at the ceiling with a ✗ (they do not survive it).
+    CEIL = 5.0e3
+    wr = []
+    for k in keys:
+        wr.append(CEIL if met_worst[k]["diverged"]
+                  else max(met_worst[k]["rms_settled_um"], 1e-3))
+    ax[1, 1].bar(x, wr, color=colors)
+    ax[1, 1].set_yscale("log")
+    ax[1, 1].set_ylim(1.0, CEIL * 1.6)
+    for xi, k in zip(x, keys):
+        if met_worst[k]["diverged"]:
+            ax[1, 1].text(xi, CEIL * 0.06, "✗ unstable", ha="center", rotation=90,
+                          fontsize=8, color="white", va="bottom", fontweight="bold")
+    ax[1, 1].set_title("(d) paper worst case  (α₄=2.9, −20% damping)\n"
+                       "settled RMS; ✗ = diverges")
+    ax[1, 1].set_ylabel("µm  (log)")
 
     for a in ax.ravel():
         a.set_xticks(x)
@@ -225,44 +263,53 @@ def fig_metrics_bars(met_nom, met_worst):
 
 
 def fig_robustness(factors, freq_shifts_pct):
-    """Two robustness sweeps:
-    (a) milling-force coefficient alpha4 (chatter strength; paper: 0.3..2.9),
-    (b) modal-frequency drift (material removal) — the demanding test that
-        separates broadband dampers from narrowly tuned model-based designs."""
+    """Two paper-faithful robustness sweeps (log scale so the failing controllers
+    and the tight robust cluster are BOTH visible):
+    (a) milling-force coefficient alpha4 (chatter strength; paper Eq. 23: 0.3..2.9)
+        at the paper's reduced damping (−20 %), nominal geometry — the decisive
+        test: only the robust/model-based designs stay stable across the range;
+    (b) modal-frequency drift (material removal) at −20 % damping.
+    A point is dropped (curve breaks) where that controller DIVERGES; a marker on
+    the top rule flags the divergence explicitly."""
     fig, ax = plt.subplots(1, 2, figsize=(12.5, 5))
+    FLOOR, CEIL = 1.0, 5.0e3          # µm axis window
 
-    # (a) alpha4 sweep (frequency-preserving mass/stiffness perturbation)
-    for key, ctor in CONTROLLERS:
-        rmss = []
-        for fac in factors:
-            r = simulate(P.MillingPlant(alpha4_factor=fac, dmass=0.08,
-                                        dstiff=0.08, dzeta=-0.2),
-                         ctor(), t_sim=0.24, meas_noise=True)
-            m = M.compute(r)
-            rmss.append(m["rms_settled_um"] if not m["diverged"] else np.nan)
-        ax[0].plot(factors, rmss, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
+    def _plot(a, xs, curves_kwargs, xlabel, title):
+        for key, ctor in CONTROLLERS:
+            ys, div_x = [], []
+            for xv, kw in curves_kwargs:
+                r = simulate(P.MillingPlant(**kw), ctor(), t_sim=0.3, meas_noise=True)
+                m = M.compute(r)
+                if m["diverged"]:
+                    ys.append(np.nan); div_x.append(xv)
+                else:
+                    ys.append(m["rms_settled_um"])
+            a.semilogy(xs, ys, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
+            if div_x:                                   # mark divergences on the ceiling
+                a.plot(div_x, [CEIL * 0.9] * len(div_x), "x",
+                       color=_COLOR[key], ms=7, mew=1.6)
+        a.set_ylim(FLOOR, CEIL)
+        a.set_xlabel(xlabel); a.set_ylabel("settled RMS displacement (µm)")
+        a.set_title(title); a.legend(ncol=2, fontsize=8)
+
+    # (a) alpha4 sweep at nominal geometry, paper damping (−20 %)
+    _plot(ax[0], factors,
+          [(f, dict(alpha4_factor=f, dzeta=-0.2)) for f in factors],
+          "milling-force-coefficient factor  (× average α₄)",
+          "(a) vs milling-force coefficient α₄  (−20 % damping)\n"
+          "✗ = diverges;  only robust/model-based designs stay stable")
     ax[0].axvspan(0.3, 2.9, color="gray", alpha=0.08)
     ax[0].axvline(C.ALPHA4_NOMINAL_FACTOR, color="gray", ls=":", lw=0.8)
-    ax[0].set_title("(a) vs milling-force coefficient α₄\n(+8% mass/stiffness, −20% damping)")
-    ax[0].set_xlabel("milling-force-coefficient factor  (× average α₄)")
-    ax[0].set_ylabel("settled RMS displacement (µm)")
-    ax[0].legend(ncol=2, fontsize=8)
 
-    # (b) modal-frequency drift: dmass shifts every omega by 1/sqrt(1+dmass)
-    for key, ctor in CONTROLLERS:
-        rmss = []
-        for pct in freq_shifts_pct:
-            dmass = 1.0 / (1.0 + pct / 100.0) ** 2 - 1.0     # omega*(1+pct/100)
-            r = simulate(P.MillingPlant(dmass=dmass, dzeta=-0.2),
-                         ctor(), t_sim=0.22, meas_noise=True)
-            m = M.compute(r)
-            rmss.append(m["rms_settled_um"] if not m["diverged"] else np.nan)
-        ax[1].plot(freq_shifts_pct, rmss, "o-", color=_COLOR[key], lw=1.4, ms=4, label=key)
+    # (b) modal-frequency drift: dmass shifts every omega by ~(1+pct/100)
+    _plot(ax[1], freq_shifts_pct,
+          [(pct, dict(dmass=1.0 / (1.0 + pct / 100.0) ** 2 - 1.0, dzeta=-0.2))
+           for pct in freq_shifts_pct],
+          "natural-frequency shift (%)   (material removal → positive)",
+          "(b) vs modal-frequency shift  (−20 % damping)\n"
+          "material removal raises f (+side); flat = frequency-robust")
     ax[1].axvline(0, color="gray", ls=":", lw=0.8)
-    ax[1].set_title("(b) vs modal-frequency drift (material removal)\n(−20% damping); flat = frequency-robust")
-    ax[1].set_xlabel("natural-frequency shift (%)")
-    ax[1].set_ylabel("settled RMS displacement (µm)")
-    ax[1].legend(ncol=2, fontsize=8)
+
     fig.tight_layout()
     fig.savefig(os.path.join(RESULTS, "fig_robustness.png"))
     plt.close(fig)
@@ -300,9 +347,8 @@ def main():
 
     print("  · nominal milling condition S ...")
     runs_nom = run_all(plant_kwargs=dict())
-    print("  · worst-case perturbation (α₄=2.9, +10% mass/stiff, −20% damping) ...")
-    runs_worst = run_all(plant_kwargs=dict(dmass=0.1, dstiff=0.1, dzeta=-0.2,
-                                           alpha4_factor=2.9))
+    print("  · paper-style worst case (α₄=2.9 strong chatter force, −20% damping) ...")
+    runs_worst = run_all(plant_kwargs=dict(dzeta=-0.2, alpha4_factor=2.9))
 
     met_nom = {k: M.compute(runs_nom[k]) for k in runs_nom}
     met_worst = {k: M.compute(runs_worst[k]) for k in runs_worst}
@@ -338,12 +384,15 @@ def main():
     print(f"  diverges: peak {mn0['peak_um']:.0f} µm, dominant chatter {mn0['dom_freq_hz']:.0f} Hz "
           f"(2nd mode ≈ {C.MODE_FREQ_HZ[1]:.0f} Hz)")
 
-    print("\n=== CONTROLLER COMPARISON (nominal milling condition S) ===")
+    print("\n=== CONTROLLER COMPARISON (nominal condition S | paper worst case) ===")
     print(f"{'controller':13s} {'RMS_um':>7s} {'peak_um':>8s} {'rmsV':>6s} "
-          f"{'peakV':>6s} {'energy':>8s} {'RMS_worst':>10s} {'robust':>7s}")
-    for r in rows:
-        print(f"{r[0]:13s} {r[1]:7.3f} {r[2]:8.2f} {r[3]:6.2f} {r[4]:6.1f} "
-              f"{r[5]:8.4f} {r[7]:10.3f} {r[8]:7.2f}")
+          f"{'peakV':>6s} {'energy':>8s} {'worst_case':>12s}")
+    for key, _ in CONTROLLERS:
+        mn, mw = met_nom[key], met_worst[key]
+        worst = "DIVERGES" if mw["diverged"] else f"{mw['rms_settled_um']:8.2f} µm"
+        print(f"{key:13s} {mn['rms_settled_um']:7.3f} {mn['peak_um']:8.2f} "
+              f"{mn['rms_volt']:6.2f} {mn['peak_volt']:6.1f} "
+              f"{mn['control_energy']:8.4f} {worst:>12s}")
 
     # ---- write CSV + JSON ----
     import csv

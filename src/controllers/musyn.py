@@ -52,20 +52,22 @@ def _wpau():
     return WPau * (SU / SY)          # into scaled (SU/SY) units
 
 
+# mu-synthesis synthesises on the SAME mixed-sensitivity weights as the robust
+# H-infinity design (which stabilises the non-collocated plant across the whole
+# pass); the mu-synthesis-specific part is the D-K iteration that scales the T
+# (robustness) channel using the paper's additive-uncertainty weight W_Pau.
 def _perf_weight():
-    """Performance / sensitivity weight W1(s) (no pure integrator).  Frequency-
-    drift robustness comes from the well-damped design model (ZETA_DESIGN), so
-    the performance weight can be as demanding as the H-infinity design."""
+    """Performance / sensitivity weight W1(s) (shared with the H-infinity design)."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return (s / 1.8 + tp * 1050) / (s + tp * 1050 * 0.35)
+    return (s / 2.0 + tp * 1200) / (s + tp * 1200 * 0.3)
 
 
 def _ks_weight():
-    """Generic control-effort (K·S) weight — keeps the K-step well posed."""
+    """Control-effort (K·S) weight (shared with the H-infinity design)."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return 0.06 * (s + tp * 2000) / (s + tp * 8000)
+    return 0.05 * (s + tp * 2000) / (s + tp * 8000)
 
 
 def _rolloff_weight():
@@ -74,7 +76,7 @@ def _rolloff_weight():
     so shrinks the additive-uncertainty term W_Pau·K·S."""
     s = ct.tf('s')
     tp = 2 * np.pi
-    return (s + tp * 1600 / 2.5) / (0.02 * s + tp * 1600 * 4.0)
+    return (s + tp * 2000 / 2.5) / (0.02 * s + tp * 2000 * 4.0)
 
 
 def _mu_upper_bound(Gs, W1, Wa, Kss):
@@ -110,9 +112,9 @@ def design_musyn(dk_iters=3, return_info=False):
     W3b = _rolloff_weight()
     Wa = _wpau()                 # paper additive-uncertainty weight (drives D-step)
     d_scale = 1.0
-    K = None
     gamma = None
     hist = []
+    best = None                      # keep the controller with the lowest mu_peak
     for it in range(dk_iters):
         # K-step: mixed-sensitivity H-infinity; the constant D-scale acts on the
         # robustness (T) channel W3, trading nominal performance for a lower
@@ -123,8 +125,12 @@ def design_musyn(dk_iters=3, return_info=False):
         # D-step: robust-performance mu against the paper's additive uncertainty.
         peak_mu, d_opt = _mu_upper_bound(Gs, W1b, Wa, ct.ss(K))
         hist.append((round(d_scale, 3), round(gamma, 3), round(peak_mu, 3)))
-        d_scale *= d_opt ** 0.5
-        d_scale = float(np.clip(d_scale, 0.25, 4.0))
+        if best is None or peak_mu < best[0]:
+            best = (peak_mu, K, gamma)
+        # damped, tightly-bounded D-scale update (D-K can overshoot otherwise)
+        d_scale *= d_opt ** 0.35
+        d_scale = float(np.clip(d_scale, 0.6, 1.8))
+    peak_mu, K, gamma = best         # use the best iteration, not the last
     Kreal = K * (SU / SY)
     Kd = ct.ss(ct.sample_system(Kreal, C.DT, method='tustin'))
     if return_info:

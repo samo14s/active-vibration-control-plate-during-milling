@@ -52,13 +52,70 @@ N_MODES      = len(MODE_FREQ_HZ)
 
 OMEGA_N = 2.0 * np.pi * MODE_FREQ_HZ                        # rad/s
 
-# Mass-normalised transverse mode shape sampled at the milling/sensor point on
-# the free upper edge of the plate.  Plate mass m_p = rho * l * h * b:
-#   m_p = 2830 * 0.100 * 0.080 * 0.004 = 0.0906 kg
-# At a free-edge antinode the mass-normalised modal displacement is ~1/sqrt(m_eff)
-# with m_eff a fraction of m_p, i.e. O(5..7) [1/sqrt(kg)].  Relative amplitudes
-# taper slightly with mode order.
+# Mass-normalised transverse mode shape amplitude scale (per mode) at a free-edge
+# antinode.  Plate mass m_p = rho * l * h * b = 2830*0.1*0.08*0.004 = 0.0906 kg;
+# the mass-normalised modal displacement is ~1/sqrt(m_eff), O(5..7) [1/sqrt(kg)].
 PHI = np.array([6.6, 6.1, 5.2])                            # 1/sqrt(kg)
+
+# --------------------------------------------------------------------------- #
+#  Spatial mode shapes of the CANTILEVER plate (clamped bottom, 3 free edges)  #
+# --------------------------------------------------------------------------- #
+# The sensor, the piezo actuator and the milling point sit at DIFFERENT places
+# (paper Fig. 2 / Section 5), so the plant is genuinely NON-COLLOCATED.  We build
+# representative separable mode shapes  phi_i(x,z) = X_i(x) * Z_i(z),  x,z in [0,1]
+# (x along the length l_p, z along the height h_p; z=0 clamped, z=1 free top edge):
+#   mode 1 = 1st bending  : X_0(x)=1                * Z_1(z)   (uniform along edge)
+#   mode 2 = 1st torsion  : X_rot(x)=2x-1           * Z_1(z)   (antisymmetric in x)
+#   mode 3 = 2nd bending  : X_0(x)=1                * Z_2(z)
+# Z_n are clamped-free (cantilever) beam mode shapes; the piezo bending coupling
+# uses the z-curvature Z_n'' (paper Eq. 14 integrates mode curvature over the patch).
+_B1, _S1 = 1.8751, 0.7341        # cantilever beam eigen-data (modes 1 and 2 in z)
+_B2, _S2 = 4.6941, 1.0185
+
+def _Zc(zt, b, s):               # clamped-free beam mode shape
+    return (np.cosh(b*zt) - np.cos(b*zt)) - s*(np.sinh(b*zt) - np.sin(b*zt))
+
+def _Zc2(zt, b, s):              # its 2nd derivative (curvature ~ piezo coupling)
+    return b*b*((np.cosh(b*zt) + np.cos(b*zt)) - s*(np.sinh(b*zt) + np.sin(b*zt)))
+
+def plate_mode_shape(xt, zt):
+    """Displacement mode shape [phi1,phi2,phi3] at (xt,zt), normalised, in [0,1]."""
+    z1 = _Zc(zt, _B1, _S1); z2 = _Zc(zt, _B2, _S2)
+    return np.array([z1 * 1.0, z1 * (2.0*xt - 1.0), z2 * 1.0])[:N_MODES]
+
+def plate_mode_curv(xt, zt):
+    """z-curvature of the mode shapes at (xt,zt) — piezo bending coupling."""
+    z1 = _Zc2(zt, _B1, _S1); z2 = _Zc2(zt, _B2, _S2)
+    return np.array([z1 * 1.0, z1 * (2.0*xt - 1.0), z2 * 1.0])[:N_MODES]
+
+# Locations (normalised x,z).  Paper Section 5 (experiments): displacement sensor
+# at the RIGHT-UPPER corner of the plate back, piezo patch at the RIGHT-LOWER
+# corner.  Both on the right side -> the torsion mode has the same sign at both,
+# so the non-collocated plant stays MINIMUM-PHASE (controllable).  Milling runs
+# along the free upper edge (z=1), x advancing with the tool.
+SENSOR_POS = (1.00, 1.00)        # right-upper corner
+ACT_POS    = (0.80, 0.25)        # right-lower patch centroid
+
+# per-mode scale so |sensor mode shape| matches the calibrated PHI magnitudes
+_phi_s_raw = plate_mode_shape(*SENSOR_POS)
+_MS_SCALE  = PHI[:N_MODES] / np.abs(_phi_s_raw)
+PHI_SENSOR = _phi_s_raw * _MS_SCALE                        # sensor output vector
+
+def phi_mill(xt):
+    """Milling-point mode shape at fractional edge position xt in [0,1]."""
+    return plate_mode_shape(xt, 1.0) * _MS_SCALE
+
+# piezo actuator modal input direction (curvature-based), scaled so the strongest
+# (1st-mode) entry matches the reference amplitude; the calibrated PIEZO_GAIN then
+# sets the absolute authority.
+_hpe_raw = plate_mode_curv(*ACT_POS)
+PHI_ACT  = _hpe_raw / np.abs(_hpe_raw[0]) * PHI[0]         # actuator input vector
+
+# Reference milling position for the fixed-position (snapshot) study: near the
+# right end of the free edge (close to the sensor), where the milling excites the
+# 2nd (torsion) mode strongly and produces the 2nd-mode chatter of the paper's
+# condition S (f_c2 ~ 1.1 kHz).  Still non-collocated: phi_mill(0.9) != sensor.
+MILL_POS_STATIC = 0.9
 
 # --------------------------------------------------------------------------- #
 # 2. Plate geometry / material  (Table 1)                                     #
@@ -154,10 +211,11 @@ DUTY = float(_phi_eng / (2.0 * np.pi / TOOL["n_teeth"]))     # ~0.096  (9.6 %)
 # geometry / averaging factors and the mode-shape scaling into two calibrated
 # dimensionless knobs, tuned in plant.py so that the open loop matches Fig.14(a).
 ALPHA4_BASE = TOOL["kt"] * CONDITION_S["a_axial"]           # ~2.78e5 N/m (order)
-# --- Calibrated so that the UNCONTROLLED plate at condition S is unstable with
-#     2nd-mode chatter ~1.1 kHz (matches Fig. 14a), and a velocity-feedback probe
-#     stabilises it with tens of volts (matches the paper's control-voltage scale).
-CUT_GAIN    = 1.5     # dimensionless regenerative-loop-gain multiplier
+# --- Calibrated (with the non-collocated geometry and the reference milling
+#     position MILL_POS_STATIC) so that the UNCONTROLLED plate at condition S is
+#     unstable with 2nd-mode chatter ~1.1 kHz (matches Fig. 14a), stabilisable
+#     with tens of volts (matches the paper's control-voltage scale).
+CUT_GAIN    = 2.2     # dimensionless regenerative-loop-gain multiplier
 PIEZO_GAIN  = 8.0     # dimensionless actuator-authority multiplier
 
 # Non-smooth milling-force coefficient bounds (Section 3.2, Eq. 23):

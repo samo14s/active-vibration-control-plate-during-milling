@@ -22,7 +22,7 @@ class PID(Controller):
     name = "PID (classical)"
     color = "#e8710a"      # orange
 
-    def __init__(self, Kp=2.0e4, Ki=0.0, Kd=320.0, N=8000.0, **kw):
+    def __init__(self, Kp=1.0e4, Ki=0.0, Kd=200.0, N=8000.0, **kw):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd

@@ -142,7 +142,7 @@ def main():
     gs = fig2.add_gridspec(2, 1, height_ratios=[0.8, 1.2], hspace=0.32)
     ax0 = fig2.add_subplot(gs[0])
     xi = np.linspace(0, 1, 200)
-    prof = np.array([P.edge_mode_profile(x) for x in xi])
+    prof = np.array([C.phi_mill(x) / C.PHI[:C.N_MODES] for x in xi])   # relative to ref
     for i in range(prof.shape[1]):
         ax0.plot(xi * C.T_PASS, prof[:, i] ** 2, lw=1.5, label=f"mode {i+1}")
     ax0.set_title("(a) Varying dynamics — milling-point modal coupling φ² vs tool position")

@@ -58,7 +58,7 @@ def piezo_input_vector(gain=None, phi=None):
     scale so that ~O(10-100 V) yields meaningful control (calibrated in plant).
     """
     gain = C.PIEZO_GAIN if gain is None else gain
-    phi  = C.PHI if phi is None else np.asarray(phi, float)
+    phi  = C.PHI_ACT if phi is None else np.asarray(phi, float)   # actuator location
     H0 = 3.0e-2          # base authority [modal-force / V], calibrated
     return gain * H0 * phi
 
@@ -90,16 +90,18 @@ def design_state_space(gain_piezo=None, n_modes=None, zeta_design=None):
     omega = C.OMEGA_N[:n]
     zeta = C.MODE_ZETA[:n] if zeta_design is None else np.full(n, float(zeta_design))
     K, Cd = modal_matrices(omega, zeta)
-    Hpe = piezo_input_vector(gain_piezo)[:n]
-    phi = C.PHI[:n]
+    Hpe = piezo_input_vector(gain_piezo)[:n]           # actuator (right-lower)
+    phi_sensor = C.PHI_SENSOR[:n]                       # sensor  (right-upper)
+    phi_mill_ref = C.phi_mill(C.MILL_POS_STATIC)[:n]    # milling force enters here
 
     A = np.block([[np.zeros((n, n)), np.eye(n)],
                   [-K,               -Cd]])
-    Bu = np.vstack([np.zeros((n, 1)), Hpe.reshape(-1, 1)])          # u -> states
-    Bd = np.vstack([np.zeros((n, 1)), phi.reshape(-1, 1)])          # force -> states
-    Cy = np.hstack([phi.reshape(1, -1), np.zeros((1, n))])          # states -> y
+    Bu = np.vstack([np.zeros((n, 1)), Hpe.reshape(-1, 1)])                  # u -> states
+    Bd = np.vstack([np.zeros((n, 1)), phi_mill_ref.reshape(-1, 1)])         # force -> states
+    Cy = np.hstack([phi_sensor.reshape(1, -1), np.zeros((1, n))])           # states -> y (sensor)
 
-    return dict(A=A, Bu=Bu, Bd=Bd, Cy=Cy, n=n, K=K, Cd=Cd, Hpe=Hpe, phi=phi)
+    return dict(A=A, Bu=Bu, Bd=Bd, Cy=Cy, n=n, K=K, Cd=Cd,
+                Hpe=Hpe, phi=phi_sensor)
 
 
 # --------------------------------------------------------------------------- #
@@ -120,32 +122,6 @@ def engagement(t, tau, duty=None, smooth=True):
     if ph >= duty:
         return 0.0
     return 0.5 * (1.0 - np.cos(2.0 * np.pi * ph / duty))
-
-
-# --------------------------------------------------------------------------- #
-#  Spatial variation of the milling-point mode shape along the free upper edge #
-# --------------------------------------------------------------------------- #
-def edge_mode_profile(xi):
-    """
-    Mode-shape multipliers (one per mode) at the milling point as the tool
-    advances along the free upper edge, xi in [0,1] (0 = pass start, 1 = end).
-
-    These reproduce the paper's "varying dynamic characteristics" (its Fig. 7,
-    D_Pr^T D_Pr varying with milling position) with physically motivated spatial
-    profiles along the free edge of a cantilever plate:
-      * mode 1 (first bending): nearly uniform along the free top edge;
-      * mode 2 (first torsion): antinodes at the two free corners, a node in the
-        middle -> its coupling phi^2 is large at BOTH ends and vanishes mid-span,
-        giving the hour-glass response envelope seen in the paper's Fig. 14(c,e);
-      * mode 3: two internal nodes.
-    Sign changes are physical (they flip the phase of the modal forcing / the
-    cross-coupling); the self-coupling enters as phi^2 and is sign-independent.
-    """
-    xi = np.clip(xi, 0.0, 1.0)
-    p1 = 1.0 + 0.15 * np.sin(np.pi * xi)           # mode 1: ~uniform
-    p2 = np.cos(np.pi * xi)                         # mode 2: antinodes at ends, node mid
-    p3 = np.cos(2.0 * np.pi * xi)                   # mode 3: two internal nodes
-    return np.array([p1, p2, p3])[:C.N_MODES]
 
 
 # --------------------------------------------------------------------------- #
@@ -206,19 +182,25 @@ class MillingPlant:
         self.omega0 = C.OMEGA_N * np.sqrt((1.0 + self.dstiff) / (1.0 + self.dmass))
         self.zeta0  = C.MODE_ZETA * (1.0 + self.dzeta)
         K, Cd = modal_matrices(self.omega0, self.zeta0)
-        # FIXED sensor / actuator mode shape (right-upper corner / piezo patch)
-        self.phi = C.PHI / np.sqrt(1.0 + self.dmass)
-        self.Hpe = piezo_input_vector(self.piezo_gain, phi=self.phi)
+        # NON-COLLOCATED locations (paper Fig. 2 / Section 5).  The mass-normalised
+        # mode shapes all scale by 1/sqrt(1+dmass) under a modal-mass perturbation.
+        ms = 1.0 / np.sqrt(1.0 + self.dmass)
+        self.phi = C.PHI_SENSOR * ms                        # sensor  (right-upper)
+        self.phi_act = C.PHI_ACT * ms                       # actuator(right-lower)
+        self.phi_mill0 = C.phi_mill(C.MILL_POS_STATIC) * ms  # milling pt (snapshot)
+        self.Hpe = piezo_input_vector(self.piezo_gain, phi=self.phi_act)
+        self._ms = ms
 
         self.A = np.block([[np.zeros((n, n)), np.eye(n)],
                            [-K,               -Cd]])
         self.Bu = np.vstack([np.zeros((n, 1)), self.Hpe.reshape(-1, 1)])
-        self.Bd = np.vstack([np.zeros((n, 1)), self.phi.reshape(-1, 1)])
+        self.Bd = np.vstack([np.zeros((n, 1)), self.phi_mill0.reshape(-1, 1)])
         self.Cy = np.hstack([self.phi.reshape(1, -1), np.zeros((1, n))])
 
-        # absolute milling-force coefficient and regenerative matrix (static case)
+        # absolute milling-force coefficient and regenerative matrix (static case,
+        # milling force acts AT the milling point phi_mill0)
         self.alpha4 = self.cut_gain * C.ALPHA4_BASE * self.alpha4_factor
-        self.G = self.alpha4 * np.outer(self.phi, self.phi)     # (n,n)
+        self.G = self.alpha4 * np.outer(self.phi_mill0, self.phi_mill0)   # (n,n)
 
         # static (feed) cutting force amplitude   [modal force units]
         self.f_static = C.CONDITION_S["feed_per_tooth"] * C.ALPHA4_BASE
@@ -245,8 +227,8 @@ class MillingPlant:
             # ---- fixed-position fast path (single-point milling snapshot) ----
             xdot = self.A @ x
             xdot[n:] -= g * (self.G @ (q - q_tau))          # regenerative (destab.)
-            xdot[n:] += g * self.f_static * self.phi        # feed excitation
-            xdot[n:] += self.Hpe * u                        # control
+            xdot[n:] += g * self.f_static * self.phi_mill0  # feed excitation (mill pt)
+            xdot[n:] += self.Hpe * u                        # control (actuator)
             return xdot
 
         # ---- full-pass path: milling point moves, frequencies may drift ----
@@ -254,8 +236,8 @@ class MillingPlant:
         omega = self.omega0 * (1.0 + self.drift * prog)     # material removal
         Kdiag = omega ** 2
         Cdiag = 2.0 * self.zeta0 * omega
-        # milling-point mode shape (sensor/actuator remain the fixed self.phi)
-        phi_mill = self.phi * edge_mode_profile(prog) if self.moving else self.phi
+        # milling-point mode shape moves along the free edge; sensor & actuator fixed
+        phi_mill = (C.phi_mill(prog) * self._ms) if self.moving else self.phi_mill0
 
         qd = x[n:]
         qdd = -Kdiag * q - Cdiag * qd                       # diagonal modal dynamics

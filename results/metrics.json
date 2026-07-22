@@ -1,0 +1,160 @@
+{
+  "nominal": {
+    "No control": {
+      "rms_settled_um": 34536623.16848263,
+      "rms_full_um": 26753114.20826947,
+      "peak_um": 313544676.3399514,
+      "rms_volt": 0.0,
+      "peak_volt": 0.0,
+      "control_energy": 0.0,
+      "dom_freq_hz": 1103.1896888425986,
+      "dom_amp_um": 817542.3857001574,
+      "diverged": true
+    },
+    "PID": {
+      "rms_settled_um": 3.329812036135952,
+      "rms_full_um": 3.3824051531238357,
+      "peak_um": 14.441007953075221,
+      "rms_volt": 3.875350918143022,
+      "peak_volt": 15.958443937252536,
+      "control_energy": 4.505787527857649,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 2.12905393075825,
+      "diverged": false
+    },
+    "SMC": {
+      "rms_settled_um": 8.720808302090655,
+      "rms_full_um": 8.68320020649657,
+      "peak_um": 15.429873637295916,
+      "rms_volt": 7.434988027073706,
+      "peak_volt": 11.576623665028439,
+      "control_energy": 16.585850704625383,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 2.7494970894737745,
+      "diverged": false
+    },
+    "H-infinity": {
+      "rms_settled_um": 2.2590074227740744,
+      "rms_full_um": 2.3801739271491957,
+      "peak_um": 8.984039426702337,
+      "rms_volt": 4.127117231227282,
+      "peak_volt": 37.31798458981554,
+      "control_energy": 5.082933158083469,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 1.9725637376074994,
+      "diverged": false
+    },
+    "mu-synthesis": {
+      "rms_settled_um": 4.674606791893258,
+      "rms_full_um": 4.73357894144598,
+      "peak_um": 11.537519650036336,
+      "rms_volt": 3.712340499449915,
+      "peak_volt": 20.100048562755227,
+      "control_energy": 4.132216767851684,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 5.945286377903411,
+      "diverged": false
+    },
+    "ADRC": {
+      "rms_settled_um": 3.7790202879277905,
+      "rms_full_um": 3.816366605768271,
+      "peak_um": 11.138030945401875,
+      "rms_volt": 8.878788216105411,
+      "peak_volt": 78.62192743655523,
+      "control_energy": 23.6529433191523,
+      "dom_freq_hz": 736.5707590157532,
+      "dom_amp_um": 3.963740487062699,
+      "diverged": false
+    },
+    "MPC": {
+      "rms_settled_um": 10.264935642972121,
+      "rms_full_um": 10.209540924634764,
+      "peak_um": 17.687930159683063,
+      "rms_volt": 8.931277663676717,
+      "peak_volt": 40.83638461681704,
+      "control_energy": 23.932160118411094,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 3.749364177604323,
+      "diverged": false
+    }
+  },
+  "worst": {
+    "No control": {
+      "rms_settled_um": 759408787.896095,
+      "rms_full_um": 588235517.6977923,
+      "peak_um": 9502456533.392998,
+      "rms_volt": 0.0,
+      "peak_volt": 0.0,
+      "control_energy": 0.0,
+      "dom_freq_hz": 1126.323639075317,
+      "dom_amp_um": 10910735.51229442,
+      "diverged": true
+    },
+    "PID": {
+      "rms_settled_um": 3.364426422145074,
+      "rms_full_um": 3.4502281765052705,
+      "peak_um": 16.25816300758549,
+      "rms_volt": 4.032232160171801,
+      "peak_volt": 19.412363299194368,
+      "control_energy": 4.878134220868878,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 2.1312662959212703,
+      "diverged": false
+    },
+    "SMC": {
+      "rms_settled_um": 8.724436605519376,
+      "rms_full_um": 8.678022925496364,
+      "peak_um": 15.465450317733355,
+      "rms_volt": 7.434325229192325,
+      "peak_volt": 11.577220260949066,
+      "control_energy": 16.582892356047775,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 2.7502503451343876,
+      "diverged": false
+    },
+    "H-infinity": {
+      "rms_settled_um": 2.2537993105026177,
+      "rms_full_um": 2.3723276953759465,
+      "peak_um": 10.584552544455686,
+      "rms_volt": 4.1678897000730935,
+      "peak_volt": 37.31798458981554,
+      "control_energy": 5.1844111412897895,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 1.9735106048274325,
+      "diverged": false
+    },
+    "mu-synthesis": {
+      "rms_settled_um": 4.679310532838993,
+      "rms_full_um": 4.751792904013883,
+      "peak_um": 11.665243601590639,
+      "rms_volt": 3.7299094454492687,
+      "peak_volt": 20.10014554352992,
+      "control_energy": 4.171447181420361,
+      "dom_freq_hz": 489.936206223148,
+      "dom_amp_um": 5.949813585145351,
+      "diverged": false
+    },
+    "ADRC": {
+      "rms_settled_um": 3.791294409144241,
+      "rms_full_um": 3.875880293451494,
+      "peak_um": 11.41889891665525,
+      "rms_volt": 9.17794078436806,
+      "peak_volt": 78.62192743655523,
+      "control_energy": 25.273567034794105,
+      "dom_freq_hz": 736.5707590157532,
+      "dom_amp_um": 3.967706396424366,
+      "diverged": false
+    },
+    "MPC": {
+      "rms_settled_um": 10.270937106651425,
+      "rms_full_um": 10.202699419120574,
+      "peak_um": 17.757860859438296,
+      "rms_volt": 8.928358208247346,
+      "peak_volt": 40.83638461681704,
+      "control_energy": 23.91650658235084,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 3.751304376773699,
+      "diverged": false
+    }
+  }
+}

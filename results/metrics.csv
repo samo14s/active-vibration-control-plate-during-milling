@@ -1,0 +1,7 @@
+controller,RMS_nom_um,peak_nom_um,rmsV,peakV,energy,domFreq_Hz,RMS_worst_um,robust_ratio,diverged
+PID,3.33,14.44,3.88,16.0,4.5058,490.0,3.364,1.01,False
+SMC,8.721,15.43,7.43,11.6,16.5859,247.0,8.724,1.0,False
+H-infinity,2.259,8.98,4.13,37.3,5.0829,490.0,2.254,1.0,False
+mu-synthesis,4.675,11.54,3.71,20.1,4.1322,490.0,4.679,1.0,False
+ADRC,3.779,11.14,8.88,78.6,23.6529,737.0,3.791,1.0,False
+MPC,10.265,17.69,8.93,40.8,23.9322,247.0,10.271,1.0,False

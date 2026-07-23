@@ -35,6 +35,8 @@ article_simulation_package/
 │
 ├── 02_controllers/        ← Control algorithms
 │   ├── lqg_controller.py         # LQG with Kalman observer
+│   ├── rcsac_controller.py       # ⭐ RC-SAC: novel regeneration-cancelling
+│   │                             #    saturation-aware control (this work)
 │   └── darc_mpc_v3_controller.py # DARC-MPC: LQG + NN feedforward
 │
 ├── 03_analysis/           ← Stability & robustness analysis
@@ -204,6 +206,23 @@ Newmark-β time integration scheme (β = 1/4, γ = 1/2):
 - Tracks both physical states and observer estimates
 
 ### 02_controllers — Control Algorithms
+
+#### `rcsac_controller.py`  ⭐ (novel strategy of this work)
+**RC-SAC — Regeneration-Cancelling Saturation-Aware Control.** Targets the
+root cause of chatter (the delayed regenerative force) instead of its energy:
+1. **Exact decoupling filter** `C(s) = [DpᵀG(s)Dp]/[DpᵀG(s)H]` — dynamic
+   inversion of the actuator→tool-point channel, resolving the opposite-sign
+   static-gain conflict between modes (+85 vs −257) that defeats static
+   cancellation;
+2. **Cutting-force-aware Kalman predictor** — the known force model
+   (α₃, α₄, τ) is injected into the observer propagation;
+3. **Saturation-aware priority allocation** — the stability-critical
+   feedforward gets the ±150 V budget first, LQG damping uses the headroom.
+
+Worst-case result (RPM 4900, ±150 V): critical depth of cut
+**0.40 (OL) → 2.05 (LQG) → 3.85 mm (RC-SAC)** — ×1.9 vs LQG, ×9.6 vs open loop,
+with lower vibration and voltage than LQG at every depth. See
+[`docs/RCSAC_STRATEGY.md`](docs/RCSAC_STRATEGY.md).
 
 #### `lqg_controller.py`
 Linear Quadratic Gaussian controller:

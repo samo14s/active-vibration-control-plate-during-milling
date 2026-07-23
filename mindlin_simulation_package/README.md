@@ -28,6 +28,7 @@ article_simulation_package/
 │   ├── mindlin_q8.py             # Reissner–Mindlin Q8 plate element FEM (literal Plate-FEM port)
 │   ├── kirchhoff_q4.py           # Kirchhoff Q4 plate element FEM (reference only, unused)
 │   ├── plate_model.py            # Plate assembly + modal reduction (Mindlin)
+│   ├── inprocess_plate.py        # In-process material removal (time-varying dynamics)
 │   ├── piezo_actuator.py         # Piezoelectric actuator model (QDA60-200.7)
 │   ├── milling_force.py          # Cutting force model (3-tooth end-mill)
 │   └── newmark_solver.py         # Newmark-β time integration
@@ -161,6 +162,14 @@ Provides:
 - Serendipity mesh numbering, point evaluation, and piezo moment-load helpers
 
 See [`MINDLIN_PORT.md`](01_core/MINDLIN_PORT.md) for the verbatim `.m` ↔ `.py` map.
+
+#### `inprocess_plate.py` — in-process material removal
+`InProcessPlate` (subclass of `PlateModel`) raises the fidelity so the cutter
+**removes material as it feeds along its path**: per-element thickness field,
+`machine_to(x_tool, a_p, a_e)` removal law, `rebuild()`, `instantaneous_modes()`
+and a fixed-basis ROM `reduced_on_basis(V0)`. With nothing removed it equals
+`PlateModel`. See [`docs/MATERIAL_REMOVAL.md`](docs/MATERIAL_REMOVAL.md) and
+`05_main/gen_material_removal_sim.py` (roughing pass: mode 1 519 → 542 Hz).
 
 #### `kirchhoff_q4.py` (reference only)
 Original Kirchhoff plate Q4 (4-node) element with Hermite shape functions.

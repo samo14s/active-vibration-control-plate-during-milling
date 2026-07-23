@@ -38,6 +38,13 @@ cantilever mode-1 shape (w=0 at base → max at free top), piezo patch corners
 `(x_P1,z_P1)-(x_P2,z_P2)`, displacement-sensor location, and tool path along
 `X_P` at fixed height.
 
+### `verify_inprocess.py`
+Checks the in-process material-removal model (`InProcessPlate`, see
+[`../docs/MATERIAL_REMOVAL.md`](../docs/MATERIAL_REMOVAL.md)): uniform-thickness
+consistency with `PlateModel`, per-pass idempotency of `machine_to`, monotonic
+mass reduction, the correct physical sign (thinning the free tip raises the
+cantilever fundamental), and fixed-basis ROM accuracy.
+
 ### `verify_integration.py`
 Builds the Mindlin `PlateModel` with the exact article parameters, checks every
 interface attribute the downstream code relies on, then runs the **package-12

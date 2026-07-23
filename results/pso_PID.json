@@ -1,52 +1,74 @@
 {
   "PID": {
     "gains": {
-      "Kp": 16730.0,
+      "Kp": 1000.0,
       "Ki": 0.0,
-      "Kd": 501.2,
-      "N": 1248.0
+      "Kd": 393.7,
+      "N": 1360.0
     },
-    "cost": 1415.5785436043484,
-    "robust": false,
+    "cost": 294.4064608480365,
+    "robust": true,
     "validation": {
       "a4_0.3": {
-        "rms_um": 216.41,
-        "peak_V": 150.0,
+        "rms_um": 3.73,
+        "peak_V": 4.4,
         "diverged": false
       },
       "a4_0.7": {
-        "rms_um": 29.2,
-        "peak_V": 48.4,
+        "rms_um": 1.27,
+        "peak_V": 3.6,
         "diverged": false
       },
       "a4_1.1": {
-        "rms_um": 7.8,
-        "peak_V": 17.7,
+        "rms_um": 1.99,
+        "peak_V": 4.7,
         "diverged": false
       },
       "a4_1.5": {
-        "rms_um": 7.77,
-        "peak_V": 16.8,
+        "rms_um": 2.72,
+        "peak_V": 6.2,
         "diverged": false
       },
       "a4_1.9": {
-        "rms_um": 8.15,
-        "peak_V": 16.3,
+        "rms_um": 3.51,
+        "peak_V": 7.6,
         "diverged": false
       },
       "a4_2.4": {
-        "rms_um": 12.29,
-        "peak_V": 17.8,
+        "rms_um": 5.01,
+        "peak_V": 9.1,
         "diverged": false
       },
       "a4_2.9": {
-        "rms_um": 20.18,
-        "peak_V": 39.0,
+        "rms_um": 10.94,
+        "peak_V": 16.3,
+        "diverged": false
+      },
+      "f_up": {
+        "rms_um": 3.72,
+        "peak_V": 6.6,
         "diverged": false
       }
     },
-    "seconds": 1199.7,
-    "robust_note": "robust = stable AND controlling (<50um, not saturating) across all alpha4 conditions",
-    "worst_condition_um": 216.41
+    "history": [
+      3825.55,
+      311.67,
+      311.67,
+      311.67,
+      311.67,
+      311.67,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41,
+      294.41
+    ],
+    "seconds": 1549.8
   }
 }

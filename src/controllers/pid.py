@@ -39,7 +39,12 @@ class PID(Controller):
     # feedback gain, so no PID tuning covers the full range -- a structural limit
     # (contrast the STATE-feedback SMC, which PSO makes robust everywhere).  This
     # performance-vs-robustness gap is exactly why the paper adopted robust control.
-    def __init__(self, Kp=1.673e4, Ki=0.0, Kd=501.2, N=1248.0, **kw):
+    # defaults: PSO optimum on the PAPER-EXACT force model.  A LOW-gain PID now
+    # holds the MID band (alpha4 ~ 0.7..2.4 -> 1.3-5 um at <10 V) but grows
+    # slowly (2.4-2.5x per window third) at BOTH band edges (alpha4 = 0.3 and
+    # 2.9) — bounded snapshots, divergent over the long pass.  The RHP zero
+    # still caps output feedback; only the band centre is coverable.
+    def __init__(self, Kp=1000.0, Ki=0.0, Kd=393.7, N=1360.0, **kw):
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd

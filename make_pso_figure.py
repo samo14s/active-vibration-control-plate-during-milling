@@ -31,7 +31,8 @@ from src.controllers.mpc import MPC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 _COLOR = {"PID": "#e8710a", "SMC": "#188038", "ADRC": "#a142f4",
-          "H-infinity": "#1a73e8", "mu-synthesis": "#d01884", "MPC": "#00897b"}
+          "H-infinity": "#1a73e8", "mu-synthesis": "#d01884", "MPC": "#00897b",
+          "CTDC": "#b31412", "TDSMC": "#7b5c00"}
 LOGDIR = None      # set via CLI; scratchpad path holding pso_<NAME>.log
 
 
@@ -47,14 +48,16 @@ def _factory(name, gains):
     from src.controllers.pid import PID
     from src.controllers.smc import SMC
     from src.controllers.adrc import ADRC
-    cls = {"PID": PID, "SMC": SMC, "ADRC": ADRC}[name]
+    from src.controllers.ctdc import CTDC
+    from src.controllers.tdsmc import TDSMC
+    cls = {"PID": PID, "SMC": SMC, "ADRC": ADRC, "CTDC": CTDC, "TDSMC": TDSMC}[name]
     return lambda: cls(**gains)
 
 
 def main():
     plt.rcParams.update({"figure.dpi": 120, "font.size": 10, "axes.grid": True,
                          "grid.alpha": 0.3, "axes.axisbelow": True})
-    names = ["PID", "SMC", "ADRC"]
+    names = ["PID", "SMC", "ADRC", "CTDC", "TDSMC"]
     data = {n: load(n) for n in names}
 
     fig, ax = plt.subplots(1, 2, figsize=(13, 5.2))

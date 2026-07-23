@@ -44,6 +44,9 @@ ROBUST_CONDITIONS = [
     ("a4_1.9", dict(alpha4_factor=1.9, dzeta=-0.2)),
     ("a4_2.4", dict(alpha4_factor=2.4, dzeta=-0.2)),
     ("a4_2.9", dict(alpha4_factor=2.9, dzeta=-0.2)),   # max chatter force (hardest)
+    # modal-frequency rise (material removal, ~+4 %) — breadth against the
+    # frequency drift of the pass, not only the force band
+    ("f_up",  dict(dmass=-0.08, dzeta=-0.2)),
 ]
 
 
@@ -106,9 +109,12 @@ def robust_cost(make, params, t_sim=0.30, volt_weight=0.02, worst_weight=2.0,
 
 
 def pso(cost, bounds, n_particles=16, n_iters=18, seed=0,
-        w=0.72, c1=1.5, c2=1.5, verbose=True, tag=""):
+        w=0.72, c1=1.5, c2=1.5, verbose=True, tag="", x0=None):
     """Global-best PSO.  `bounds` is a list of (lo, hi) in the SEARCH space.
 
+    `x0` (optional) is a list of seed points injected into the initial swarm
+    (e.g. a previously tuned optimum, or the zero-TD point of a combined
+    controller so the swarm can never end worse than the base controller).
     Returns (best_x, best_cost, history).
     """
     rng = np.random.default_rng(seed)
@@ -117,6 +123,9 @@ def pso(cost, bounds, n_particles=16, n_iters=18, seed=0,
     dim = len(bounds)
 
     X = lb + rng.random((n_particles, dim)) * (ub - lb)
+    if x0:
+        for i, xs in enumerate(x0[:n_particles]):
+            X[i] = np.clip(np.asarray(xs, float), lb, ub)
     V = (rng.random((n_particles, dim)) - 0.5) * (ub - lb) * 0.1
     pbest = X.copy()
     pcost = np.array([cost(x) for x in X])
@@ -161,7 +170,9 @@ def pid_spec():
 
     def make(x):
         return PID(**decode(x))
-    return dict(name="PID", bounds=bounds, decode=decode, make=make)
+    # seed: the previous PSO optimum (log10 Kp, log10 Kd, log10 N)
+    seeds = [[4.223, 2.700, 3.096]]
+    return dict(name="PID", bounds=bounds, decode=decode, make=make, seeds=seeds)
 
 
 def smc_spec():
@@ -175,7 +186,9 @@ def smc_spec():
 
     def make(x):
         return SMC(**decode(x))
-    return dict(name="SMC", bounds=bounds, decode=decode, make=make)
+    # seed: the previous PSO optimum (zeta_s, log10 ks, eta, log10 phi)
+    seeds = [list(_SMC_SEED)]
+    return dict(name="SMC", bounds=bounds, decode=decode, make=make, seeds=seeds)
 
 
 def adrc_spec():
@@ -192,7 +205,48 @@ def adrc_spec():
     return dict(name="ADRC", bounds=bounds, decode=decode, make=make)
 
 
-SPECS = {"PID": pid_spec, "SMC": smc_spec, "ADRC": adrc_spec}
+def ctdc_spec():
+    from .controllers.ctdc import CTDC
+    # delayed-PD gains of the paper's Eq. (30): KPp [V/m], KPd [V/(m/s)].
+    # The cancelling sense of the regenerative force is negative KPp on this
+    # geometry (verified by a trend probe), but both signs are searched.
+    bounds = [(-2.0e5, 5.0e4), (-60.0, 60.0)]
+
+    def decode(x):
+        return dict(KPp=round_sig(x[0]), KPd=round_sig(x[1]))
+
+    def make(x):
+        return CTDC(**decode(x))
+    # seeds: zero-TD (= plain mu, the base) and the probed cancelling sense
+    seeds = [[0.0, 0.0], [-4.0e4, 0.0]]
+    return dict(name="CTDC", bounds=bounds, decode=decode, make=make, seeds=seeds)
+
+
+# previously PSO-tuned SMC optimum, reused as swarm seed (search coordinates:
+# zeta_s, log10 ks, eta, log10 phi) — tuned on the paper-exact force model
+_SMC_SEED = [0.3644, 3.119, 254.6, -1.056]
+
+
+def tdsmc_spec():
+    from .controllers.tdsmc import TDSMC
+    # joint search: sliding-mode gains + the paper's delayed-PD gains
+    bounds = [(0.05, 0.60), (3.0, 4.7), (10.0, 500.0), (-1.7, -0.3),
+              (-2.0e5, 5.0e4), (-60.0, 60.0)]
+
+    def decode(x):
+        return dict(zeta_s=round_sig(x[0]), ks=round_sig(10.0 ** x[1]),
+                    eta=round_sig(x[2]), phi=round_sig(10.0 ** x[3]),
+                    KPp=round_sig(x[4]), KPd=round_sig(x[5]))
+
+    def make(x):
+        return TDSMC(**decode(x))
+    # seeds: plain tuned SMC (TD off) and the probed cancelling TD sense
+    seeds = [_SMC_SEED + [0.0, 0.0], _SMC_SEED + [-4.0e4, 0.0]]
+    return dict(name="TDSMC", bounds=bounds, decode=decode, make=make, seeds=seeds)
+
+
+SPECS = {"PID": pid_spec, "SMC": smc_spec, "ADRC": adrc_spec,
+         "CTDC": ctdc_spec, "TDSMC": tdsmc_spec}
 
 
 def tune(name, n_particles=16, n_iters=18, seed=0):
@@ -201,7 +255,7 @@ def tune(name, n_particles=16, n_iters=18, seed=0):
     best_x, best_cost, hist = pso(
         lambda x: robust_cost(spec["make"], x),
         spec["bounds"], n_particles=n_particles, n_iters=n_iters, seed=seed,
-        tag=spec["name"])
+        tag=spec["name"], x0=spec.get("seeds"))
     best_kwargs = spec["decode"](best_x)
     val = validate(spec["make"], best_x)
     return best_kwargs, best_cost, val, hist

@@ -40,6 +40,8 @@ from src.controllers.hinf import Hinf
 from src.controllers.musyn import MuSynthesis
 from src.controllers.adrc import ADRC
 from src.controllers.mpc import MPC
+from src.controllers.ctdc import CTDC
+from src.controllers.tdsmc import TDSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 os.makedirs(RESULTS, exist_ok=True)
@@ -52,13 +54,16 @@ CONTROLLERS = [
     ("mu-synthesis", MuSynthesis),
     ("ADRC",         ADRC),
     ("MPC",          MPC),
+    ("RCTDC (paper)", CTDC),      # paper's combined time-delay control (Eq. 30)
+    ("TD-SMC (new)",  TDSMC),     # new strategy: sliding-mode + time-delay comp.
 ]
 
 plt.rcParams.update({
     "figure.dpi": 120, "font.size": 10, "axes.grid": True,
     "grid.alpha": 0.3, "axes.axisbelow": True, "legend.framealpha": 0.9,
     "axes.prop_cycle": plt.cycler(color=[
-        "#e8710a", "#188038", "#1a73e8", "#d01884", "#a142f4", "#00897b"]),
+        "#e8710a", "#188038", "#1a73e8", "#d01884", "#a142f4", "#00897b",
+        "#b31412", "#7b5c00"]),
 })
 
 
@@ -93,6 +98,7 @@ def color_of(key):
 
 _COLOR = {"PID": "#e8710a", "SMC": "#188038", "H-infinity": "#1a73e8",
           "mu-synthesis": "#d01884", "ADRC": "#a142f4", "MPC": "#00897b",
+          "RCTDC (paper)": "#b31412", "TD-SMC (new)": "#7b5c00",
           "No control": "#9aa0a6"}
 
 
@@ -130,7 +136,7 @@ def fig_time_response(runs):
 def fig_time_full(runs):
     """Full-horizon time response, one panel per controller, auto-scaled per
     panel so the entire trajectory is visible (no clipping)."""
-    fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+    fig, axes = plt.subplots(4, 2, figsize=(12, 11.5), sharex=True)
     for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
         r = runs[key]
         y_um = r["y"] * 1e6
@@ -152,7 +158,7 @@ def fig_time_full(runs):
 
 
 def fig_control_voltage(runs):
-    fig, axes = plt.subplots(3, 2, figsize=(10, 7.5), sharex=True)
+    fig, axes = plt.subplots(4, 2, figsize=(10, 9.5), sharex=True)
     for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
         r = runs[key]
         a.plot(r["t"] * 1e3, r["u"], color=_COLOR[key], lw=0.6)

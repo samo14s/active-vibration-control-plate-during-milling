@@ -93,7 +93,9 @@ class SMC(Controller):
     name = "SMC"
     color = "#188038"      # green
 
-    def __init__(self, zeta_s=0.427, ks=1.276e4, eta=347.3, phi=0.0699,
+    # defaults: PSO optimum on the PAPER-EXACT force model (see tuning_pso.py;
+    # robust across alpha4 in [0.3, 2.9] and the +4% frequency-rise condition)
+    def __init__(self, zeta_s=0.3644, ks=1315.0, eta=254.6, phi=0.0879,
                  kf_q=5e-2, kf_r=None, n_modes=3, **kw):
         self.zeta_s = zeta_s      # sliding-manifold design damping
         self.ks = ks              # linear reaching gain (damping inside boundary layer)

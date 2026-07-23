@@ -21,7 +21,7 @@ RESULTS = os.path.join(os.path.dirname(__file__), "results")
 os.makedirs(RESULTS, exist_ok=True)
 
 
-def main(names=("PID", "SMC", "ADRC"), n_particles=14, n_iters=16, seed=0):
+def main(names=("PID", "SMC", "ADRC", "CTDC", "TDSMC"), n_particles=14, n_iters=16, seed=0):
     all_out = {}
     for name in names:
         t0 = time.time()
@@ -60,5 +60,6 @@ def main(names=("PID", "SMC", "ADRC"), n_particles=14, n_iters=16, seed=0):
 
 if __name__ == "__main__":
     import sys
-    names = tuple(sys.argv[1:]) if len(sys.argv) > 1 else ("PID", "SMC", "ADRC")
+    names = tuple(sys.argv[1:]) if len(sys.argv) > 1 else ("PID", "SMC", "ADRC",
+                                                           "CTDC", "TDSMC")
     main(names=names)

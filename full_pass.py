@@ -32,12 +32,16 @@ from src.controllers.hinf import Hinf
 from src.controllers.musyn import MuSynthesis
 from src.controllers.adrc import ADRC
 from src.controllers.mpc import MPC
+from src.controllers.ctdc import CTDC
+from src.controllers.tdsmc import TDSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 CONTROLLERS = [("PID", PID), ("SMC", SMC), ("H-infinity", Hinf),
-               ("mu-synthesis", MuSynthesis), ("ADRC", ADRC), ("MPC", MPC)]
+               ("mu-synthesis", MuSynthesis), ("ADRC", ADRC), ("MPC", MPC),
+               ("RCTDC (paper)", CTDC), ("TD-SMC (new)", TDSMC)]
 _COLOR = {"PID": "#e8710a", "SMC": "#188038", "H-infinity": "#1a73e8",
           "mu-synthesis": "#d01884", "ADRC": "#a142f4", "MPC": "#00897b",
+          "RCTDC (paper)": "#b31412", "TD-SMC (new)": "#7b5c00",
           "No control": "#c9922b"}
 
 

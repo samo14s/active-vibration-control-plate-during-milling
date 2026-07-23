@@ -36,6 +36,7 @@ import numpy as np
 from dataclasses import dataclass, field
 
 from . import config as C
+from . import cutforce as CF
 
 
 # --------------------------------------------------------------------------- #
@@ -155,6 +156,12 @@ class MillingPlant:
     dzeta: float = -0.20        # Fig.16 uses 80% of nominal damping
     alpha4_factor: float = None
     smooth_engage: bool = True
+    # 'paper'  : exact non-smooth per-tooth coefficients alpha3(t)/alpha4(t) of
+    #            the paper's Eqs. (3)-(4) (helix-integrated engagement), sampled
+    #            once and interpolated -- the same milling-force model as the
+    #            reference article;
+    # 'window' : legacy idealised engagement window g(t) * constant alpha4.
+    force_model: str = 'paper'
     moving: bool = False
     freq_drift: bool = False
     t_pass: float = None
@@ -200,10 +207,25 @@ class MillingPlant:
         # absolute milling-force coefficient and regenerative matrix (static case,
         # milling force acts AT the milling point phi_mill0)
         self.alpha4 = self.cut_gain * C.ALPHA4_BASE * self.alpha4_factor
-        self.G = self.alpha4 * np.outer(self.phi_mill0, self.phi_mill0)   # (n,n)
+        self.Gout = np.outer(self.phi_mill0, self.phi_mill0)              # (n,n)
+        self.G = self.alpha4 * self.Gout      # legacy full regenerative matrix
 
         # static (feed) cutting force amplitude   [modal force units]
         self.f_static = C.CONDITION_S["feed_per_tooth"] * C.ALPHA4_BASE
+
+        if self.force_model == 'paper':
+            # paper-exact non-smooth coefficients (Eqs. 3-4): periodic waveforms
+            # sampled over one tooth period, normalised so |period mean| = 1.
+            wf = CF.paper_alpha_waveforms()
+            m4 = abs(wf["a4_mean"])
+            self._w4 = C.PAPER_A4_SIGN * (wf["a4"] / m4)   # regenerative shape
+            self._w3 = wf["a3"] / m4                        # feed-force shape
+            self._nw = len(self._w4)
+            # amplitude giving the same PERIOD-AVERAGE regenerative stiffness as
+            # the legacy window model (alpha4 * mean(g) = alpha4 * DUTY/2), so the
+            # calibrated loop gain carries over; alpha4_factor scales it as before.
+            self._a4_amp = self.alpha4 * (C.DUTY / 2.0)
+            self._ft = C.CONDITION_S["feed_per_tooth"]
         self.t_pass = C.T_PASS if self.t_pass is None else self.t_pass
         self.drift = C.FREQ_DRIFT_PASS[:n] if self.freq_drift else np.zeros(n)
         self._time_varying = self.moving or self.freq_drift
@@ -221,13 +243,26 @@ class MillingPlant:
         n = self.n
         q     = x[:n]
         q_tau = x_tau[:n]
-        g = engagement(t, self.tau, smooth=self.smooth_engage)
+        if self.force_model == 'paper':
+            # paper-exact non-smooth coefficients: interpolate the periodic
+            # waveforms at the current tooth-period phase (Eqs. 3-4)
+            fi = ((t / self.tau) % 1.0) * self._nw
+            i0 = int(fi)
+            fr = fi - i0
+            i0 %= self._nw
+            i1 = (i0 + 1) % self._nw
+            a4_t = self._a4_amp * ((1.0 - fr) * self._w4[i0] + fr * self._w4[i1])
+            f_st = self._ft * self._a4_amp * ((1.0 - fr) * self._w3[i0] + fr * self._w3[i1])
+        else:
+            g = engagement(t, self.tau, smooth=self.smooth_engage)
+            a4_t = g * self.alpha4
+            f_st = g * self.f_static
 
         if not self._time_varying:
             # ---- fixed-position fast path (single-point milling snapshot) ----
             xdot = self.A @ x
-            xdot[n:] -= g * (self.G @ (q - q_tau))          # regenerative (destab.)
-            xdot[n:] += g * self.f_static * self.phi_mill0  # feed excitation (mill pt)
+            xdot[n:] -= a4_t * (self.Gout @ (q - q_tau))    # regenerative (destab.)
+            xdot[n:] += f_st * self.phi_mill0               # feed excitation (mill pt)
             xdot[n:] += self.Hpe * u                        # control (actuator)
             return xdot
 
@@ -242,8 +277,8 @@ class MillingPlant:
         qd = x[n:]
         qdd = -Kdiag * q - Cdiag * qd                       # diagonal modal dynamics
         proj = float(phi_mill @ (q - q_tau))                # milling-point rel. displ.
-        qdd -= g * self.alpha4 * proj * phi_mill            # regenerative (destab.)
-        qdd += g * self.f_static * phi_mill                 # feed excitation
+        qdd -= a4_t * proj * phi_mill                       # regenerative (destab.)
+        qdd += f_st * phi_mill                              # feed excitation
         qdd += self.Hpe * u                                 # control (fixed actuator)
         return np.concatenate([qd, qdd])
 

@@ -1,51 +1,73 @@
 {
   "ADRC": {
     "gains": {
-      "b0": -0.3,
-      "wo": 42230.0,
-      "wc": 4751.0
+      "b0": -0.5844,
+      "wo": 41070.0,
+      "wc": 4066.0
     },
-    "cost": 3957.2372665683797,
+    "cost": 15065.2518193971,
     "robust": false,
     "validation": {
       "a4_0.3": {
-        "rms_um": 112.79,
+        "rms_um": 111.13,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_0.7": {
-        "rms_um": 112.79,
+        "rms_um": 111.61,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_1.1": {
-        "rms_um": 131.08,
+        "rms_um": 117.96,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_1.5": {
-        "rms_um": 146.13,
+        "rms_um": 149.55,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_1.9": {
-        "rms_um": 151.63,
+        "rms_um": 163.28,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_2.4": {
-        "rms_um": 138.73,
+        "rms_um": 146.08,
         "peak_V": 150.0,
         "diverged": false
       },
       "a4_2.9": {
-        "rms_um": 151.88,
+        "rms_um": null,
+        "peak_V": 150.0,
+        "diverged": true
+      },
+      "f_up": {
+        "rms_um": 151.49,
         "peak_V": 150.0,
         "diverged": false
       }
     },
-    "seconds": 1268.0,
-    "robust_note": "robust = stable AND controlling (<50um, not saturating) across all alpha4 conditions",
-    "worst_condition_um": 151.88
+    "history": [
+      28675.46,
+      16297.16,
+      16297.16,
+      16297.16,
+      16297.16,
+      16297.16,
+      16297.16,
+      16297.16,
+      16297.16,
+      16262.63,
+      15516.97,
+      15516.97,
+      15516.97,
+      15516.97,
+      15065.25,
+      15065.25,
+      15065.25
+    ],
+    "seconds": 1370.0
   }
 }

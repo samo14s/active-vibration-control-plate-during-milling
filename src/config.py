@@ -214,11 +214,13 @@ DUTY = float(_phi_eng / (2.0 * np.pi / TOOL["n_teeth"]))     # ~0.096  (9.6 %)
 # geometry / averaging factors and the mode-shape scaling into two calibrated
 # dimensionless knobs, tuned in plant.py so that the open loop matches Fig.14(a).
 ALPHA4_BASE = TOOL["kt"] * CONDITION_S["a_axial"]           # ~2.78e5 N/m (order)
-# --- Calibrated (with the non-collocated geometry and the reference milling
-#     position MILL_POS_STATIC) so that the UNCONTROLLED plate at condition S is
-#     unstable with 2nd-mode chatter ~1.1 kHz (matches Fig. 14a), stabilisable
-#     with tens of volts (matches the paper's control-voltage scale).
-CUT_GAIN    = 2.2     # dimensionless regenerative-loop-gain multiplier
+# --- Calibrated (with the non-collocated geometry, the reference milling
+#     position MILL_POS_STATIC and the PAPER-EXACT alpha3/alpha4(t) waveforms of
+#     cutforce.py) so that the UNCONTROLLED plate at condition S is unstable with
+#     2nd-mode chatter ~1.12 kHz (paper Fig. 14a: fc2 = 1135 Hz) diverging within
+#     the first fraction of the pass, stabilisable with tens of volts (matches
+#     the paper's control-voltage scale).  Calibration sweep: see docs/report.md.
+CUT_GAIN    = 3.2     # dimensionless regenerative-loop-gain multiplier
 PIEZO_GAIN  = 8.0     # dimensionless actuator-authority multiplier
 
 # Non-smooth milling-force coefficient bounds (Section 3.2, Eq. 23):
@@ -226,6 +228,13 @@ PIEZO_GAIN  = 8.0     # dimensionless actuator-authority multiplier
 ALPHA4_NOMINAL_FACTOR = 1.6
 ALPHA4_MIN_FACTOR     = 0.3
 ALPHA4_MAX_FACTOR     = 2.9
+
+# Sign applied to the paper-exact alpha4(t) waveform (cutforce.py, Eqs. 3-4).
+# The printed Eq. (3) convention makes alpha4(t) NEGATIVE in low-immersion down
+# milling; the calibrated regenerative sense that reproduces the paper's
+# open-loop mode-2 chatter at condition S (Fig. 14a) selects this sign (fixed by
+# the open-loop calibration sweep, see docs/report.md).
+PAPER_A4_SIGN = -1.0
 
 # --------------------------------------------------------------------------- #
 # 8. Numerical / simulation settings                                          #

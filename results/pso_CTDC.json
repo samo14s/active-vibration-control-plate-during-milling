@@ -1,0 +1,72 @@
+{
+  "CTDC": {
+    "gains": {
+      "KPp": 50000.0,
+      "KPd": 10.48
+    },
+    "cost": 15095.367764391991,
+    "robust": false,
+    "validation": {
+      "a4_0.3": {
+        "rms_um": 3.74,
+        "peak_V": 11.7,
+        "diverged": false
+      },
+      "a4_0.7": {
+        "rms_um": 8.72,
+        "peak_V": 11.7,
+        "diverged": false
+      },
+      "a4_1.1": {
+        "rms_um": 13.64,
+        "peak_V": 11.7,
+        "diverged": false
+      },
+      "a4_1.5": {
+        "rms_um": 18.47,
+        "peak_V": 11.7,
+        "diverged": false
+      },
+      "a4_1.9": {
+        "rms_um": 24.09,
+        "peak_V": 19.6,
+        "diverged": false
+      },
+      "a4_2.4": {
+        "rms_um": null,
+        "peak_V": 150.0,
+        "diverged": true
+      },
+      "a4_2.9": {
+        "rms_um": null,
+        "peak_V": 150.0,
+        "diverged": true
+      },
+      "f_up": {
+        "rms_um": 8.78,
+        "peak_V": 12.2,
+        "diverged": false
+      }
+    },
+    "history": [
+      15243.14,
+      15149.14,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37,
+      15095.37
+    ],
+    "seconds": 1866.1
+  }
+}

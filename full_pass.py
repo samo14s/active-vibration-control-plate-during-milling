@@ -11,7 +11,7 @@ Produces two figures in results/:
                             and amplitude spectrum for every method.
   * fig_full_pass.png    -- summary: varying coupling, windowed RMS, sample trace.
 
-Run:  python full_pass.py     (a few minutes; 6 controllers x 20.4 s at 25.6 kHz)
+Run:  python full_pass.py     (a few minutes; SMC family x 20.4 s at 25.6 kHz)
 """
 from __future__ import annotations
 import os, warnings, time
@@ -26,23 +26,14 @@ from src import plant as P
 from src import metrics as M
 from src.simulate import simulate
 from src.controllers.base import ZeroController
-from src.controllers.pid import PID
 from src.controllers.smc import SMC
-from src.controllers.hinf import Hinf
-from src.controllers.musyn import MuSynthesis
-from src.controllers.adrc import ADRC
-from src.controllers.mpc import MPC
-from src.controllers.ctdc import CTDC
 from src.controllers.tdsmc import TDSMC
+from src.controllers.stsmc import STSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
-CONTROLLERS = [("PID", PID), ("SMC", SMC), ("H-infinity", Hinf),
-               ("mu-synthesis", MuSynthesis), ("ADRC", ADRC), ("MPC", MPC),
-               ("RCTDC (paper)", CTDC), ("TD-SMC (new)", TDSMC)]
-_COLOR = {"PID": "#e8710a", "SMC": "#188038", "H-infinity": "#1a73e8",
-          "mu-synthesis": "#d01884", "ADRC": "#a142f4", "MPC": "#00897b",
-          "RCTDC (paper)": "#b31412", "TD-SMC (new)": "#7b5c00",
-          "No control": "#c9922b"}
+CONTROLLERS = [("SMC", SMC), ("TD-SMC", TDSMC), ("ST-SMC (developed)", STSMC)]
+_COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
+          "ST-SMC (developed)": "#8e24aa", "No control": "#c9922b"}
 
 
 def envelope(t, y_um, win=0.008):
@@ -177,7 +168,7 @@ def main():
         ax1.semilogy(d["cen"], np.maximum(d["wr"], 1e-2), lw=1.3,
                      color=_COLOR[name], label=lbl)
     ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass "
-                  "(log scale; SMC lowest — PID/ADRC diverge, curves shoot up & stop)")
+                  "(log scale; ST-SMC lowest across the varying-dynamics pass)")
     ax1.set_ylabel("RMS displacement (µm)"); ax1.set_xlabel("time (s)")
     ax1.set_xlim(0, C.T_PASS); ax1.set_ylim(1.0, 1e4); ax1.legend(ncol=3, fontsize=8)
     fig2.savefig(os.path.join(RESULTS, "fig_full_pass.png"), bbox_inches="tight")

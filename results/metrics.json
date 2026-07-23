@@ -11,17 +11,6 @@
       "dom_amp_um": 2090824.960738518,
       "diverged": true
     },
-    "PID": {
-      "rms_settled_um": 2.9062206769793804,
-      "rms_full_um": 3.1371176940033374,
-      "peak_um": 13.474412923693444,
-      "rms_volt": 1.509416585710875,
-      "peak_volt": 6.590886871394931,
-      "control_energy": 0.6835800144486671,
-      "dom_freq_hz": 979.872412446296,
-      "dom_amp_um": 2.141389058753687,
-      "diverged": false
-    },
     "SMC": {
       "rms_settled_um": 4.857768357957575,
       "rms_full_um": 4.868435494518866,
@@ -33,62 +22,7 @@
       "dom_amp_um": 2.0655213507083303,
       "diverged": false
     },
-    "H-infinity": {
-      "rms_settled_um": 9.386446804431559,
-      "rms_full_um": 9.07877290301907,
-      "peak_um": 18.15809124191162,
-      "rms_volt": 2.96934839884191,
-      "peak_volt": 11.698390099304056,
-      "control_energy": 2.6423802557534843,
-      "dom_freq_hz": 489.936206223148,
-      "dom_amp_um": 12.40024982189868,
-      "diverged": false
-    },
-    "mu-synthesis": {
-      "rms_settled_um": 9.386446804431559,
-      "rms_full_um": 9.07877290301907,
-      "peak_um": 18.15809124191162,
-      "rms_volt": 2.96934839884191,
-      "peak_volt": 11.698390099304056,
-      "control_energy": 2.6423802557534843,
-      "dom_freq_hz": 489.936206223148,
-      "dom_amp_um": 12.40024982189868,
-      "diverged": false
-    },
-    "ADRC": {
-      "rms_settled_um": 922296698.4831797,
-      "rms_full_um": 714443781.5649861,
-      "peak_um": 11136321604.454996,
-      "rms_volt": 149.9010580642628,
-      "peak_volt": 150.0,
-      "control_energy": 5833.068149593297,
-      "dom_freq_hz": 635.5702678302738,
-      "dom_amp_um": 21681872.04270875,
-      "diverged": true
-    },
-    "MPC": {
-      "rms_settled_um": 9.349244945444237,
-      "rms_full_um": 9.22028865885,
-      "peak_um": 16.431052372173923,
-      "rms_volt": 11.64556600464467,
-      "peak_volt": 29.123322508066135,
-      "control_energy": 40.68947336711849,
-      "dom_freq_hz": 246.63455279260515,
-      "dom_amp_um": 3.4862577284620047,
-      "diverged": false
-    },
-    "RCTDC (paper)": {
-      "rms_settled_um": 19.664395827871456,
-      "rms_full_um": 18.043386225657752,
-      "peak_um": 32.79473834586273,
-      "rms_volt": 3.7228193711920006,
-      "peak_volt": 11.698390099304056,
-      "control_energy": 4.154954900269593,
-      "dom_freq_hz": 489.936206223148,
-      "dom_amp_um": 26.479685460759054,
-      "diverged": false
-    },
-    "TD-SMC (new)": {
+    "TD-SMC": {
       "rms_settled_um": 3.9076742740739614,
       "rms_full_um": 3.945118767768375,
       "peak_um": 12.674054958071691,
@@ -97,6 +31,17 @@
       "control_energy": 3.8529616912387246,
       "dom_freq_hz": 979.872412446296,
       "dom_amp_um": 2.3012661108782124,
+      "diverged": false
+    },
+    "ST-SMC (developed)": {
+      "rms_settled_um": 6.7483469510852485,
+      "rms_full_um": 6.672504660206689,
+      "peak_um": 12.923025140680592,
+      "rms_volt": 23.39336980118175,
+      "peak_volt": 40.35003443303819,
+      "control_energy": 164.18204517935715,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 2.434600588964281,
       "diverged": false
     }
   },
@@ -112,17 +57,6 @@
       "dom_amp_um": 14356007.207772842,
       "diverged": true
     },
-    "PID": {
-      "rms_settled_um": 10.937406121846065,
-      "rms_full_um": 9.630239103393723,
-      "peak_um": 37.43800799425776,
-      "rms_volt": 4.699926364843359,
-      "peak_volt": 16.340177564888542,
-      "control_energy": 6.627345664670233,
-      "dom_freq_hz": 699.9088660330686,
-      "dom_amp_um": 7.626524795226543,
-      "diverged": false
-    },
     "SMC": {
       "rms_settled_um": 8.802867564389684,
       "rms_full_um": 8.647488218970008,
@@ -134,62 +68,7 @@
       "dom_amp_um": 3.7331839820044648,
       "diverged": false
     },
-    "H-infinity": {
-      "rms_settled_um": 1126287444.4220817,
-      "rms_full_um": 872518568.2646978,
-      "peak_um": 12978628112.895472,
-      "rms_volt": 117.76695333922119,
-      "peak_volt": 150.0,
-      "control_energy": 3148.266834784122,
-      "dom_freq_hz": 409.63523743977976,
-      "dom_amp_um": 7258127.684118161,
-      "diverged": true
-    },
-    "mu-synthesis": {
-      "rms_settled_um": 1126287444.4220817,
-      "rms_full_um": 872518568.2646978,
-      "peak_um": 12978628112.895472,
-      "rms_volt": 117.76695333922119,
-      "peak_volt": 150.0,
-      "control_energy": 3148.266834784122,
-      "dom_freq_hz": 409.63523743977976,
-      "dom_amp_um": 7258127.684118161,
-      "diverged": true
-    },
-    "ADRC": {
-      "rms_settled_um": 905450469.2179843,
-      "rms_full_um": 701358918.3928108,
-      "peak_um": 11581444190.000559,
-      "rms_volt": 149.89946836422197,
-      "peak_volt": 150.0,
-      "control_energy": 2803.9032311611336,
-      "dom_freq_hz": 408.63849765258215,
-      "dom_amp_um": 25681048.832433894,
-      "diverged": true
-    },
-    "MPC": {
-      "rms_settled_um": 24.47820650917739,
-      "rms_full_um": 21.61789937892206,
-      "peak_um": 92.32397023265997,
-      "rms_volt": 31.254826687470842,
-      "peak_volt": 150.0,
-      "control_energy": 293.09580485369713,
-      "dom_freq_hz": 193.30816299960944,
-      "dom_amp_um": 7.099370664502329,
-      "diverged": false
-    },
-    "RCTDC (paper)": {
-      "rms_settled_um": 938356606.3637049,
-      "rms_full_um": 726847901.8500679,
-      "peak_um": 11086043995.282024,
-      "rms_volt": 118.27066436990431,
-      "peak_volt": 150.0,
-      "control_energy": 3062.1539690187083,
-      "dom_freq_hz": 411.06155218554863,
-      "dom_amp_um": 6598977.378693712,
-      "diverged": true
-    },
-    "TD-SMC (new)": {
+    "TD-SMC": {
       "rms_settled_um": 7.267379245384492,
       "rms_full_um": 7.386058053529438,
       "peak_um": 25.716827715577875,
@@ -198,6 +77,17 @@
       "control_energy": 13.237250179921173,
       "dom_freq_hz": 979.872412446296,
       "dom_amp_um": 4.174462820073914,
+      "diverged": false
+    },
+    "ST-SMC (developed)": {
+      "rms_settled_um": 12.44393165003773,
+      "rms_full_um": 11.983068018439996,
+      "peak_um": 23.54407411587573,
+      "rms_volt": 25.959590447578098,
+      "peak_volt": 50.87884329533772,
+      "control_energy": 202.19351691904342,
+      "dom_freq_hz": 246.63455279260515,
+      "dom_amp_um": 4.378346457256811,
       "diverged": false
     }
   }

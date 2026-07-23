@@ -1,35 +1,37 @@
 """
-TD-SMC — Time-Delay Sliding-Mode Combined Control (the NEW strategy).
+TD-SMC — Time-Delay Sliding-Mode Combined Control (the reference combined design).
 
-Motivation.  The paper's combined method (RCTDC, controllers/ctdc.py) welds its
-robust OUTPUT-feedback mu controller to an active time-delay term (Eq. 30)
+NOT a novel control law.  Combining a sliding mode with a delayed-state (time-
+delay) term is an established idea; here it plays the role of the well-tuned
+combined *reference* that the developed ST-SMC (controllers/stsmc.py) has to beat
+on genuinely harder challenges.  It is kept in the comparison precisely because
+it is a strong, honest baseline — not because it is new.
+
+Construction.  The paper's own combined method (RCTDC) welds a robust OUTPUT-
+feedback mu controller to an active time-delay term (Eq. 30)
 
         u_td(t) = K_Pp * y(t - tau) + K_Pd * ydot(t - tau)
 
 that offsets part of the regenerative milling force at its source.  On the
-paper's exact non-minimum-phase geometry, however, output feedback is capped by
-the right-half-plane zero, so the mu base (and hence RCTDC) cannot cover the
-very top of the milling-force band.  STATE feedback is not capped that way —
-our regular-form sliding-mode controller (controllers/smc.py) is the strongest
-base on this plant.
-
-TD-SMC therefore combines the two ideas:
+paper's exact non-minimum-phase geometry, output feedback is capped by the
+right-half-plane zero, so the mu base cannot cover the very top of the milling-
+force band.  STATE feedback is not capped that way — the regular-form sliding-
+mode controller (controllers/smc.py) is the strongest base on this plant — so
+TD-SMC grafts the paper's time-delay idea onto the state SMC instead:
 
         u(t) = u_SMC(x_hat(t))  +  K_Pp * y_hat(t - tau) + K_Pd * ydot_hat(t - tau)
 
   * the sliding-mode part (equivalent control + boundary-layer reaching law on
     the pole-placed regular-form surface) supplies broadband stabilising
     damping through the Kalman-observed modal state;
-  * the paper-style time-delay part cheaply removes the delayed (regenerative)
-    component of the milling force, unloading the sliding mode exactly where
-    chatter is born.
+  * the time-delay part cheaply removes the delayed (regenerative) component of
+    the milling force, unloading the sliding mode where chatter is born.
 
 ALL six gains (zeta_s, ks, eta, phi, K_Pp, K_Pd) are tuned TOGETHER by PSO
 against the robust cost of src/tuning_pso.py (milling-force band 0.3-2.9x at
 reduced damping + modal-frequency rise), with the previously tuned SMC and the
 zero-TD point seeded into the swarm — so the combined optimum can never be
-worse than the plain SMC, and any improvement is genuinely earned by the
-time-delay term.
+worse than the plain SMC, and any improvement is earned by the time-delay term.
 """
 
 from __future__ import annotations
@@ -40,12 +42,12 @@ from .. import config as C
 
 
 class TDSMC(SMC):
-    name = "TD-SMC (new)"
+    name = "TD-SMC"
     color = "#7b5c00"      # dark gold
 
-    # defaults: joint PSO optimum on the paper-exact force model (cost 47.4 —
-    # the best of all eight controllers): 0.7-7.3 um across the whole
-    # alpha4 in [0.3, 2.9] band at only 5-24 V, and 3.7 um at +4% frequency rise.
+    # defaults: joint PSO optimum on the paper-exact force model (cost 47.4):
+    # 0.7-7.3 um across the whole alpha4 in [0.3, 2.9] band at only 5-24 V, and
+    # 3.7 um at +4% frequency rise -- a strong combined reference for ST-SMC.
     def __init__(self, zeta_s=0.3882, ks=1125.0, eta=254.1, phi=0.2414,
                  KPp=1.073e4, KPd=1.898, **kw):
         self.KPp = KPp            # delayed proportional gain [V/m]

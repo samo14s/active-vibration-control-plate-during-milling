@@ -8,9 +8,16 @@ Reproduces the milling-chatter scenario of
     J. Du et al., "Robust combined time delay control for milling chatter
     suppression of flexible workpieces", Int. J. Mech. Sci. 274 (2024) 109257,
 
-and compares six control strategies on the SAME plant, actuator and sampling:
+and compares the SLIDING-MODE FAMILY on the SAME plant, actuator and sampling:
 
-    PID (classical) | SMC | H-infinity | mu-synthesis | ADRC | MPC (predictive)
+    SMC (plain state sliding mode)
+      -> TD-SMC (the known combined sliding-mode + time-delay design; not novel)
+      -> ST-SMC (the DEVELOPED controller: super-twisting reaching + a model-based
+                 regenerative-force feedforward, PSO-tuned for a harder envelope)
+
+The harder-than-paper stress suite lives in make_challenge_figure.py /
+src/challenges.py; this script is the head-to-head at the nominal and paper
+worst-case conditions.
 
 Outputs (written to results/):
     * fig_time_response.png    time-domain plate displacement
@@ -34,36 +41,24 @@ from src import plant as P
 from src import metrics as M
 from src.simulate import simulate
 from src.controllers.base import ZeroController
-from src.controllers.pid import PID
 from src.controllers.smc import SMC
-from src.controllers.hinf import Hinf
-from src.controllers.musyn import MuSynthesis
-from src.controllers.adrc import ADRC
-from src.controllers.mpc import MPC
-from src.controllers.ctdc import CTDC
 from src.controllers.tdsmc import TDSMC
+from src.controllers.stsmc import STSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 os.makedirs(RESULTS, exist_ok=True)
 
 # controller lineup: (key, factory)   -- order controls plotting/legend order
 CONTROLLERS = [
-    ("PID",          PID),
-    ("SMC",          SMC),
-    ("H-infinity",   Hinf),
-    ("mu-synthesis", MuSynthesis),
-    ("ADRC",         ADRC),
-    ("MPC",          MPC),
-    ("RCTDC (paper)", CTDC),      # paper's combined time-delay control (Eq. 30)
-    ("TD-SMC (new)",  TDSMC),     # new strategy: sliding-mode + time-delay comp.
+    ("SMC",                SMC),      # plain state sliding mode
+    ("TD-SMC",             TDSMC),    # known combined SMC + time-delay (not novel)
+    ("ST-SMC (developed)", STSMC),    # developed: super-twisting + regen feedforward
 ]
 
 plt.rcParams.update({
     "figure.dpi": 120, "font.size": 10, "axes.grid": True,
     "grid.alpha": 0.3, "axes.axisbelow": True, "legend.framealpha": 0.9,
-    "axes.prop_cycle": plt.cycler(color=[
-        "#e8710a", "#188038", "#1a73e8", "#d01884", "#a142f4", "#00897b",
-        "#b31412", "#7b5c00"]),
+    "axes.prop_cycle": plt.cycler(color=["#188038", "#7b5c00", "#8e24aa"]),
 })
 
 
@@ -96,10 +91,8 @@ def color_of(key):
     return "#333333"
 
 
-_COLOR = {"PID": "#e8710a", "SMC": "#188038", "H-infinity": "#1a73e8",
-          "mu-synthesis": "#d01884", "ADRC": "#a142f4", "MPC": "#00897b",
-          "RCTDC (paper)": "#b31412", "TD-SMC (new)": "#7b5c00",
-          "No control": "#9aa0a6"}
+_COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
+          "ST-SMC (developed)": "#8e24aa", "No control": "#9aa0a6"}
 
 
 # --------------------------------------------------------------------------- #
@@ -136,8 +129,9 @@ def fig_time_response(runs):
 def fig_time_full(runs):
     """Full-horizon time response, one panel per controller, auto-scaled per
     panel so the entire trajectory is visible (no clipping)."""
-    fig, axes = plt.subplots(4, 2, figsize=(12, 11.5), sharex=True)
-    for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
+    n = len(CONTROLLERS)
+    fig, axes = plt.subplots(n, 1, figsize=(9, 2.8 * n), sharex=True)
+    for a, (key, _) in zip(np.atleast_1d(axes).ravel(), CONTROLLERS):
         r = runs[key]
         y_um = r["y"] * 1e6
         a.plot(r["t"] * 1e3, y_um, color=_COLOR[key], lw=0.6)
@@ -147,8 +141,7 @@ def fig_time_full(runs):
         a.set_ylabel("displacement (µm)", fontsize=8)
         lim = 1.1 * float(np.max(np.abs(y_um)))
         a.set_ylim(-lim, lim)
-    for a in axes[-1, :]:
-        a.set_xlabel("time (ms)")
+    np.atleast_1d(axes).ravel()[-1].set_xlabel("time (ms)")
     fig.suptitle("Full time response over the whole milling pass "
                  "(control active throughout) — per-panel vertical scale",
                  fontsize=11)
@@ -158,8 +151,9 @@ def fig_time_full(runs):
 
 
 def fig_control_voltage(runs):
-    fig, axes = plt.subplots(4, 2, figsize=(10, 9.5), sharex=True)
-    for a, (key, _) in zip(axes.ravel(), CONTROLLERS):
+    n = len(CONTROLLERS)
+    fig, axes = plt.subplots(n, 1, figsize=(9, 2.4 * n), sharex=True)
+    for a, (key, _) in zip(np.atleast_1d(axes).ravel(), CONTROLLERS):
         r = runs[key]
         a.plot(r["t"] * 1e3, r["u"], color=_COLOR[key], lw=0.6)
         pk = float(np.max(np.abs(r["u"])))
@@ -167,8 +161,7 @@ def fig_control_voltage(runs):
         a.set_ylabel("u (V)", fontsize=8)
         lim = max(20.0, 1.15 * pk)
         a.set_ylim(-lim, lim)
-    for a in axes[-1, :]:
-        a.set_xlabel("time (ms)")
+    np.atleast_1d(axes).ravel()[-1].set_xlabel("time (ms)")
     fig.suptitle("Control voltages (piezo actuator) — note the differing vertical scales",
                  fontsize=11)
     fig.tight_layout()
@@ -187,7 +180,7 @@ def fig_spectrum(runs):
     excluded = []
     for key, _ in CONTROLLERS:
         r = runs[key]
-        if float(np.max(np.abs(r["y"] * 1e6))) > 100.0:   # fails at nominal (ADRC)
+        if float(np.max(np.abs(r["y"] * 1e6))) > 100.0:   # rails off-scale at nominal
             excluded.append(key)
             continue
         f, a = M.spectrum(r["t"], r["y"])
@@ -216,7 +209,7 @@ def fig_metrics_bars(met_nom, met_worst):
     fig, ax = plt.subplots(2, 2, figsize=(10, 7.6))
     x = np.arange(len(keys))
 
-    # (a) nominal settled RMS — log scale (ADRC fails by orders of magnitude)
+    # (a) nominal settled RMS — log scale
     rms = [max(met_nom[k]["rms_settled_um"], 1e-3) for k in keys]
     ax[0, 0].bar(x, rms, color=colors)
     ax[0, 0].set_yscale("log")
@@ -303,7 +296,7 @@ def fig_robustness(factors, freq_shifts_pct):
           [(f, dict(alpha4_factor=f, dzeta=-0.2)) for f in factors],
           "milling-force-coefficient factor  (× average α₄)",
           "(a) vs milling-force coefficient α₄  (−20 % damping)\n"
-          "✗ = diverges;  only robust/model-based designs stay stable")
+          "✗ = diverges;  ST-SMC holds the widest force band before divergence")
     ax[0].axvspan(0.3, 2.9, color="gray", alpha=0.08)
     ax[0].axvline(C.ALPHA4_NOMINAL_FACTOR, color="gray", ls=":", lw=0.8)
 
@@ -325,7 +318,8 @@ def fig_activation():
     """Let chatter start to build (control off), then switch control on at t_on
     while the amplitude is still recoverable, showing each controller damp it."""
     t_on = 0.035
-    fig, ax = plt.subplots(len(CONTROLLERS), 1, figsize=(9, 10), sharex=True)
+    fig, ax = plt.subplots(len(CONTROLLERS), 1, figsize=(9, 2.9 * len(CONTROLLERS)),
+                           sharex=True)
     for i, (key, ctor) in enumerate(CONTROLLERS):
         c = ctor()
         r = simulate(P.MillingPlant(), c, t_sim=0.22, control_on_at=t_on,
@@ -366,8 +360,8 @@ def main():
     fig_spectrum(runs_nom)
     fig_metrics_bars({k: met_nom[k] for k, _ in CONTROLLERS},
                      {k: met_worst[k] for k, _ in CONTROLLERS})
-    fig_robustness(np.array([0.3, 0.8, 1.3, 1.6, 2.1, 2.6, 2.9]),
-                   np.array([-8, -4, 0, 4, 8]))
+    fig_robustness(np.array([0.3, 0.8, 1.3, 1.8, 2.3, 2.9, 3.3, 3.7]),
+                   np.array([-8, -4, 0, 4, 8, 12]))
     fig_activation()
 
     # ---- summary table ----

@@ -2,7 +2,7 @@
 Harder-than-paper control-challenge suite for the SMC family.
 
 Tuned (from an empirical failure-boundary probe) to the regime where the plain
-SMC / TD-SMC start to break, so the DEVELOPED ST-SMC can be measured on genuinely
+SMC / TD-SMC start to break, so the DEVELOPED ATD-SMC can be measured on genuinely
 harder problems than the paper's:
 
   * EXTREME cutting force alpha4 = 3.5 .. 5.5x  (the paper studies up to 2.9x;

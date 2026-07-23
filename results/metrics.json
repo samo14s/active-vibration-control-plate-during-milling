@@ -33,15 +33,15 @@
       "dom_amp_um": 2.3012661108782124,
       "diverged": false
     },
-    "ST-SMC (developed)": {
-      "rms_settled_um": 6.7483469510852485,
-      "rms_full_um": 6.672504660206689,
-      "peak_um": 12.923025140680592,
-      "rms_volt": 23.39336980118175,
-      "peak_volt": 40.35003443303819,
-      "control_energy": 164.18204517935715,
-      "dom_freq_hz": 246.63455279260515,
-      "dom_amp_um": 2.434600588964281,
+    "ATD-SMC (developed)": {
+      "rms_settled_um": 4.1663980862871695,
+      "rms_full_um": 4.106424590089799,
+      "peak_um": 12.139760151615173,
+      "rms_volt": 3.6135296973045916,
+      "peak_volt": 10.204049839400179,
+      "control_energy": 3.9177682823538147,
+      "dom_freq_hz": 979.872412446296,
+      "dom_amp_um": 2.25615270705702,
       "diverged": false
     }
   },
@@ -79,15 +79,15 @@
       "dom_amp_um": 4.174462820073914,
       "diverged": false
     },
-    "ST-SMC (developed)": {
-      "rms_settled_um": 12.44393165003773,
-      "rms_full_um": 11.983068018439996,
-      "peak_um": 23.54407411587573,
-      "rms_volt": 25.959590447578098,
-      "peak_volt": 50.87884329533772,
-      "control_energy": 202.19351691904342,
-      "dom_freq_hz": 246.63455279260515,
-      "dom_amp_um": 4.378346457256811,
+    "ATD-SMC (developed)": {
+      "rms_settled_um": 7.580771208064877,
+      "rms_full_um": 7.578839999349694,
+      "peak_um": 32.77417273790689,
+      "rms_volt": 6.87769083475508,
+      "peak_volt": 19.5200901336409,
+      "control_energy": 14.192547788101914,
+      "dom_freq_hz": 979.872412446296,
+      "dom_amp_um": 4.112143571099365,
       "diverged": false
     }
   }

@@ -3,7 +3,7 @@ TD-SMC — Time-Delay Sliding-Mode Combined Control (the reference combined desi
 
 NOT a novel control law.  Combining a sliding mode with a delayed-state (time-
 delay) term is an established idea; here it plays the role of the well-tuned
-combined *reference* that the developed ST-SMC (controllers/stsmc.py) has to beat
+combined *reference* that the developed ATD-SMC (controllers/atdsmc.py) has to beat
 on genuinely harder challenges.  It is kept in the comparison precisely because
 it is a strong, honest baseline — not because it is new.
 
@@ -47,7 +47,7 @@ class TDSMC(SMC):
 
     # defaults: joint PSO optimum on the paper-exact force model (cost 47.4):
     # 0.7-7.3 um across the whole alpha4 in [0.3, 2.9] band at only 5-24 V, and
-    # 3.7 um at +4% frequency rise -- a strong combined reference for ST-SMC.
+    # 3.7 um at +4% frequency rise -- a strong combined reference for ATD-SMC.
     def __init__(self, zeta_s=0.3882, ks=1125.0, eta=254.1, phi=0.2414,
                  KPp=1.073e4, KPd=1.898, **kw):
         self.KPp = KPp            # delayed proportional gain [V/m]

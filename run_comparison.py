@@ -12,8 +12,9 @@ and compares the SLIDING-MODE FAMILY on the SAME plant, actuator and sampling:
 
     SMC (plain state sliding mode)
       -> TD-SMC (the known combined sliding-mode + time-delay design; not novel)
-      -> ST-SMC (the DEVELOPED controller: super-twisting reaching + a model-based
-                 regenerative-force feedforward, PSO-tuned for a harder envelope)
+      -> ATD-SMC (the DEVELOPED controller: TD-SMC plus an ADAPTIVE switching gain
+                  that auto-grows under extreme chatter and relaxes otherwise,
+                  tuned for a harder-than-paper envelope)
 
 The harder-than-paper stress suite lives in make_challenge_figure.py /
 src/challenges.py; this script is the head-to-head at the nominal and paper
@@ -43,16 +44,16 @@ from src.simulate import simulate
 from src.controllers.base import ZeroController
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
-from src.controllers.stsmc import STSMC
+from src.controllers.atdsmc import ATDSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 os.makedirs(RESULTS, exist_ok=True)
 
 # controller lineup: (key, factory)   -- order controls plotting/legend order
 CONTROLLERS = [
-    ("SMC",                SMC),      # plain state sliding mode
-    ("TD-SMC",             TDSMC),    # known combined SMC + time-delay (not novel)
-    ("ST-SMC (developed)", STSMC),    # developed: super-twisting + regen feedforward
+    ("SMC",                 SMC),      # plain state sliding mode
+    ("TD-SMC",              TDSMC),    # known combined SMC + time-delay (not novel)
+    ("ATD-SMC (developed)", ATDSMC),   # developed: TD-SMC + adaptive switching gain
 ]
 
 plt.rcParams.update({
@@ -92,7 +93,7 @@ def color_of(key):
 
 
 _COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
-          "ST-SMC (developed)": "#8e24aa", "No control": "#9aa0a6"}
+          "ATD-SMC (developed)": "#8e24aa", "No control": "#9aa0a6"}
 
 
 # --------------------------------------------------------------------------- #
@@ -296,7 +297,7 @@ def fig_robustness(factors, freq_shifts_pct):
           [(f, dict(alpha4_factor=f, dzeta=-0.2)) for f in factors],
           "milling-force-coefficient factor  (× average α₄)",
           "(a) vs milling-force coefficient α₄  (−20 % damping)\n"
-          "✗ = diverges;  ST-SMC holds the widest force band before divergence")
+          "✗ = diverges;  the adaptive gain extends ATD-SMC's stable force band")
     ax[0].axvspan(0.3, 2.9, color="gray", alpha=0.08)
     ax[0].axvline(C.ALPHA4_NOMINAL_FACTOR, color="gray", ls=":", lw=0.8)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Harder-than-paper challenge comparison for the SMC family: plain SMC, the (known)
-combined TD-SMC, and the DEVELOPED ST-SMC.  Runs src/challenges.py and plots the
+combined TD-SMC, and the DEVELOPED ATD-SMC.  Runs src/challenges.py and plots the
 settled RMS on every challenge (log scale; a diverging / saturating controller is
 drawn at the ceiling with a red x) plus the survival count.
 
@@ -18,12 +18,12 @@ import matplotlib.pyplot as plt
 from src import challenges as CH
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
-from src.controllers.stsmc import STSMC
+from src.controllers.atdsmc import ATDSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 FAMILY = [("SMC", SMC, "#188038"),
           ("TD-SMC", TDSMC, "#7b5c00"),
-          ("ST-SMC (developed)", STSMC, "#8e24aa")]
+          ("ATD-SMC (developed)", ATDSMC, "#8e24aa")]
 CEIL = 3.0e3
 
 

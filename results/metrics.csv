@@ -1,4 +1,4 @@
 controller,RMS_nom_um,peak_nom_um,rmsV,peakV,energy,domFreq_Hz,RMS_worst_um,robust_ratio,diverged
 SMC,4.858,12.66,5.22,13.5,8.1895,247.0,8.803,1.81,False
 TD-SMC,3.908,12.67,3.58,11.4,3.853,980.0,7.267,1.86,False
-ST-SMC (developed),6.748,12.92,23.39,40.4,164.182,247.0,12.444,1.84,False
+ATD-SMC (developed),4.166,12.14,3.61,10.2,3.9178,980.0,7.581,1.82,False

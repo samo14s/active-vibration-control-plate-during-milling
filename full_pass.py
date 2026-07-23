@@ -28,12 +28,12 @@ from src.simulate import simulate
 from src.controllers.base import ZeroController
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
-from src.controllers.stsmc import STSMC
+from src.controllers.atdsmc import ATDSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
-CONTROLLERS = [("SMC", SMC), ("TD-SMC", TDSMC), ("ST-SMC (developed)", STSMC)]
+CONTROLLERS = [("SMC", SMC), ("TD-SMC", TDSMC), ("ATD-SMC (developed)", ATDSMC)]
 _COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
-          "ST-SMC (developed)": "#8e24aa", "No control": "#c9922b"}
+          "ATD-SMC (developed)": "#8e24aa", "No control": "#c9922b"}
 
 
 def envelope(t, y_um, win=0.008):
@@ -168,7 +168,7 @@ def main():
         ax1.semilogy(d["cen"], np.maximum(d["wr"], 1e-2), lw=1.3,
                      color=_COLOR[name], label=lbl)
     ax1.set_title("(b) 0.3 s windowed RMS displacement across the whole pass "
-                  "(log scale; ST-SMC lowest across the varying-dynamics pass)")
+                  "(log scale; all three survive — ATD-SMC ties TD-SMC's economy)")
     ax1.set_ylabel("RMS displacement (µm)"); ax1.set_xlabel("time (s)")
     ax1.set_xlim(0, C.T_PASS); ax1.set_ylim(1.0, 1e4); ax1.legend(ncol=3, fontsize=8)
     fig2.savefig(os.path.join(RESULTS, "fig_full_pass.png"), bbox_inches="tight")

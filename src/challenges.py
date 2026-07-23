@@ -10,7 +10,9 @@ harder problems than the paper's:
     cases are near / beyond the finite piezo actuator's physical authority, so
     they cap EVERY controller — they are kept as an honest "ceiling" marker.
   * LARGE material-removal frequency rise +12% / +17% (paper full series; +17%
-    breaks the plain SMC).
+    breaks the plain SMC) and a NEGATIVE -4% shift (model-overestimation side:
+    breaks the plain SMC and exposes the amplitude-schedule blind spot of the
+    feedforward-scheduled designs).
   * TIGHT actuator limit u_max = 20 V.
   * COMBINED extreme (alpha4=4.0 at nominal frequency + -40% damping).
   * nominal / low-force guards against regression.
@@ -44,6 +46,7 @@ CHALLENGES = [
     ("a4_5.5",   dict(alpha4_factor=5.5),             dict()),
     ("freq+12%", dict(dmass=dmass_for_pct(12)),       dict()),
     ("freq+17%", dict(dmass=dmass_for_pct(17)),       dict()),
+    ("freq-4%",  dict(dmass=dmass_for_pct(-4)),       dict()),
     ("tightV",   dict(alpha4_factor=2.9),             dict(u_max=20.0)),
     ("combo",    dict(alpha4_factor=4.0, dzeta=-0.4), dict()),
 ]

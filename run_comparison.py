@@ -45,6 +45,7 @@ from src.controllers.base import ZeroController
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
 from src.controllers.atdsmc import ATDSMC
+from src.controllers.astsmc import ASTSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 os.makedirs(RESULTS, exist_ok=True)
@@ -53,13 +54,14 @@ os.makedirs(RESULTS, exist_ok=True)
 CONTROLLERS = [
     ("SMC",                 SMC),      # plain state sliding mode
     ("TD-SMC",              TDSMC),    # known combined SMC + time-delay (not novel)
-    ("ATD-SMC (developed)", ATDSMC),   # developed: TD-SMC + adaptive switching gain
+    ("ATD-SMC (developed)", ATDSMC),   # developed #1: adaptive gain (static/economy champion)
+    ("AST-SMC (developed)", ASTSMC),   # developed #2: super-twisting + scheduled regen FF
 ]
 
 plt.rcParams.update({
     "figure.dpi": 120, "font.size": 10, "axes.grid": True,
     "grid.alpha": 0.3, "axes.axisbelow": True, "legend.framealpha": 0.9,
-    "axes.prop_cycle": plt.cycler(color=["#188038", "#7b5c00", "#8e24aa"]),
+    "axes.prop_cycle": plt.cycler(color=["#188038", "#7b5c00", "#8e24aa", "#d81b60"]),
 })
 
 
@@ -93,7 +95,8 @@ def color_of(key):
 
 
 _COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
-          "ATD-SMC (developed)": "#8e24aa", "No control": "#9aa0a6"}
+          "ATD-SMC (developed)": "#8e24aa", "AST-SMC (developed)": "#d81b60",
+          "No control": "#9aa0a6"}
 
 
 # --------------------------------------------------------------------------- #

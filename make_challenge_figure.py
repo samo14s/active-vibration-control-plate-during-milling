@@ -19,11 +19,13 @@ from src import challenges as CH
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
 from src.controllers.atdsmc import ATDSMC
+from src.controllers.astsmc import ASTSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 FAMILY = [("SMC", SMC, "#188038"),
           ("TD-SMC", TDSMC, "#7b5c00"),
-          ("ATD-SMC (developed)", ATDSMC, "#8e24aa")]
+          ("ATD-SMC (developed)", ATDSMC, "#8e24aa"),
+          ("AST-SMC (developed)", ASTSMC, "#d81b60")]
 CEIL = 3.0e3
 
 
@@ -37,9 +39,10 @@ def main():
         data[lab] = (r, col)
         print(f"{lab:20s}: survived {r['n_survived']}/{r['n_total']}  score {r['score']:.0f}")
 
-    fig, ax = plt.subplots(figsize=(13, 5.6))
+    fig, ax = plt.subplots(figsize=(14, 5.8))
     x = np.arange(len(names))
-    w = 0.26
+    nfam = len(FAMILY)
+    w = 0.8 / nfam
     for i, (lab, ctor, col) in enumerate(FAMILY):
         r, _ = data[lab]
         vals, div = [], []
@@ -49,7 +52,7 @@ def main():
                 vals.append(CEIL); div.append(True)
             else:
                 vals.append(max(m["rms"], 0.3)); div.append(False)
-        xb = x + (i - 1) * w
+        xb = x + (i - (nfam - 1) / 2.0) * w
         ax.bar(xb, vals, w, color=col, label=f"{lab}  ({r['n_survived']}/{r['n_total']})")
         for xi, v, d in zip(xb, vals, div):
             if d:

@@ -29,11 +29,15 @@ from src.controllers.base import ZeroController
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
 from src.controllers.atdsmc import ATDSMC
+from src.controllers.astsmc import ASTSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
-CONTROLLERS = [("SMC", SMC), ("TD-SMC", TDSMC), ("ATD-SMC (developed)", ATDSMC)]
+CONTROLLERS = [("SMC", SMC), ("TD-SMC", TDSMC),
+               ("ATD-SMC (developed)", ATDSMC),
+               ("AST-SMC (developed)", lambda **kw: ASTSMC(moving=True, **kw))]
 _COLOR = {"SMC": "#188038", "TD-SMC": "#7b5c00",
-          "ATD-SMC (developed)": "#8e24aa", "No control": "#c9922b"}
+          "ATD-SMC (developed)": "#8e24aa", "AST-SMC (developed)": "#d81b60",
+          "No control": "#c9922b"}
 
 
 def envelope(t, y_um, win=0.008):

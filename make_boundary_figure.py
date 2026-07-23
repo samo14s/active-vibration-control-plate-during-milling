@@ -26,10 +26,11 @@ from src.simulate import simulate
 from src.controllers.smc import SMC
 from src.controllers.tdsmc import TDSMC
 from src.controllers.atdsmc import ATDSMC
+from src.controllers.astsmc import ASTSMC
 
 RESULTS = os.path.join(os.path.dirname(__file__), "results")
 FAM = [("SMC", SMC, "#188038"), ("TD-SMC", TDSMC, "#7b5c00"),
-       ("ATD-SMC", ATDSMC, "#8e24aa")]
+       ("ATD-SMC", ATDSMC, "#8e24aa"), ("AST-SMC", ASTSMC, "#d81b60")]
 CEIL = 1.0e3
 
 
@@ -69,7 +70,7 @@ def main():
     ax[0].set_xlabel(r"milling-force factor  $\alpha_4$  (× average)")
     ax[0].set_ylabel("settled RMS displacement (µm, log)")
     ax[0].set_title("(a) Cutting-force stability boundary  (−20% damping)\n"
-                    "✗ = diverges;  ATD-SMC extends to ≈4.0× vs 3.6× / 3.1×")
+                    "✗ = diverges;  the developed pair extends to ≈4.0× vs 3.6× / 3.1×")
     ax[0].legend(loc="upper left", fontsize=9)
 
     # (b) detuning band at -20% damping
@@ -91,7 +92,7 @@ def main():
     ax[1].set_xlabel("modal-frequency shift (%)   (mass removal → + side)")
     ax[1].set_ylabel("settled RMS displacement (µm, log)")
     ax[1].set_title("(b) Modal-detuning robustness  (−20% damping)\n"
-                    "SMC collapses at both edges; ATD-SMC/TD-SMC hold a flat band")
+                    "ATD-SMC/TD-SMC hold a flat band; SMC and AST-SMC fail the − side")
     ax[1].legend(loc="upper center", fontsize=9)
 
     fig.tight_layout()

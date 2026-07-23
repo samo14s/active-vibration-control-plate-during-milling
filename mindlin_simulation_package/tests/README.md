@@ -1,0 +1,45 @@
+# tests — Mindlin port validation
+
+Validation suite for the literal Reissner–Mindlin element port
+(`01_core/mindlin_q8.py`) and its drop-in integration with the article
+simulation package (package 12).
+
+## Run
+
+```bash
+cd tests
+bash run_tests.sh
+# or individually:
+python verify_mindlin.py        # structural / analytical benchmarks
+python verify_integration.py    # end-to-end drop-in with LQG + Newmark
+```
+
+Only `numpy` and `scipy` are required. No MATLAB needed.
+
+## What is checked
+
+### `verify_mindlin.py`
+1. **Element sanity** — partition of unity (`ΣNᵢ=1`, `Σ∂Nᵢ=0`), matrix symmetry,
+   and the zero-energy-mode count of a single free element (**4** = 3 rigid-body
+   + 1 hourglass, as expected for the uniform-reduced 2×2 Q8 element).
+2. **CCCC clamped square plate** — fundamental frequency parameter
+   `λ₁ = ω a²√(ρh/D)` vs Leissa's reference **35.99** (and modes 2–6).
+3. **Cantilever AL6061** (article geometry) — mode 1 vs the article's ~521 Hz
+   and the beam-strip estimate (528 Hz).
+4. **Mesh convergence** of the cantilever fundamental frequency.
+5. **Thermal load** (`thermal_stress_M`) smoke test (net transverse force = 0).
+
+### `verify_integration.py`
+Builds the Mindlin `PlateModel` with the exact article parameters, checks every
+interface attribute the downstream code relies on, then runs the **package-12
+stack unchanged** (milling force → LQG controller → Newmark solver) and asserts
+the closed loop reduces vibration within the piezo voltage limit.
+
+## Expected output (abridged)
+
+```
+CCCC lambda_1 = 35.98   (Leissa 35.99, err -0.02%)
+Cantilever mode 1 = 519.4 Hz   (article ~521 Hz)
+LQG reduction vs open-loop: ~74 %   u_max ~13 V
+ALL PASS
+```

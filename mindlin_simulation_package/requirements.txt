@@ -1,0 +1,16 @@
+# Required Python packages for the article simulation
+# Install with: pip install -r requirements.txt
+
+# Core scientific computing
+numpy>=1.20
+scipy>=1.7
+matplotlib>=3.5
+
+# Numerical optimization (for FEM and Newmark)
+# Already included in scipy
+
+# Optional: for faster execution (numba JIT compilation)
+# numba>=0.56  # uncomment if you want JIT acceleration
+
+# Note: No external ML library required.
+# The DARC-MPC neural network is implemented from scratch (numpy only).

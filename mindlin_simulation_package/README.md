@@ -12,8 +12,10 @@
 > **every other module (controllers, Newmark solver, FDM stability, figures)
 > runs exactly as before** — only the plate theory differs (Kirchhoff → Mindlin).
 > See [`01_core/MINDLIN_PORT.md`](01_core/MINDLIN_PORT.md) for the `.m` ↔ `.py`
-> correspondence and [`tests/`](tests/) for the validation suite (CCCC benchmark
-> error 0.02% vs Leissa; cantilever mode 1 = 519 Hz vs the article's ~521 Hz).
+> correspondence, [`docs/GEOMETRY.md`](docs/GEOMETRY.md) for the setup-diagram ↔
+> model mapping, and [`tests/`](tests/) for the validation suite (CCCC benchmark
+> error 0.02% vs Leissa; cantilever mode 1 = 519 Hz vs the article's ~521 Hz;
+> full setup-geometry conformance).
 
 ---
 

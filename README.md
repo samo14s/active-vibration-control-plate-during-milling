@@ -35,12 +35,22 @@ Newmark solver, FDM stability, figures) runs **without any modification**.
   in Plate-FEM.
 - Piezo coupling by the consistent Mindlin bending-moment analogy.
 
+## Setup geometry
+
+The model follows the article setup diagram exactly — vertical AL6061 cantilever
+clamped at the base (`Z_P = 0`), in-plane frame `O_P–X_P Z_P`, out-of-plane
+deflection along `Y_P`, piezo patch by corners `(x_P1,z_P1)-(x_P2,z_P2)`,
+displacement sensor, and the sensor → control system → piezo-actuator loop. See
+[`mindlin_simulation_package/docs/GEOMETRY.md`](mindlin_simulation_package/docs/GEOMETRY.md)
+(with figure), conformance-checked by `tests/verify_geometry.py`.
+
 ## Validation (`tests/`)
 
 | Benchmark | Result | Reference |
 |---|---|---|
 | CCCC thin square plate, λ₁ = ω a²√(ρh/D) | **35.98** | 35.99 (Leissa), err −0.02% |
 | Cantilever AL6061 (article geometry) mode 1 | **519.4 Hz** | ~521 Hz (article) |
+| Setup-diagram conformance (frame, BC, patch, sensor, tool path) | all pass | `docs/GEOMETRY.md` |
 | Drop-in with package-12 LQG + Newmark | LQG cuts y_rms 2.19→0.57 µm | — |
 
 ```bash

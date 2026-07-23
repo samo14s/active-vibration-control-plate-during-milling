@@ -10,6 +10,8 @@ echo "###############################################################"
 
 python3 "$HERE/verify_mindlin.py"
 echo
+python3 "$HERE/verify_geometry.py"
+echo
 python3 "$HERE/verify_integration.py"
 
 echo

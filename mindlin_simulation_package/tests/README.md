@@ -11,6 +11,7 @@ cd tests
 bash run_tests.sh
 # or individually:
 python verify_mindlin.py        # structural / analytical benchmarks
+python verify_geometry.py       # setup-diagram conformance (frame, BC, patch, sensor)
 python verify_integration.py    # end-to-end drop-in with LQG + Newmark
 ```
 
@@ -28,6 +29,14 @@ Only `numpy` and `scipy` are required. No MATLAB needed.
    and the beam-strip estimate (528 Hz).
 4. **Mesh convergence** of the cantilever fundamental frequency.
 5. **Thermal load** (`thermal_stress_M`) smoke test (net transverse force = 0).
+
+### `verify_geometry.py`
+Asserts the Mindlin model conforms to the **article setup diagram**
+([`../docs/GEOMETRY.md`](../docs/GEOMETRY.md)): coordinate frame
+`O_P–X_P Y_P Z_P`, encastrement at the bottom edge `Z_P=0` (all 3 DOFs),
+cantilever mode-1 shape (w=0 at base → max at free top), piezo patch corners
+`(x_P1,z_P1)-(x_P2,z_P2)`, displacement-sensor location, and tool path along
+`X_P` at fixed height.
 
 ### `verify_integration.py`
 Builds the Mindlin `PlateModel` with the exact article parameters, checks every

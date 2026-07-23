@@ -197,7 +197,7 @@ RMS مستقرّة (µm) / ذروة V. **DIV**=يتباعد؛ العتبة: RMS<
 |-------|-------|
 | **`fig_challenges.png`** | الجناح الـ11 × 4 متحكمات (الشكل المِحوري الساكن) |
 | **`fig_pass_ceiling.png`** | **سقف المرور الكامل** (الشكل الحاسم المكاني‑الزماني) |
-| **`fig_uncertainty.png`** | **متانة عدم يقين المقال الجمعي $W_{Pau}$**: (أ) $\|G\|$ مقابل $\|W_{Pau}\|$ (ب) RMS مقابل مقدار عدم اليقين |
+| **`fig_uncertainty.png`** | **متانة عدم يقين المقال الجمعي $W_{Pau}$**: (أ) عدم اليقين النسبيّ $\|W_{Pau}/G\|$ (ب) RMS مقابل مقدار عدم اليقين $\kappa$ |
 | **`fig_boundary_detuning.png`** | (أ) حدّ القوة الساكن (ب) نطاق الانزياح |
 | `fig_time_response/spectrum/metrics_bars/robustness/activation/control_voltage/time_full` | لقطة اسمية |
 | `fig14_responses.png`, `fig_full_pass.png` | المرور الكامل بنمط الشكل 14 |

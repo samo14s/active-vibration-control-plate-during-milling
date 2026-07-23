@@ -3,9 +3,10 @@
 Robustness to the paper's additive dynamic uncertainty (Du et al. Eq. 19, weight
 W_Pau) for the sliding-mode family.
 
-Left  (a): |G(jw)| of the nominal actuator->sensor plant vs |W_Pau(jw)| -- the
-           uncertainty is negligible at the controlled modes but dominates the
-           inter-modal troughs / high band (toward the RHP zero).
+Left  (a): relative additive uncertainty |W_Pau(jw) / G(jw)| (standard robust-
+           control form) -- negligible at the controlled modes but exceeding
+           100% (uncertainty = plant) in the inter-modal troughs / high band
+           toward the RHP zero.
 Right (b): settled RMS vs uncertainty magnitude kappa (worst over Delta in
            {+1,-1,allpass}); a railed / diverged controller is drawn at the
            ceiling with a marker.  TD-SMC and ATD-SMC stay flat across the full
@@ -41,28 +42,31 @@ def main():
                          "grid.alpha": 0.3, "axes.axisbelow": True})
     fig, ax = plt.subplots(1, 2, figsize=(13, 5.0))
 
-    # (a) |G| vs |W_Pau|
+    # (a) relative additive uncertainty |W_Pau / G| (standard robust-control form)
     pl = P.MillingPlant()
     A = pl.A
     Bu = np.concatenate([np.zeros(pl.n), pl.Hpe])
     Cy = pl.Cy.ravel()
     fhz = np.logspace(np.log10(200), np.log10(6000), 400)
-    Gmag, Wmag = [], []
+    rel = []
     for fq in fhz:
         w = 2 * np.pi * fq
-        Gmag.append(abs(Cy @ np.linalg.solve(1j * w * np.eye(2 * pl.n) - A, Bu)))
-        Wmag.append(abs(np.polyval(UNC.NUM_WPAU, 1j * w) / np.polyval(UNC.DEN_WPAU, 1j * w)))
-    ax[0].loglog(fhz, Gmag, color="#1a73e8", lw=1.6, label=r"$|G(j\omega)|$ nominal plant")
-    ax[0].loglog(fhz, Wmag, color="#c5221f", lw=1.6, ls="--", label=r"$|W_{Pau}(j\omega)|$ (Eq. 19)")
-    for fn, lb in [(540, "mode 1"), (1068, "mode 2"), (2787, "mode 3"), (5175, "RHP zero")]:
+        G = Cy @ np.linalg.solve(1j * w * np.eye(2 * pl.n) - A, Bu)
+        Wp = np.polyval(UNC.NUM_WPAU, 1j * w) / np.polyval(UNC.DEN_WPAU, 1j * w)
+        rel.append(abs(Wp / G))
+    ax[0].loglog(fhz, rel, color="#8e24aa", lw=1.8,
+                 label=r"$|W_{Pau}(j\omega)/G(j\omega)|$")
+    ax[0].axhline(1.0, color="k", ls="--", lw=0.8)
+    ax[0].text(210, 1.25, "100% (uncertainty = plant)", fontsize=8)
+    for fn, lb in [(540, "mode 1"), (1068, "mode 2"), (2787, "mode 3"), (5171, "RHP zero")]:
         ax[0].axvline(fn, color="gray", ls=":", lw=0.7)
-        ax[0].text(fn, ax[0].get_ylim()[0] * 1.5, lb, rotation=90, fontsize=7,
+        ax[0].text(fn, ax[0].get_ylim()[0] * 1.6, lb, rotation=90, fontsize=7,
                    va="bottom", ha="right", color="gray")
     ax[0].set_xlabel("frequency (Hz)")
-    ax[0].set_ylabel("magnitude (m/V)")
-    ax[0].set_title("(a) Additive uncertainty vs nominal plant\n"
-                    "$W_{Pau}$ dominates the inter-modal / high band")
-    ax[0].legend(fontsize=9, loc="lower left")
+    ax[0].set_ylabel("relative additive uncertainty (–)")
+    ax[0].set_title("(a) Paper additive uncertainty, relative to the plant\n"
+                    r"$|W_{Pau}/G|$ exceeds 100% in the inter-modal troughs / high band")
+    ax[0].legend(fontsize=9, loc="upper left")
 
     # (b) settled RMS vs kappa
     for name, ctor, col in FAM:

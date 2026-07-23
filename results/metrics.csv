@@ -2,3 +2,4 @@ controller,RMS_nom_um,peak_nom_um,rmsV,peakV,energy,domFreq_Hz,RMS_worst_um,robu
 SMC,4.858,12.66,5.22,13.5,8.1895,247.0,8.803,1.81,False
 TD-SMC,3.908,12.67,3.58,11.4,3.853,980.0,7.267,1.86,False
 ATD-SMC (developed),4.166,12.14,3.61,10.2,3.9178,980.0,7.581,1.82,False
+AST-SMC (developed),6.761,13.92,9.08,19.0,24.763,980.0,12.195,1.8,False

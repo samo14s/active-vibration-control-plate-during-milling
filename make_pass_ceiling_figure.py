@@ -38,8 +38,8 @@ CEIL = 300.0
 def main():
     plt.rcParams.update({"figure.dpi": 130, "font.size": 10, "axes.grid": True,
                          "grid.alpha": 0.3, "axes.axisbelow": True})
-    fig, ax = plt.subplots(figsize=(8.5, 5.2))
-    for name, mk, col in FAM:
+    fig, ax = plt.subplots(figsize=(8.8, 5.2))
+    for fam_i, (name, mk, col) in enumerate(FAM):
         ys, div = [], []
         for a4 in A4S:
             t0 = time.time()
@@ -56,18 +56,23 @@ def main():
                 print(f"  {name} a4={a4}: {ys[-1]:.2f} um ({time.time()-t0:.0f}s)",
                       flush=True)
         ax.semilogy(A4S, ys, "o-", color=col, lw=1.8, ms=5, label=name)
+        # stagger the divergence markers/annotations per controller so the
+        # factors where BOTH diverge stay readable
+        y_x = CEIL * (0.82 if fam_i == 0 else 0.55)
+        y_t = CEIL * (0.66 if fam_i == 0 else 0.44)
         for a4, tend in div:
-            ax.plot([a4], [CEIL * 0.82], "x", color=col, ms=9, mew=2.0)
-            ax.annotate(f"t≈{tend:.0f}s", xy=(a4, CEIL * 0.62), fontsize=7,
+            ax.plot([a4], [y_x], "x", color=col, ms=9, mew=2.0)
+            ax.annotate(f"t≈{tend:.0f}s", xy=(a4, y_t), fontsize=7,
                         ha="center", color=col)
     ax.axhline(60.0, color="k", ls="--", lw=0.7, alpha=0.6)
     ax.text(A4S[0], 66, "control limit 60 µm", fontsize=8, color="k")
     ax.set_ylim(1.0, CEIL)
-    ax.set_xlabel(r"cutting-force factor  $\alpha_4$  (× average)")
+    ax.set_xlim(A4S[0] - 0.06, A4S[-1] + 0.12)
+    ax.set_xlabel(r"cutting-force factor  $\alpha_4$  (× average;  nominal condition S = 1.6×)")
     ax.set_ylabel("pass-mean RMS displacement (µm, log)")
     ax.set_title("Full 20.4 s moving-pass force ceiling  (✗ = diverges, with failure time)\n"
-                 "statically both hold ~4.0×, but the pass fails far earlier — "
-                 "AST-SMC lifts the ceiling 1.6× → 2.0×")
+                 "statically both hold ~4.0× — AST-SMC lifts the pass ceiling "
+                 "1.6× → 2.0× (+25% above nominal)")
     ax.legend(loc="upper left", fontsize=10)
     fig.tight_layout()
     out = os.path.join(RESULTS, "fig_pass_ceiling.png")

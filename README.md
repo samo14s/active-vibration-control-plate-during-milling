@@ -126,6 +126,22 @@ voltage. So **an RMS reduction is not evidence of chatter suppression** — a
 point that invalidates the headline metric of a large part of this
 literature, including the package this work started from.
 
+### Feedforward cannot enlarge the stability domain
+
+A feedforward signal indexed by tooth phase is input-additive, so it never
+multiplies the state, never enters the monodromy matrix, and cannot move the
+stability boundary. Verified two ways in
+`tests/verify_feedforward_cannot_move_lobes.py`: ρ = 0.666337362620496
+**bit-identical** with feedforward at 2 V, 20 V, 150 V and 1000 V across five
+harmonics; and past the certified boundary the loop diverges with the
+feedforward active exactly as without it.
+
+The starting package attributes "+41 % stability domain" to precisely such a
+branch. Beyond being produced by a hard-coded ×1.30 damping multiplier, **the
+correct value is exactly zero**. Feedforward remains worth having — for
+forced vibration and surface location error. Moving lobes needs a periodic
+*feedback* gain K(t) = K(t+T), or modulation of a process parameter.
+
 ### Certified lobes differ from the usual shortcut
 
 Closed-loop lobes are commonly drawn by substituting closed-loop damping
@@ -150,6 +166,7 @@ python tests/verify_monodromy_equivalence.py    # fast vs dense monodromy
 python tests/verify_closed_loop_sld.py          # certified lobe vs time domain
 python tests/verify_fixed_gain_instability.py   # the three-way check
 python tests/analyze_actuator_alignment.py      # reachability along the path
+python tests/verify_feedforward_cannot_move_lobes.py   # feedforward vs stability
 python tests/audit_baseline_claims.py           # reproduces the baseline claims
 
 python experiments/run_path_study.py            # the integrated study

@@ -113,9 +113,89 @@ has γ → 0 blind spots that **no** placement removes appears to be new.
    unquantified model". This work has the same exposure — a 3-mode modal
    truncation — and should say so rather than wait to be asked.
 
-## Validation sources worth chasing
+---
 
-Mostly paywalled; these were flagged as open-access with digitisable data:
+## A second survey, of the active-control side specifically
+
+A separate sweep of piezo-based AVC for thin-walled workpieces (2015–2026)
+independently reaches the same conclusions and adds several that map directly
+onto modules already built here.
+
+**Field structure.** Three actuation loci, pursued by disjoint groups:
+workpiece-side bonded patches (Zhang & Sims lineage; Wang/Song/Liu at
+Shandong; Du & Long at SJTU/NPU), fixture-side piezo stacks (Rashid &
+Nicolescu; Sallese/Scippa/Campatelli; INTEFIX), and tool/spindle-side
+(Cao/Chen at XJTU; Munoa/Beudaert at Ideko). Much of what is indexed as
+"milling chatter AVC" is tool-side and does not treat position-dependent
+workpiece dynamics at all.
+
+**Gaps that match what is in `src/`:**
+
+| Survey finding | Module |
+|---|---|
+| "The regenerative delay is routinely treated as a **disturbance**… a rigorous delay-differential closed-loop analysis (semi-discretisation with the controller states appended)… benchmarked against the delay-as-disturbance approach" is open | `closed_loop_sld.py` |
+| "**Closed-loop SLD does not evolve with material removal.** Every SLD in this corpus is computed for one workpiece state. A three-dimensional closed-loop stability map over speed × depth × tool position, with the controller in the loop, has not been published. **Simulation is the only practical way to produce it.**" | `closed_loop_sld.py` + `machining_path.py` |
+| "**Everything is SISO.** Essentially all thin-wall workpiece AVC uses one patch and one accelerometer. MIMO modal control with several patches… plus the associated placement optimisation, has not been done." | `actuator_placement.py` |
+| "**Placement is optimised without the process in the loop.** Nobody optimises placement against the closed-loop stability limit along a real toolpath — i.e. using the achievable depth of cut, not the modal Gramian, as the objective." | `actuator_placement.py` — currently maximises reachability; **extending the objective to certified a_p,crit is the obvious next step** |
+| "**No common-plant controller benchmark for a thin wall.** Nobody has run PPF / DVF / LQG / H∞ / µ-synthesis / SMC / MPC / RL on one thin-plate-plus-bonded-piezo plant." | `run_benchmark.py` |
+| "**Sampling, discretisation and filter delay are ignored.** Controllers are designed in continuous time and implemented on real-time hardware with no published analysis of how sample rate and group delay eat the phase margin." | the multi-rate treatment in `closed_loop_sld.py` |
+| "**Spillover is never quantified**… no paper quantifies spillover-driven destabilisation in stability-lobe terms." | not yet done — a natural addition, and §3.3 is adjacent to it |
+
+Two further notes that bear on our own results:
+
+- **PPF works, and works well** — Zhang & Sims (2005) report a 7× limiting
+  depth of cut, and it is the origin of the workpiece-side thread. Our
+  benchmark's "static modal position feedback achieved nothing" is therefore
+  *not* a verdict on PPF: it is the stiffness-shift limit without the
+  second-order filter. Implementing and certifying real PPF is required
+  before saying anything about it.
+- µ-synthesis has **never** been applied to a thin-walled workpiece, despite
+  it being the textbook structured-uncertainty problem (frequencies drift
+  monotonically with removal). One clear route if a robust-control angle is
+  wanted.
+
+---
+
+## Validation without a laboratory
+
+The second survey names the strategy explicitly, and it is the single most
+useful item here for a simulation-only group:
+
+> "**Validation-by-reproduction has never been attempted.** Several
+> independent experimental results are publicly digitisable… A simulation-only
+> study that digitises the published open-loop FRFs and cutting-force
+> coefficients and then reproduces several groups' results [would be a
+> contribution]."
+
+and
+
+> "**No open data.** Not one paper in this corpus publishes machine-readable
+> FRF, modal or SLD data; everything must be digitised from figures.
+> Releasing a validated open benchmark model plus digitised reference
+> datasets would itself be a contribution, and is **one of the few
+> contributions in this field genuinely available to a simulation-only
+> group.**"
+
+Reported closed-loop improvements that are digitisable and reproducible:
+
+| source | reported result |
+|---|---|
+| Du & Long (2022) | limiting depth 0.2 → 1 mm |
+| Du, Liu & Long (2023) | 1.5 → 6 mm |
+| Du, Liu, Dai & Long (2024) | 0.1 → 0.8 mm |
+| Ozsoy, Sims & Ozturk (2022) | 2.6× |
+| Aggogeri et al. (2021) | 96 % attenuation at 1130 Hz |
+| Zhang & Sims (2005) | 7× limiting depth, PPF |
+
+**Recommended plan:** digitise the open-loop FRF and force coefficients from
+two or three of these, reproduce their reported closed-loop improvement with
+this code, and release the digitised datasets alongside. That converts
+"simulation-only" from a weakness into a stated contribution, and it is
+exactly what these venues will accept in place of an experiment.
+
+## Other validation sources worth chasing
+
+Mostly paywalled; flagged as open-access with digitisable data:
 
 - Yang et al., *Int. J. Mech. Syst. Dyn.* 2(1):117–130 (2022) — GPR+POD,
   predicted vs experimental SLD

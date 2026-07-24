@@ -207,12 +207,33 @@ it, and averaging hides the answer.**
 
 | evaluated with | substitution error |
 |---|---|
-| the path-averaged `Dp` the baseline SLD scripts use | **+1.1 %** |
+| the signed path-averaged `Dp` the baseline SLD scripts use | **+1.1 %** |
+| an rms (magnitude-preserving) path average | +4.3 % |
 | the local `Dp(x)` at each tool position | **−3.6 % to +45.4 %**, mean +10.2 %, optimistic at 7 of 10 stations |
 
 So a single path-averaged number makes the shortcut look almost exact, while
 the error actually incurred along the pass reaches **+45 % in the optimistic
 direction** — it over-promises stability by nearly half.
+
+**And the averaged row is worse than unrepresentative — it is degenerate.**
+`gen_SLD_academic_style.py` averages the *signed* mode shape along the path.
+Mode 2 of a cantilever plate is antisymmetric in x, so that average cancels
+it exactly:
+
+| mode | signed path mean | rms along path | magnitude retained |
+|---|---|---|---|
+| 1 | +6.6435 | 6.6437 | 100.00 % |
+| **2** | **+3.07e−10** | 5.9941 | **0.00 %** |
+| 3 | −2.4520 | 5.7414 | 42.71 % |
+
+`Dp₂` runs from −9.959 at x = 0 to +9.959 at x = 100 mm. Since the
+regenerative gain depends on `Dp²`, the signed average is a factor **3.8×10²⁰**
+wrong on mode 2 — every stability lobe diagram in the baseline package is
+computed on a plate with mode 2 deleted and mode 3 at 43 % strength.
+
+So averaging a signed mode shape does not merely hide the substitution error;
+it destroys the model being averaged. **Evaluate the lobe position by
+position.**
 
 The location of the worst error is the interesting part, and it is the
 opposite of the intuitive guess. The +45.4 % occurs at x = 0, where the

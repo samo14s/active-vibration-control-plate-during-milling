@@ -150,8 +150,16 @@ wrong that is depends on where it is evaluated — and averaging hides it:
 
 | evaluated with | substitution error |
 |---|---|
-| path-averaged `Dp` (what the baseline scripts use) | **+1.1 %** |
+| signed path-averaged `Dp` (what the baseline scripts use) | **+1.1 %** |
+| rms (magnitude-preserving) path average | +4.3 % |
 | local `Dp(x)` along the pass | **−3.6 % to +45.4 %**, optimistic at 7 of 10 stations |
+
+The averaged row is not just unrepresentative, it is degenerate: averaging the
+*signed* mode shape cancels mode 2 exactly (antisymmetric in x, −9.96 at x=0
+to +9.96 at x=100 mm), retaining **0.00 %** of its magnitude and 42.7 % of
+mode 3. Since the regenerative gain uses `Dp²`, that is a factor 3.8×10²⁰
+error on mode 2 — every lobe diagram in the baseline is computed on a plate
+with mode 2 deleted.
 
 The worst case sits at x = 0, where γ = 0.944 — where the actuator is *best*
 aligned and the controller dominates the loop, which is exactly what a scalar

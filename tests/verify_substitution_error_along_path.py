@@ -132,19 +132,43 @@ if valid:
         print(f"  OPTIMISTIC (over-promises stability) at "
               f"{len(opt)} of {len(valid)} stations, worst {opt.max():+.1f}%")
 
-# the path-averaged mode shape the baseline SLD scripts actually use
-Dp_avg = plate.Dp_array.mean(axis=1)
-ap_sub_a = critical_depth(lambda a: spectral_radius(
-    W_CL, Z_CL, Dp_avg, plate.H_Pe_modal, plate.D_obs,
-    RPM=RPM, ap=a, Ts=TS, ctrl_design=None, **COMMON), lo=1e-7, hi=8e-3)
-ap_cert_a = critical_depth(lambda a: spectral_radius(
-    plate.omega_n, ZETA, Dp_avg, plate.H_Pe_modal, plate.D_obs,
-    RPM=RPM, ap=a, Ts=TS, ctrl_design=DES, **COMMON), lo=1e-7, hi=8e-3)
 print()
-print(f"  with the PATH-AVERAGED Dp that the baseline SLD scripts use:")
-print(f"    substitution {ap_sub_a*1e3:.4f} mm vs certified "
-      f"{ap_cert_a*1e3:.4f} mm -> {(ap_sub_a-ap_cert_a)/ap_cert_a*100:+.1f}%")
+print("=" * 78)
+print(" Why the path-averaged evaluation looks harmless: it is degenerate")
+print("=" * 78)
+print("  The baseline SLD scripts average the SIGNED mode shape along the path")
+print("  (gen_SLD_academic_style.py: Dp_avg = np.mean(Dp_sample, axis=0)).")
+print("  Mode 2 of a cantilever plate is antisymmetric in x, so that average")
+print("  cancels it exactly -- and the regenerative gain depends on Dp^2.")
 print()
-print("  A single path-averaged figure is not representative of the error")
-print("  encountered along the pass; the substitution must be checked where")
-print("  the loop is actually operating, not at an averaged mode shape.")
+D = plate.Dp_array
+Dp_avg = D.mean(axis=1)                  # signed average, as the baseline does
+Dp_rms = np.sqrt((D ** 2).mean(axis=1))  # magnitude-preserving alternative
+print(f"  {'mode':>6} {'signed mean':>15} {'rms along path':>16} {'retained':>10}")
+for k in range(N_MODES):
+    print(f"  {k+1:6d} {Dp_avg[k]:+15.4e} {Dp_rms[k]:16.4f} "
+          f"{abs(Dp_avg[k])/Dp_rms[k]*100:9.2f}%")
+print()
+print(f"  mode 2 at x=0 {D[1,0]:+.3f}, at x=100 mm {D[1,-1]:+.3f}"
+      f"  ->  signed average {Dp_avg[1]:+.2e}")
+print(f"  in the regenerative gain that is a factor "
+      f"{(D[1]**2).mean()/max(Dp_avg[1]**2,1e-300):.2e} error on mode 2")
+print()
+
+for tag, Dp_u in (("signed average (baseline)", Dp_avg),
+                  ("rms magnitude", Dp_rms)):
+    ap_s = critical_depth(lambda a: spectral_radius(
+        W_CL, Z_CL, Dp_u, plate.H_Pe_modal, plate.D_obs,
+        RPM=RPM, ap=a, Ts=TS, ctrl_design=None, **COMMON), lo=1e-7, hi=8e-3)
+    ap_c = critical_depth(lambda a: spectral_radius(
+        plate.omega_n, ZETA, Dp_u, plate.H_Pe_modal, plate.D_obs,
+        RPM=RPM, ap=a, Ts=TS, ctrl_design=DES, **COMMON), lo=1e-7, hi=8e-3)
+    print(f"  {tag:<28} substitution {ap_s*1e3:7.4f} mm  "
+          f"certified {ap_c*1e3:7.4f} mm  -> {(ap_s-ap_c)/ap_c*100:+6.1f}%")
+
+print()
+print("  So the reassuring path-averaged number is not a fair summary of the")
+print("  per-station errors above: it is computed on a mode shape from which")
+print("  mode 2 has been removed entirely. Averaging a signed mode shape does")
+print("  not merely hide the substitution error, it destroys the model being")
+print("  averaged. Evaluate the lobe position by position.")

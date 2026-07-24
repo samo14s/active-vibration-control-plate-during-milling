@@ -191,7 +191,17 @@ def lqg_design(w_q, w_qd=1e8, w_r=1.0):
 
 
 def dvf_design(g):
-    """Direct velocity feedback as a static gain on the velocity states."""
+    """
+    Velocity feedback, u = -g * (actuator-aligned modal velocity).
+
+    NOTE ON NAMING: this is estimated-state velocity feedback, not true
+    collocated DVF. Only displacement is measured here, so the velocity is
+    reconstructed by the same Kalman observer every other law uses. It is
+    labelled "velocity fb (obs)" in the table rather than "DVF" to avoid
+    claiming the unconditional-stability property of genuine collocated DVF,
+    which requires a dual sensor/actuator pair -- and the pair here is not
+    collocated (patch at the clamped edge, probe at the free end).
+    """
     K = np.zeros((1, n2))
     K[0, n:] = g * plate.H_Pe_modal / np.linalg.norm(plate.H_Pe_modal)
     V = np.array([[1e-12]])
@@ -199,14 +209,13 @@ def dvf_design(g):
     return dict(A=A, B=B, C=C, K=K, L=L)
 
 
-def ppf_design(g, mode=0, zf=0.3):
+def modal_pos_design(g, mode=0):
     """
-    Positive position feedback on one mode, cast into the same observer-based
-    form so the certified monodromy can consume it: the filter is appended as
-    extra controller states via an equivalent output-feedback gain.
-    Implemented here as a modal position gain on the target mode, which is
-    the static limit of PPF and is what the lobe computation can certify
-    without extending the state.
+    Static modal position feedback on the target mode -- the stiffness-shift
+    limit of PPF. Full PPF adds a second-order filter, i.e. extra controller
+    states; certifying that would require extending the observer block of the
+    monodromy, which is left for the filtered version rather than approximated
+    here.
     """
     K = np.zeros((1, n2))
     K[0, mode] = g
@@ -217,9 +226,9 @@ def ppf_design(g, mode=0, zf=0.3):
 
 LAWS = [
     ("open loop", None, None),
-    ("DVF", dvf_design, np.geomspace(1e2, 1e7, 16)),
-    ("modal position fb", ppf_design, np.geomspace(1e2, 1e8, 16)),
-    ("LQG", lqg_design, np.geomspace(1e11, 1e17, 16)),
+    ("velocity fb (obs)", dvf_design, np.geomspace(1e2, 1e7, 16)),
+    ("modal position fb", modal_pos_design, np.geomspace(1e2, 1e10, 16)),
+    ("LQG", lqg_design, np.geomspace(1e11, 1e20, 19)),
 ]
 
 print()
@@ -260,9 +269,24 @@ for name, builder, grid in LAWS:
     if best is None:
         print(f"  {name:<20} {'-':>10}  no stable gain within the budget")
         continue
+
+    # Flag two ways a scalar search can mislead, rather than reporting the
+    # number as if it were an interior optimum.
+    flags = []
+    if best['gain'] >= grid[-1] * 0.999:
+        flags.append("gain AT TOP of grid - not an optimum, widen the grid")
+    if best['gain'] <= grid[0] * 1.001:
+        flags.append("gain AT BOTTOM of grid")
+    if best['ap_crit'] <= results[0]['ap_crit'] * 1.02:
+        flags.append("no better than open loop - this law achieved nothing "
+                     "within the voltage budget")
+    best['flags'] = flags
+
     print(f"  {name:<20} {best['gain']:10.2e} {best['u_peak']:10.2f} "
           f"{best['u_rms']:9.2f} {best['y_rms']*1e6:10.4f} "
           f"{best['ap_crit']*1e3:12.4f}")
+    for fl in flags:
+        print(f"  {'':<20} !! {fl}")
     results.append(best)
 
 print()
@@ -270,6 +294,21 @@ print(f"  ({time.time()-t0:.0f} s)")
 print()
 print("  Every controlled row respects the same peak-voltage budget, so the")
 print("  a_p,crit column compares control LAWS, not control effort.")
+ctrl_rows = [r for r in results if r.get('gain') is not None
+             and not r.get('flags')]
+if ctrl_rows:
+    bestlaw = max(ctrl_rows, key=lambda r: r['ap_crit'])
+    print()
+    print(f"  best law within the budget: {bestlaw['law']} at "
+          f"a_p,crit = {bestlaw['ap_crit']*1e3:.3f} mm "
+          f"using {bestlaw['u_peak']:.1f} V peak")
+    for r in ctrl_rows:
+        if r is bestlaw:
+            continue
+        print(f"    vs {r['law']:<20} {r['ap_crit']*1e3:6.3f} mm "
+              f"at {r['u_peak']:5.1f} V "
+              f"({bestlaw['ap_crit']/r['ap_crit']:.2f}x the depth for "
+              f"{bestlaw['u_peak']/max(r['u_peak'],1e-9):.2f}x the voltage)")
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "results_benchmark.json"), "w") as f:

@@ -96,6 +96,23 @@ Over the full programme, the fixed-gain loop is worse than no control at
 **10 of 25** stations, while path-scheduled design holds a worst-case
 critical depth of **1.48 mm — 7.1× open loop**.
 
+### Minimising vibration is not the same as maximising stability
+
+At matched control effort on the nominal plate (60 V budget, every law tuned
+against the same reported objective, both selected gains interior optima):
+
+| law | u peak [V] | y_rms [µm] | certified a_p,crit [mm] |
+|---|---|---|---|
+| open loop | 0.00 | 28.487 | 0.071 |
+| velocity feedback | **8.92** | 0.166 | **2.401** |
+| static modal position fb | 0.00 | 28.488 | 0.071 |
+| LQG | 28.53 | **0.134** | 1.983 |
+
+LQG wins on RMS by 19 % and **loses on stability by 17 %**, at 3.2x the
+voltage. So **an RMS reduction is not evidence of chatter suppression** — a
+point that invalidates the headline metric of a large part of this
+literature, including the package this work started from.
+
 ### Certified lobes differ from the usual shortcut
 
 Closed-loop lobes are commonly drawn by substituting closed-loop damping

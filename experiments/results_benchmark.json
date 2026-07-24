@@ -1,0 +1,45 @@
+{
+ "u_cap": 60.0,
+ "Ts": 4.977600796416128e-05,
+ "rpm_effective": 4900.0,
+ "results": [
+  {
+   "law": "open loop",
+   "gain": null,
+   "u_peak": 0.0,
+   "u_rms": 0.0,
+   "y_rms": 2.848727101667529e-05,
+   "ap_crit": 7.10064109802246e-05
+  },
+  {
+   "law": "velocity fb (obs)",
+   "gain": 46415.888336127726,
+   "u_peak": 8.916802870810804,
+   "u_rms": 3.5211115493515828,
+   "y_rms": 1.6606118167293161e-07,
+   "ap_crit": 0.002400618462371827,
+   "flags": []
+  },
+  {
+   "law": "modal position fb",
+   "gain": 100.0,
+   "u_peak": 0.004635669999971251,
+   "u_rms": 0.001296427834140462,
+   "y_rms": 2.8487928456668268e-05,
+   "ap_crit": 7.10064109802246e-05,
+   "flags": [
+    "gain AT BOTTOM of grid",
+    "no better than open loop - this law achieved nothing within the voltage budget"
+   ]
+  },
+  {
+   "law": "LQG",
+   "gain": 1e+18,
+   "u_peak": 28.52588073585899,
+   "u_rms": 8.80188984839073,
+   "y_rms": 1.3439044662178145e-07,
+   "ap_crit": 0.0019825040931701655,
+   "flags": []
+  }
+ ]
+}

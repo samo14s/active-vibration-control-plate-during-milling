@@ -210,6 +210,47 @@ faster).
 
 ---
 
+## 4b. Minimising vibration and maximising stability are different objectives
+
+At matched control effort on the nominal plate
+(`experiments/run_benchmark.py`, 60 V budget, every law tuned against the
+same reported objective):
+
+| law | gain | u peak [V] | y_rms [µm] | certified a_p,crit [mm] |
+|---|---|---|---|---|
+| open loop | — | 0.00 | 28.487 | 0.071 |
+| velocity feedback | 4.64e4 | **8.92** | 0.166 | **2.401** |
+| static modal position fb | — | 0.00 | 28.488 | 0.071 |
+| LQG | 1.00e18 | 28.53 | **0.134** | 1.983 |
+
+LQG wins on RMS by 19 % and **loses on stability by 17 %**, using 3.2× the
+voltage. Both selected gains are interior optima, not grid boundaries — the
+search reports a flag when they are not, and static modal position feedback
+is flagged as achieving nothing at all, which is correct: a stiffness shift
+does not add damping, and chatter is a damping problem.
+
+That is not a paradox, it is the point. The quadratic cost weights the
+response to an assumed disturbance spectrum; chatter stability is governed by
+how far the negative real part of the plant FRF is pushed back at the chatter
+frequency. Velocity feedback attacks the second quantity directly. A
+controller tuned for one need not win the other.
+
+The consequence for the field is concrete: **an RMS reduction is not evidence
+of chatter suppression**, and papers that report only "x % vibration
+reduction" — including the package this work started from — have not
+demonstrated the thing they claim. The stability boundary has to be computed,
+and computed from the real loop.
+
+It also connects to §3.3. Velocity feedback here is static in the state; the
+liability in §3.3 was the *observer*. The two results point the same way: the
+observer is the fragile element, and it is not buying stability margin in
+exchange.
+
+*(Reported from a single nominal operating point; the ordering should be
+confirmed across the RPM range before it is stated as general.)*
+
+---
+
 ## 5. What the paper should be
 
 **Working title.** *Path-wide controllability and certified closed-loop

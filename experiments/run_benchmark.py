@@ -26,6 +26,21 @@ The figure of merit is the certified critical depth of cut a_p,crit from
 closed_loop_sld -- the real sampled loop inside the monodromy matrix -- rather
 than an RMS reduction at one operating point, because it is the quantity that
 decides whether the process can be run.
+
+PROTOCOL (ROADMAP items 19-23)
+------------------------------
+  19. Every law is tuned by the same scalar search against the same reported
+      objective, and the tuning curve is written out, not just the winner.
+  20. An open-loop row is always present, so "better than nothing" is visible.
+  21. All time-domain metrics use a COMMON window across controllers, so a
+      law that diverges earlier cannot be flattered by a shorter average.
+  22. The SAME actuator model applies to every law -- the project's own
+      PiezoActuator, with saturation, slew limit, amplifier lag, hysteresis
+      and sensor noise -- rather than saturating one controller and not
+      another.
+  23. Every stochastic element is run over N_SEEDS realisations and reported
+      as mean +/- std. A 4 % effect quoted from a single seed cannot be
+      distinguished from noise.
 """
 from __future__ import annotations
 
@@ -43,6 +58,7 @@ import _bootstrap  # noqa: F401,E402
 from scipy.linalg import solve_continuous_are, expm                # noqa: E402
 
 from evolving_plate import EvolvingPlateModel                      # noqa: E402
+from piezo_actuator import PiezoActuator                           # noqa: E402
 from milling_force import precompute_alpha_periodic                # noqa: E402
 from closed_loop_sld import (spectral_radius, critical_depth,      # noqa: E402
                              build_monodromy, discretize_controller)
@@ -72,6 +88,8 @@ TAU = 60.0 / (NT * RPM)
 M_CTRL = int(round(TAU / 5e-5))
 TS = TAU / M_CTRL      # sample period chosen so that dt divides tau exactly
 AP_EVAL = 0.3e-3       # depth at which the effort is measured
+N_SEEDS = 12           # realisations per law (item 23)
+USE_ACTUATOR = True    # same actuator model for every law (item 22)
 
 print("=" * 78)
 print(" FAIR BENCHMARK AT MATCHED CONTROL EFFORT")
@@ -109,10 +127,19 @@ a3, a4 = precompute_alpha_periodic(TS, n_per, 40 * n_per, 2 * np.pi * RPM / 60,
                                    HP - AP_EVAL, HP, K1, K2, KT)
 
 
-def simulate(ctrl_design, ap=AP_EVAL, n_periods=60):
+def simulate(ctrl_design, ap=AP_EVAL, n_periods=60, seed=0,
+             use_actuator=USE_ACTUATOR, n_common=None):
     """
     Sampled closed loop with the periodic cutting force, at the SAME timing
-    the monodromy uses. Returns (y_rms [m], u_peak [V], u_rms [V], stable).
+    the monodromy uses.
+
+    The actuator model is applied identically whether or not a controller is
+    present (item 22), the measurement carries the project's own sensor noise
+    at the given seed (item 23), and metrics are taken over `n_common` steps
+    when supplied so that every law is averaged over the same window
+    (item 21).
+
+    Returns (y_rms [m], u_peak [V], u_rms [V], stable, n_valid).
     """
     a3p, a4p = precompute_alpha_periodic(
         TS, n_per, n_periods * n_per, 2 * np.pi * RPM / 60, NT, RT, ETA_H,
@@ -155,11 +182,26 @@ def simulate(ctrl_design, ap=AP_EVAL, n_periods=60):
     u = 0.0
     ys, us = [], []
 
+    rng = np.random.default_rng(seed)
+    act = None
+    if use_actuator:
+        # identical actuator for every law, including open loop
+        act = PiezoActuator(dt=TS, verbose=False)
+        act.reset()
+
+    n_valid = nstep - 1
     for k in range(1, nstep):
-        y = float(plate.D_obs @ st[:n])
+        y_true = float(plate.D_obs @ st[:n])
+        y = act.measure(y_true, rng=rng) if act is not None else y_true
+
         if ctrl_design is not None:
             xh = Ao @ xh + Gu.flatten() * u + Gy.flatten() * y
-            u = float(np.clip((-Kf @ xh).item(), -U_MAX, U_MAX))
+            u_cmd = float((-Kf @ xh).item())
+        else:
+            u_cmd = 0.0
+        u = act.apply(u_cmd) if act is not None else float(
+            np.clip(u_cmd, -U_MAX, U_MAX))
+
         qd = q_hist[:, k - n_tau] if k >= n_tau else np.zeros(n)
 
         Adk, Sk = step_cache[k % n_per]
@@ -167,16 +209,25 @@ def simulate(ctrl_design, ap=AP_EVAL, n_periods=60):
         st = Adk @ st + Sk @ (B.flatten() * u
                               + np.concatenate([np.zeros(n), f]))
         q_hist[:, k] = st[:n]
-        ys.append(y)
+        ys.append(y_true)
         us.append(u)
-        if not np.isfinite(y) or abs(y) > 1e-3:
-            return np.inf, np.inf, np.inf, False
+        if not np.isfinite(y_true) or abs(y_true) > 1e-3:
+            n_valid = k
+            break
 
-    # discard the first third as transient
-    ys = np.array(ys[len(ys) // 3:])
-    us = np.array(us[len(us) // 3:])
+    stable = n_valid >= nstep - 1
+    ys = np.array(ys)
+    us = np.array(us)
+    # common window across laws (item 21): a law that diverged earlier must
+    # not be scored on a shorter, quieter prefix
+    if n_common is not None:
+        if len(ys) < n_common:
+            return np.inf, np.inf, np.inf, False, len(ys)
+        ys, us = ys[:n_common], us[:n_common]
+    ys = ys[len(ys) // 3:]           # discard the transient
+    us = us[len(us) // 3:]
     return (float(np.sqrt(np.mean(ys ** 2))), float(np.max(np.abs(us))),
-            float(np.sqrt(np.mean(us ** 2))), True)
+            float(np.sqrt(np.mean(us ** 2))), stable, n_valid)
 
 
 def lqg_design(w_q, w_qd=1e8, w_r=1.0):
@@ -232,58 +283,95 @@ LAWS = [
 ]
 
 print()
+print(f"  actuator model applied to EVERY law: "
+      f"{'PiezoActuator (saturation, slew, amplifier, hysteresis, noise)' if USE_ACTUATOR else 'ideal'}")
+print(f"  {N_SEEDS} noise realisations per law, reported as mean +/- std")
+print()
 print("  tuning each law against the SAME objective (max certified a_p,crit)")
 print("  subject to the SAME peak-voltage budget")
 print()
+
+
+def ensemble(des, n_common):
+    """Run N_SEEDS realisations and return the metric distributions."""
+    ys, ups, urs, nv = [], [], [], []
+    for sd in range(N_SEEDS):
+        y, up, ur, okk, n = simulate(des, seed=sd, n_common=n_common)
+        nv.append(n)
+        if not np.isfinite(y):
+            return None
+        ys.append(y); ups.append(up); urs.append(ur)
+    return dict(y_mean=float(np.mean(ys)), y_std=float(np.std(ys)),
+                u_peak_mean=float(np.mean(ups)), u_peak_max=float(np.max(ups)),
+                u_rms_mean=float(np.mean(urs)), u_rms_std=float(np.std(urs)),
+                n_valid_min=int(np.min(nv)))
+
+
+# Pass 1: find the common window from the shortest run any law survives.
+probe = [simulate(None, seed=0)[4]]
+for _, builder, grid in LAWS:
+    if builder is None:
+        continue
+    for g in (grid[0], grid[len(grid) // 2], grid[-1]):
+        probe.append(simulate(builder(float(g)), seed=0)[4])
+N_COMMON = int(min(probe))
+print(f"  common metric window = {N_COMMON} steps "
+      f"({N_COMMON/M_CTRL:.1f} tooth periods), the shortest any law survives")
+print()
+
 print(f"  {'law':<20} {'gain':>10} {'u_peak[V]':>10} {'u_rms[V]':>9} "
-      f"{'y_rms[um]':>10} {'ap_crit[mm]':>12}")
+      f"{'y_rms [um]':>18} {'ap_crit[mm]':>12}")
 
 results = []
+tuning_curves = {}
 t0 = time.time()
 for name, builder, grid in LAWS:
     if builder is None:
-        y, up, ur, okk = simulate(None)
-        ap = critical_depth(lambda a: spectral_radius(
+        e = ensemble(None, N_COMMON)
+        apc = critical_depth(lambda a: spectral_radius(
             plate.omega_n, ZETA, Dp, plate.H_Pe_modal, plate.D_obs,
             RPM=RPM, ap=a, Ts=TS, ctrl_design=None, **COMMON),
             lo=1e-7, hi=6e-3)
         print(f"  {name:<20} {'-':>10} {0.0:10.2f} {0.0:9.2f} "
-              f"{y*1e6:10.4f} {ap*1e3:12.4f}")
-        results.append(dict(law=name, gain=None, u_peak=0.0, u_rms=0.0,
-                            y_rms=y, ap_crit=ap))
+              f"{e['y_mean']*1e6:11.4f} +/-{e['y_std']*1e6:5.4f} "
+              f"{apc*1e3:12.4f}")
+        results.append(dict(law=name, gain=None, ap_crit=apc, **e))
         continue
 
-    best = None
+    curve, best = [], None
     for g in grid:
         des = builder(float(g))
-        y, up, ur, okk = simulate(des)
-        if not okk or up > U_CAP:
+        e = ensemble(des, N_COMMON)
+        if e is None or e['u_peak_max'] > U_CAP:
+            curve.append(dict(gain=float(g), ap_crit=None,
+                              reason="unstable" if e is None else "over budget"))
             continue
-        ap = critical_depth(lambda a: spectral_radius(
+        apc = critical_depth(lambda a: spectral_radius(
             plate.omega_n, ZETA, Dp, plate.H_Pe_modal, plate.D_obs,
             RPM=RPM, ap=a, Ts=TS, ctrl_design=des, **COMMON),
             lo=1e-7, hi=6e-3)
-        if best is None or ap > best['ap_crit']:
-            best = dict(law=name, gain=float(g), u_peak=up, u_rms=ur,
-                        y_rms=y, ap_crit=ap)
+        curve.append(dict(gain=float(g), ap_crit=apc,
+                          y_mean=e['y_mean'], u_peak_max=e['u_peak_max']))
+        if best is None or apc > best['ap_crit']:
+            best = dict(law=name, gain=float(g), ap_crit=apc, **e)
+    tuning_curves[name] = curve
+
     if best is None:
         print(f"  {name:<20} {'-':>10}  no stable gain within the budget")
         continue
 
-    # Flag two ways a scalar search can mislead, rather than reporting the
-    # number as if it were an interior optimum.
     flags = []
     if best['gain'] >= grid[-1] * 0.999:
         flags.append("gain AT TOP of grid - not an optimum, widen the grid")
     if best['gain'] <= grid[0] * 1.001:
         flags.append("gain AT BOTTOM of grid")
     if best['ap_crit'] <= results[0]['ap_crit'] * 1.02:
-        flags.append("no better than open loop - this law achieved nothing "
-                     "within the voltage budget")
+        flags.append("no better than open loop within the voltage budget")
     best['flags'] = flags
 
-    print(f"  {name:<20} {best['gain']:10.2e} {best['u_peak']:10.2f} "
-          f"{best['u_rms']:9.2f} {best['y_rms']*1e6:10.4f} "
+    print(f"  {name:<20} {best['gain']:10.2e} {best['u_peak_mean']:10.2f} "
+          f"{best['u_rms_mean']:9.2f} "
+          f"{best['y_mean']*1e6:11.4f} +/-{best['y_std']*1e6:5.4f} "
           f"{best['ap_crit']*1e3:12.4f}")
     for fl in flags:
         print(f"  {'':<20} !! {fl}")
@@ -292,8 +380,9 @@ for name, builder, grid in LAWS:
 print()
 print(f"  ({time.time()-t0:.0f} s)")
 print()
-print("  Every controlled row respects the same peak-voltage budget, so the")
-print("  a_p,crit column compares control LAWS, not control effort.")
+print("  Every controlled row respects the same peak-voltage budget, under the")
+print("  same actuator model, over the same metric window, so the a_p,crit")
+print("  column compares control LAWS rather than control effort or luck.")
 ctrl_rows = [r for r in results if r.get('gain') is not None
              and not r.get('flags')]
 if ctrl_rows:
@@ -301,17 +390,24 @@ if ctrl_rows:
     print()
     print(f"  best law within the budget: {bestlaw['law']} at "
           f"a_p,crit = {bestlaw['ap_crit']*1e3:.3f} mm "
-          f"using {bestlaw['u_peak']:.1f} V peak")
+          f"using {bestlaw['u_peak_mean']:.1f} V peak")
     for r in ctrl_rows:
         if r is bestlaw:
             continue
+        sep = abs(bestlaw['y_mean'] - r['y_mean'])
+        pooled = np.hypot(bestlaw['y_std'], r['y_std'])
         print(f"    vs {r['law']:<20} {r['ap_crit']*1e3:6.3f} mm "
-              f"at {r['u_peak']:5.1f} V "
-              f"({bestlaw['ap_crit']/r['ap_crit']:.2f}x the depth for "
-              f"{bestlaw['u_peak']/max(r['u_peak'],1e-9):.2f}x the voltage)")
+              f"at {r['u_peak_mean']:5.1f} V "
+              f"({bestlaw['ap_crit']/r['ap_crit']:.2f}x depth, "
+              f"{bestlaw['u_peak_mean']/max(r['u_peak_mean'],1e-9):.2f}x volts)")
+        print(f"       y_rms separation = {sep*1e6:.4f} um against a pooled "
+              f"spread of {pooled*1e6:.4f} um "
+              f"({sep/max(pooled,1e-30):.1f} sigma)")
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "results_benchmark.json"), "w") as f:
     json.dump(dict(u_cap=U_CAP, Ts=TS, rpm_effective=60.0 / (NT * TAU),
-                   results=results), f, indent=1)
+                   n_seeds=N_SEEDS, use_actuator=USE_ACTUATOR,
+                   n_common=N_COMMON, results=results,
+                   tuning_curves=tuning_curves), f, indent=1)
 print("  wrote results_benchmark.json")

@@ -214,12 +214,93 @@ class EvolvingPlateModel:
         self.DOFb = DOFb
         self.DOFf = np.setdiff1d(np.arange(self.ndof), DOFb)
 
+        # Per-element property multipliers relative to the bare base material.
+        # A bonded surface layer (a piezo patch) raises the local bending
+        # rigidity, areal mass and rotary inertia; these fields carry that,
+        # so the patch is part of the structure rather than a pure load.
+        self.fB = np.ones((N2, N1))     # bending rigidity
+        self.fS = np.ones((N2, N1))     # shear rigidity
+        self.fM = np.ones((N2, N1))     # translational mass
+        self.fR = np.ones((N2, N1))     # rotary inertia
+        self.layers = []                # bonded layers, for reporting
+
         self._piezo_args = None
         self._obs_args = None
         self._dp_args = None
         self.removed_volume = 0.0
 
         self.solve_modes()
+
+    # -----------------------------------------------------------------
+    def _neutral_axis_shift(self, h, E_l, nu_l, h_l, nu_p_iso=None):
+        """
+        Position of the composite neutral axis, measured from the BARE plate
+        mid-plane, for a base layer h of (E, nu) with a bonded layer h_l of
+        (E_l, nu_l) on one face.
+
+            z_n = E'_l h_l (h + h_l)/2 / (E' h + E'_l h_l),   E' = E/(1-nu^2)
+
+        A single-sided layer always shifts the neutral axis towards itself,
+        which SHORTENS the actuator moment arm relative to the bare-plate
+        mid-plane. Taking the arm as (h + h_l)/2, as is common, therefore
+        overstates the actuator authority.
+        """
+        Ep = self.E / (1 - self.nu ** 2)
+        El = E_l / (1 - nu_l ** 2)
+        return El * h_l * (h + h_l) / 2.0 / (Ep * h + El * h_l)
+
+    def add_bonded_layer(self, x0, x1, z0, z1, E_l, rho_l, nu_l, h_l):
+        """
+        Bond a surface layer (e.g. the piezo patch itself) over a window, so
+        that its mass and stiffness enter the modal model.
+
+        Leaving the patch out is not a small effect: 0.7 mm of PZT
+        (rho ~ 7800) on a 4 mm aluminium plate raises the local areal mass by
+        roughly half and the local flexural rigidity by more than half over
+        the footprint, which moves the low modes by several half-power
+        bandwidths -- more than the parametric perturbations such studies
+        usually treat as "uncertainty".
+        """
+        xc = (np.arange(self.N1) + 0.5) * self.lex
+        zc = (np.arange(self.N2) + 0.5) * self.ley
+        mi = (xc >= x0) & (xc <= x1)
+        mj = (zc >= z0) & (zc <= z1)
+        if not mi.any() or not mj.any():
+            return
+        sel = np.ix_(mj, mi)
+
+        h = self.thickness[sel]
+        Ep = self.E / (1 - self.nu ** 2)
+        El = E_l / (1 - nu_l ** 2)
+        Gp = self.E / (2 * (1 + self.nu))
+        Gl = E_l / (2 * (1 + nu_l))
+
+        z_n = El * h_l * (h + h_l) / 2.0 / (Ep * h + El * h_l)
+        d_l = (h + h_l) / 2.0 - z_n                    # layer centroid offset
+
+        D_bare = Ep * h ** 3 / 12.0
+        D_comp = (Ep * (h ** 3 / 12.0 + h * z_n ** 2)
+                  + El * (h_l ** 3 / 12.0 + h_l * d_l ** 2))
+        self.fB[sel] = D_comp / D_bare
+        self.fS[sel] = (Gp * h + Gl * h_l) / (Gp * h)
+
+        m_bare = self.rho * h
+        self.fM[sel] = (self.rho * h + rho_l * h_l) / m_bare
+        I_bare = self.rho * h ** 3 / 12.0
+        I_comp = (self.rho * (h ** 3 / 12.0 + h * z_n ** 2)
+                  + rho_l * (h_l ** 3 / 12.0 + h_l * d_l ** 2))
+        self.fR[sel] = I_comp / I_bare
+
+        self.layers.append(dict(window=(x0, x1, z0, z1), E=E_l, rho=rho_l,
+                                nu=nu_l, h=h_l,
+                                z_n_mean=float(np.mean(z_n)),
+                                fB_mean=float(np.mean(self.fB[sel])),
+                                fM_mean=float(np.mean(self.fM[sel]))))
+        if self.verbose:
+            L = self.layers[-1]
+            print(f"[EvolvingPlate] bonded layer {h_l*1e3:.2f} mm: "
+                  f"bending x{L['fB_mean']:.3f}, mass x{L['fM_mean']:.3f}, "
+                  f"neutral axis shifted {L['z_n_mean']*1e3:.3f} mm")
 
     # -----------------------------------------------------------------
     def check_axial_resolution(self, ap):
@@ -263,8 +344,14 @@ class EvolvingPlateModel:
     def _assemble(self):
         h = self.thickness.reshape(-1)                      # (nelem,)
         h3 = h ** 3
-        Ke = h3[:, None, None] * self.KB1 + h[:, None, None] * self.KS1
-        Me = h[:, None, None] * self.MT1 + h3[:, None, None] * self.MR1
+        fB = self.fB.reshape(-1)
+        fS = self.fS.reshape(-1)
+        fM = self.fM.reshape(-1)
+        fR = self.fR.reshape(-1)
+        Ke = ((fB * h3)[:, None, None] * self.KB1
+              + (fS * h)[:, None, None] * self.KS1)
+        Me = ((fM * h)[:, None, None] * self.MT1
+              + (fR * h3)[:, None, None] * self.MR1)
         Kg = csr_matrix((Ke.ravel(), (self._rows, self._cols)),
                         shape=(self.ndof, self.ndof))
         Mg = csr_matrix((Me.ravel(), (self._rows, self._cols)),
@@ -356,12 +443,22 @@ class EvolvingPlateModel:
         mj = (zc >= zP1) & (zc <= zP2)
         h_loc = (float(np.mean(self.thickness[np.ix_(mj, mi)]))
                  if mi.any() and mj.any() else self.h_nominal)
-        m_piezo = -E_Pe * d31 * (h_loc + h_Pa) / (2 * (1 - nu_Pe))
+
+        # Moment arm measured to the COMPOSITE neutral axis, not to the bare
+        # plate mid-plane. A one-sided patch pulls the neutral axis towards
+        # itself, so the naive arm (h + h_Pa)/2 overstates the induced moment.
+        z_n = self._neutral_axis_shift(h_loc, E_Pe, nu_Pe, h_Pa)
+        arm = (h_loc + h_Pa) / 2.0 - z_n
+        m_piezo = -E_Pe * d31 * arm / (1 - nu_Pe)
+
         g = piezo_moment_load_M(xP1, xP2, zP1, zP2, self.N1, self.N2,
                                 self.lex, self.ley, self.node_id, self.ndof)
         self.H_Pe_modal = self.V.T @ (m_piezo * g)[self.DOFf]
+        arm_naive = (h_loc + h_Pa) / 2.0
         self.patch = dict(xP1=xP1, xP2=xP2, zP1=zP1, zP2=zP2,
-                          m_piezo=m_piezo, h_local=h_loc)
+                          m_piezo=m_piezo, h_local=h_loc,
+                          arm=arm, arm_naive=arm_naive, z_neutral=z_n,
+                          arm_overstatement=arm_naive / arm - 1.0)
 
     def get_Dp_at(self, kp):
         return self.Dp_array[:, kp], self.DpT_Dp_array[:, :, kp]

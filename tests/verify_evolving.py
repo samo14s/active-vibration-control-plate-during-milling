@@ -145,12 +145,29 @@ ok &= ef < 1e-9
 # mode-shape-derived quantities agree up to the per-mode sign convention
 s = np.sign(ev.D_obs * ref.D_obs)
 eo = np.max(np.abs(np.abs(ev.D_obs) - np.abs(ref.D_obs)) / np.abs(ref.D_obs))
-eh = np.max(np.abs(np.abs(ev.H_Pe_modal) - np.abs(ref.H_Pe_modal))
-            / np.max(np.abs(ref.H_Pe_modal)))
 print(f"   |D_obs| rel. error       = {eo:.2e}   {'PASS' if eo < 1e-8 else 'FAIL'}")
-print(f"   |H_Pe_modal| rel. error  = {eh:.2e}   {'PASS' if eh < 1e-8 else 'FAIL'}")
 print(f"   relative mode signs      = {s.astype(int)}")
-ok &= eo < 1e-8 and eh < 1e-8
+ok &= eo < 1e-8
+
+# H_Pe_modal is DELIBERATELY different: the baseline takes the actuator
+# moment arm to the bare-plate mid-plane, (h + h_Pa)/2, while a one-sided
+# bonded patch pulls the neutral axis towards itself and shortens the arm.
+# The two must therefore differ by exactly the arm ratio and nothing else.
+arm_ratio = ev.patch['arm'] / ev.patch['arm_naive']
+got = np.max(np.abs(ev.H_Pe_modal)) / np.max(np.abs(ref.H_Pe_modal))
+err = abs(got - arm_ratio) / arm_ratio
+good = err < 1e-8
+ok &= good
+print()
+print(f"   actuator moment arm, bare mid-plane : "
+      f"{ev.patch['arm_naive']*1e3:.4f} mm")
+print(f"   actuator moment arm, composite N.A. : "
+      f"{ev.patch['arm']*1e3:.4f} mm "
+      f"(neutral axis shifted {ev.patch['z_neutral']*1e3:.4f} mm)")
+print(f"   => baseline overstates the arm by "
+      f"{ev.patch['arm_overstatement']*100:.1f} %")
+print(f"   |H_Pe| ratio: expected {arm_ratio:.6f}, got {got:.6f}   "
+      f"{'PASS' if good else 'FAIL'}")
 
 print()
 print("=" * 74)

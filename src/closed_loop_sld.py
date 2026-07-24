@@ -154,8 +154,12 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
     Dp = np.asarray(Dp, float).reshape(n)
     DpDpT = np.outer(Dp, Dp)
 
-    B = np.zeros((n2, 1))
-    B[n:, 0] = np.asarray(H_modal, float).reshape(n)
+    # H_modal may be (n,) for one actuator or (n, n_u) for a layout
+    Hm = np.asarray(H_modal, float)
+    Hm = Hm.reshape(n, 1) if Hm.ndim == 1 else Hm.reshape(n, -1)
+    n_u = Hm.shape[1]
+    B = np.zeros((n2, n_u))
+    B[n:, :] = Hm
     C = np.zeros((1, n2))
     C[0, :n] = np.asarray(D_obs, float).reshape(n)
 
@@ -165,9 +169,9 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
 
     if closed:
         Ao = np.asarray(ctrl['Ao'], float)
-        Gu = np.asarray(ctrl['Gu'], float).reshape(n2, 1)
+        Gu = np.asarray(ctrl['Gu'], float).reshape(n2, n_u)
         Gy = np.asarray(ctrl['Gy'], float).reshape(n2, 1)
-        Kf = np.asarray(ctrl['K'], float).reshape(1, n2)
+        Kf = np.asarray(ctrl['K'], float).reshape(n_u, n2)
         GyC = Gy @ C
         Ahat = Ao - Gu @ Kf        # xhat_{k+1} = Ahat xhat_k + Gy C x_k
 

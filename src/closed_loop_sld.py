@@ -195,14 +195,27 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
 
     # The step matrix D_i is almost entirely a shift register: only the first
     # block row (the new plant state) and the observer block row carry
-    # non-trivial entries. Forming D_i explicitly and doing a dense N x N
-    # product would cost O(N^3) per step for a matrix that is O(n2 * N) dense.
-    # Instead the two live block rows are updated directly and the delay line
-    # is shifted, which is exact and ~three orders of magnitude cheaper.
-    P = np.eye(N)
-    top = slice(0, n2)
-    tail = slice(n2 * m_div, n2 * (m_div + 1))
-    obs = slice(s, s + n2)
+    # non-trivial entries. Forming D_i explicitly and multiplying densely
+    # would cost O(N^3) per step for a matrix that is only O(n2 * N) dense.
+    #
+    # Two further observations make this cheap. First, block row j of the
+    # accumulated product is simply the top block row as it was j steps ago,
+    # so the delay line never has to be copied: a ring buffer of the last
+    # m_div+1 top rows (each n2 x N) replaces an O(N^2) array shift per step
+    # with an O(n2 * N) write. Second, only the top and observer rows are ever
+    # read during the recursion, so the full matrix is assembled once at the
+    # end.
+    ring = [np.zeros((n2, N)) for _ in range(m_div + 1)]
+    head = 0                       # ring[head] holds the current top row
+    # With head = 0, block row j of the product lives at slot (-j) mod (m+1),
+    # NOT at slot j. Seeding the identity at slot j instead is a subtle
+    # off-by-rotation that still produces a plausible spectral radius, so it
+    # is worth being explicit about.
+    for j in range(m_div + 1):
+        ring[(head - j) % (m_div + 1)][:, n2 * j:n2 * (j + 1)] = np.eye(n2)
+    obs_row = np.zeros((n2, N))
+    if closed:
+        obs_row[:, s:s + n2] = np.eye(n2)
 
     for i in range(m_div):
         alpha_i = float(a4_array[i])
@@ -217,20 +230,26 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
 
         Phi_i, Gam_i, Psi_i = _step_matrices(A, Ad, B, dt)
 
-        # both new block rows are formed from the OLD P before the shift
-        new_top = Phi_i @ P[top] + Gam_i @ P[tail]
-        if closed:
-            new_top -= (Psi_i @ Kf) @ P[obs]
-            if i % refine == 0:                      # controller sample instant
-                new_obs = GyC @ P[top] + Ahat @ P[obs]
-            else:                                    # observer holds
-                new_obs = P[obs].copy()
+        top = ring[head]
+        tail_row = ring[(head - m_div) % (m_div + 1)]
 
-        P[n2:n2 * (m_div + 1)] = P[0:n2 * m_div]     # advance the delay line
-        P[top] = new_top
+        new_top = Phi_i @ top + Gam_i @ tail_row
         if closed:
-            P[obs] = new_obs
+            new_top -= (Psi_i @ Kf) @ obs_row
+            if i % refine == 0:                  # controller sample instant
+                obs_row = GyC @ top + Ahat @ obs_row
+            # otherwise the observer holds and obs_row is unchanged
 
+        # advancing the ring IS the shift: the oldest row is overwritten by
+        # the new top row and becomes block row 0
+        head = (head + 1) % (m_div + 1)
+        ring[head] = new_top
+
+    P = np.empty((N, N))
+    for j in range(m_div + 1):
+        P[n2 * j:n2 * (j + 1)] = ring[(head - j) % (m_div + 1)]
+    if closed:
+        P[s:s + n2] = obs_row
     return P
 
 

@@ -66,11 +66,54 @@ The force consequently SATURATES instead of growing: at 1000 um of relative
 vibration the linear model returns a force 8.1e0 while the true force is
 identically zero, because the tooth is never in contact.
 
+SIZE EFFECT, EDGE FORCES AND PROCESS DAMPING (ROADMAP item 17)
+--------------------------------------------------------------
+A single constant K_t is only defensible if the chip thickness it was
+calibrated at is stated. This model runs at h_mean = 2.0 um, deep in the
+size-effect regime where the specific cutting pressure rises steeply as the
+chip thins, so three optional refinements are provided. All default OFF, so
+the model reduces exactly to the constant-K_t law unless they are switched on
+and the switch is visible in the results.
+
+  kt_model="power"   K_t(h) = K_tc * (h / h_ref)^(-x)
+      The standard size-effect form. x ~ 0.2-0.3 for aluminium. Setting
+      h_ref to the mean uncut chip makes K_tc the value the constant-law
+      calibration corresponds to, so the two agree at the calibration point
+      and diverge only where the size effect actually bites.
+
+  K_te, K_re         edge (ploughing) coefficients, force per unit length of
+      cutting edge independent of chip thickness. They dominate as h -> 0 and
+      are why a purely proportional law under-predicts force at microns.
+
+  c_pd               process damping. The flank rubs the wavy surface, and
+      the standard equivalent-viscous representation is a force opposing the
+      surface-normal velocity with coefficient
+
+          C_pd = K_pd * a_p / V_c
+
+      i.e. it scales with axial depth and falls with cutting speed. It is the
+      reason low-speed lobes are far higher than a speed-independent model
+      predicts, and it is absent from the baseline entirely.
+
+CALIBRATION IS NOT SUPPLIED, DELIBERATELY
+-----------------------------------------
+The numerical coefficients for AL6061-T6 must be taken from a source that
+publishes them, not invented here. The survey identified
+
+    Wang, Hao, Wang, Hou & Lallart, Shock and Vibration 2018, Art. 3831825
+    (open access; AL6061-T6, peripheral milling, 10 mm 4-tooth 35 deg helix
+    -- the same process as this study), which publishes the coefficients as a
+    chip-thickness POWER LAW rather than a constant.
+
+Until those numbers are read off that paper, `kt_model` stays "constant" and
+the size-effect machinery is exercised only in sensitivity studies. The
+defaults are chosen so that switching a refinement on cannot silently change
+a result: with the defaults every added term is exactly zero.
+
 SCOPE
 -----
-This restores loss of contact. It does NOT add process damping or an
-edge/ploughing term, both of which matter at 2-4 um chip thickness and
-154 m/min, and both of which remain stated limitations.
+Loss of contact, the size effect, edge forces and process damping are
+representable. Tool runout, flank wear and thermal effects are not.
 """
 from __future__ import annotations
 
@@ -95,7 +138,9 @@ class NonlinearMillingForce:
     """
 
     def __init__(self, Omega, NT, RT, eta, phi_st, phi_ex,
-                 za_low, za_high, k1, k2, kt, ft, n_slice=24):
+                 za_low, za_high, k1, k2, kt, ft, n_slice=24,
+                 kt_model="constant", kt_exponent=0.25, h_ref=None,
+                 K_te=0.0, K_re=0.0, c_pd=0.0):
         self.Omega = float(Omega)
         self.NT = int(NT)
         self.k1, self.k2, self.kt = float(k1), float(k2), float(kt)
@@ -113,8 +158,50 @@ class NonlinearMillingForce:
         # theta_offset[j, s] = 2 pi j / NT - z_s tan(eta)/R
         self.theta_offset = lag_tooth[:, None] - lag_helix[None, :]
 
+        # size effect / edge / process damping (all inert by default)
+        if kt_model not in ("constant", "power"):
+            raise ValueError(f"unknown kt_model {kt_model!r}")
+        self.kt_model = kt_model
+        self.kt_exponent = float(kt_exponent)
+        # default reference chip = mean over the engaged arc, so that a power
+        # law and the constant law agree at the calibration point
+        if h_ref is None:
+            phi = np.linspace(phi_st, phi_ex, 256)
+            h_ref = float(np.mean(ft * np.sin(phi)))
+        self.h_ref = max(float(h_ref), 1e-12)
+        self.K_te = float(K_te)
+        self.K_re = float(K_re)
+        self.c_pd = float(c_pd)
+
         self.n_out_of_cut = 0
         self.n_engaged = 0
+
+    # -----------------------------------------------------------------
+    def kt_of_h(self, h):
+        """
+        Specific cutting pressure at chip thickness h.
+
+        "constant" returns kt unchanged. "power" applies the size-effect law
+        K_t(h) = kt * (h/h_ref)^(-x), clipped at h -> 0 so a vanishing chip
+        cannot produce an unbounded pressure; the edge coefficients are the
+        physically correct way to carry the force as h -> 0.
+        """
+        if self.kt_model == "constant":
+            return self.kt
+        hh = np.maximum(h, 1e-4 * self.h_ref)
+        return self.kt * (hh / self.h_ref) ** (-self.kt_exponent)
+
+    # -----------------------------------------------------------------
+    def process_damping_coeff(self):
+        """
+        Equivalent viscous process-damping coefficient, C_pd = K_pd a_p / V_c,
+        expressed here directly as `c_pd` (N.s/m per unit modal displacement).
+
+        Returned so a caller can fold it into the modal damping matrix; it
+        opposes the surface-normal velocity and therefore acts exactly like
+        added damping along Dp.
+        """
+        return self.c_pd
 
     # -----------------------------------------------------------------
     def _engaged_mask(self, theta):
@@ -147,8 +234,14 @@ class NonlinearMillingForce:
                 return 0.0
             st, ct, h = st[live], ct[live], h[live]
 
-        return float(self.kt * np.sum((self.k2 * st - self.k1 * ct) * h)
-                     * self.dz)
+        w = self.k2 * st - self.k1 * ct
+        # chip-proportional term, with the size effect if enabled
+        f = np.sum(w * self.kt_of_h(h) * h)
+        # edge (ploughing) term: independent of h, present whenever the edge
+        # is engaged, and dominant as h -> 0
+        if self.K_te or self.K_re:
+            f += np.sum(self.K_te * st - self.K_re * ct)
+        return float(f * self.dz)
 
     # -----------------------------------------------------------------
     def linear_coeffs(self, t):

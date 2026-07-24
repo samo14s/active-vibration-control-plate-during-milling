@@ -163,6 +163,41 @@ Treating the modes as independent — as the baseline stability code does —
 differs from the coupled system by up to **20.8 %**, because `Dp Dpᵀ` is rank
 one and couples every mode through the single contact point.
 
+### The boundary is a distribution, and control collapses its width
+
+160-sample propagation of the parameters that cannot be measured without a rig
+(`experiments/run_uncertainty_quantification.py`):
+
+| | p5 | median | p95 | p95/p5 |
+|---|---|---|---|---|
+| open loop | 0.0469 | 0.1748 | 1.0069 | **21.5×** |
+| LQG | 0.7778 | 1.3465 | 2.0857 | **2.7×** |
+
+The nominal open-loop 0.070 mm sits at the **14th percentile** of its own
+uncertainty — a single quoted chatter boundary is not even a central estimate.
+And closing the loop **collapses the band from 21.5× to 2.7×**: active control
+makes the boundary *predictable*, which for process planning is worth more than
+the mean improvement.
+
+Sensitivity inverts the field's usual priorities: clamp stiffness 33.0 %,
+K_T 16.7 %, k_N 10.7 %, and **modal damping only 1.4 %** — once the loop is
+closed the controller supplies the damping, and what is left is fixture
+compliance, which is rarely reported.
+
+### PPF, certified with its filter
+
+The "static modal position feedback achieves nothing" row above is **not** a
+verdict on PPF. With its second-order filter in the monodromy:
+
+| law | certified a_p,crit | vs open loop |
+|---|---|---|
+| static position feedback | 0.114 mm | 1.61× |
+| **PPF with its filter** | **1.787 mm** | **25.2×** |
+
+Detuning the filter an octave either way, or inverting the sign, destroys the
+benefit — so it is the filter doing the work. Consistent with Zhang & Sims
+(2005), who report 7× experimentally.
+
 ---
 
 ## Reproducing
@@ -177,10 +212,17 @@ python tests/verify_fixed_gain_instability.py   # the three-way check
 python tests/analyze_actuator_alignment.py      # reachability along the path
 python tests/verify_feedforward_cannot_move_lobes.py   # feedforward vs stability
 python tests/verify_substitution_error_along_path.py   # how wrong the usual shortcut is
+python tests/verify_leissa_cantilever.py        # CFFF benchmark (the BC used)
+python tests/verify_nonlinear_force.py          # chip-thickness positivity
+python tests/verify_size_effect_and_process_damping.py
+python tests/verify_piezo_patch_structure.py    # patch as structure
+python tests/verify_ppf_certified.py            # PPF with its filter
 python tests/audit_baseline_claims.py           # reproduces the baseline claims
 
 python experiments/run_path_study.py            # the integrated study
 python experiments/run_benchmark.py             # matched-effort comparison
+python experiments/run_discretisation_study.py  # dt, delay and m_div
+python experiments/run_uncertainty_quantification.py
 ```
 
 ---

@@ -162,7 +162,26 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
     dt       : plant sub-step, = tau / m_div
     m_div    : total plant sub-steps per period
     refine   : plant sub-steps per controller sample
-    ctrl     : dict(Ao=, Gu=, Gy=, K=) or None for the open loop
+    ctrl     : the controller, or None for the open loop. Two accepted forms:
+
+               dict(Ao=, Gu=, Gy=, K=)
+                   an observer-plus-gain design, as produced by
+                   discretize_controller. Kept because it is what the LQG
+                   path uses.
+
+               dict(Ac=, Bc=, Cc=)
+                   ANY strictly proper discrete controller
+
+                       x_c[k+1] = Ac x_c[k] + Bc y[k],   u[k] = -Cc x_c[k]
+
+                   of arbitrary state dimension n_c. This is what allows a
+                   law with its own dynamics -- PPF's second-order filter,
+                   a resonant or repetitive controller -- to be certified,
+                   rather than only its static limit.
+
+               The first form is a special case of the second, with
+               Ac = Ao - Gu K, Bc = Gy, Cc = K; that identity is asserted in
+               tests/verify_monodromy_equivalence.py.
     """
     n = len(omega_n)
     n2 = 2 * n
@@ -182,16 +201,27 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
     C[0, :n] = np.asarray(D_obs, float).reshape(n)
 
     closed = ctrl is not None
-    N = n2 * (m_div + 1) + (n2 if closed else 0)
-    s = n2 * (m_div + 1)                       # observer block offset
-
     if closed:
-        Ao = np.asarray(ctrl['Ao'], float)
-        Gu = np.asarray(ctrl['Gu'], float).reshape(n2, n_u)
-        Gy = np.asarray(ctrl['Gy'], float).reshape(n2, 1)
-        Kf = np.asarray(ctrl['K'], float).reshape(n_u, n2)
-        GyC = Gy @ C
-        Ahat = Ao - Gu @ Kf        # xhat_{k+1} = Ahat xhat_k + Gy C x_k
+        if 'Ac' in ctrl:
+            Ahat = np.asarray(ctrl['Ac'], float)
+            n_c = Ahat.shape[0]
+            Bc = np.asarray(ctrl['Bc'], float).reshape(n_c, 1)
+            Kf = np.asarray(ctrl['Cc'], float).reshape(n_u, n_c)
+        else:
+            n_c = n2
+            Ao = np.asarray(ctrl['Ao'], float)
+            Gu = np.asarray(ctrl['Gu'], float).reshape(n2, n_u)
+            Bc = np.asarray(ctrl['Gy'], float).reshape(n2, 1)
+            Kf = np.asarray(ctrl['K'], float).reshape(n_u, n2)
+            # an observer with its own input u = -K xhat folds into the same
+            # generic form: xhat_{k+1} = (Ao - Gu K) xhat_k + Gy C x_k
+            Ahat = Ao - Gu @ Kf
+        GyC = Bc @ C
+    else:
+        n_c = 0
+
+    N = n2 * (m_div + 1) + n_c
+    s = n2 * (m_div + 1)                       # controller block offset
 
     # The step matrix D_i is almost entirely a shift register: only the first
     # block row (the new plant state) and the observer block row carry
@@ -213,9 +243,9 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
     # is worth being explicit about.
     for j in range(m_div + 1):
         ring[(head - j) % (m_div + 1)][:, n2 * j:n2 * (j + 1)] = np.eye(n2)
-    obs_row = np.zeros((n2, N))
+    obs_row = np.zeros((n_c, N)) if closed else None
     if closed:
-        obs_row[:, s:s + n2] = np.eye(n2)
+        obs_row[:, s:s + n_c] = np.eye(n_c)
 
     for i in range(m_div):
         alpha_i = float(a4_array[i])
@@ -249,7 +279,7 @@ def build_monodromy(omega_n, zeta_n, Dp, H_modal, D_obs,
     for j in range(m_div + 1):
         P[n2 * j:n2 * (j + 1)] = ring[(head - j) % (m_div + 1)]
     if closed:
-        P[s:s + n2] = obs_row
+        P[s:s + n_c] = obs_row
     return P
 
 

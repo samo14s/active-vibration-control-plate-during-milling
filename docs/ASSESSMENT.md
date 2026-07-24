@@ -311,6 +311,91 @@ curve for every law is written to `results_benchmark.json`.)*
 
 ---
 
+## 4c. The boundary is a distribution, and control collapses its width
+
+`experiments/run_uncertainty_quantification.py`, 160 samples, propagating only
+what cannot be measured without a rig: modal damping (±40 %, log-normal),
+`K_T` and `k_N` (±15 %), `E` (±3 %), `d31` (±10 %), patch thickness (±5 %) and
+a clamp-stiffness knock-down (±5 %, one-sided — a fixture can only be softer
+than ideal).
+
+| | p5 | median | p95 | p95/p5 |
+|---|---|---|---|---|
+| open loop | 0.0469 | 0.1748 | 1.0069 | **21.5×** |
+| LQG | 0.7778 | 1.3465 | 2.0857 | **2.7×** |
+
+Two results, and the second is the more useful one.
+
+**The usual single number is not even a central estimate.** The nominal
+open-loop `a_p,crit` of 0.070 mm sits at the **14th percentile** of its own
+uncertainty, and the 5–95 band spans a factor of 21.5. Quoting one figure for
+a chatter boundary, as the whole field does, conveys far more confidence than
+the inputs support.
+
+**Closing the loop collapses the uncertainty from 21.5× to 2.7×.** Active
+control does not merely raise the boundary — it makes the boundary
+*predictable*. For process planning that is arguably worth more than the
+mean improvement, because it is what lets a depth of cut be chosen with a
+known margin. This is a claim a simulation-only study is well placed to make,
+and it does not appear to have been made.
+
+### Which unmeasured parameter to measure first
+
+One-at-a-time, on the closed-loop boundary:
+
+| rank | parameter | swing |
+|---|---|---|
+| 1 | **clamp stiffness** | **33.0 %** |
+| 2 | K_T | 16.7 % |
+| 3 | k_N | 10.7 % |
+| 4 | ζ (modal damping) | **1.4 %** |
+| 5 | d31 | 0.9 % |
+| 6 | E | 0.1 % |
+| 7 | patch thickness | 0.0 % |
+
+This inverts the field's usual priorities. **Modal damping — the parameter
+every chatter study frets about — is nearly irrelevant once the loop is
+closed**, because the controller supplies the damping. What dominates is
+fixture compliance, which is rarely reported at all, and which a single tap
+test would pin down. (The clamp entry is a one-sided half-range by
+construction, so it is not directly comparable with the symmetric ±1σ swings;
+it is nonetheless the largest.)
+
+This section also replaces the starting package's "Monte Carlo robustness
+analysis", which was never run — see `baseline/RETRACTED.md` item 5.
+
+---
+
+## 4d. A correction about PPF
+
+§4b reports that static modal position feedback achieves nothing. That is
+correct, and it is **not** a statement about PPF — saying so would have been
+wrong, and the earlier write-up came close to implying it.
+
+PPF's second-order filter is what turns a position measurement into damping.
+With the filter certified inside the monodromy
+(`tests/verify_ppf_certified.py`, using the generic `(Ac, Bc, Cc)` controller
+form):
+
+| law | certified a_p,crit | vs open loop |
+|---|---|---|
+| static position feedback | 0.114 mm | 1.61× |
+| **PPF with its filter** | **1.787 mm** | **25.2×** |
+
+and the benefit is demonstrably the filter's: detuning the filter frequency by
+one octave either way drops it to 0.137 mm or destabilises the loop entirely,
+and inverting the feedback sign destabilises it. That order of magnitude is
+consistent with Zhang & Sims (2005), who report 7× experimentally.
+
+Getting there required fixing a sign error of my own: `build_monodromy`
+applies `u = -Cc x_c`, so *positive* position feedback needs `Cc = -g`, and
+the plant's own DC gain sign flips it again. The first run had the sign
+inverted, which showed up as the "wrong" sign outperforming the "correct" one
+— a useful reminder that the feedback sign must be derived from the plant,
+never assumed, because eigenvector signs from an eigensolver are arbitrary.
+
+---
+
 ## 5. What the paper should be
 
 **Working title.** *Path-wide controllability and certified closed-loop

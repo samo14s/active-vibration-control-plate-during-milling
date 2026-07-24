@@ -100,4 +100,5 @@ u, x_hat = darc.step(x_hat_prev, u_prev, y_meas, k_step)
 
 The NN replaces the explicit model predictive control optimization,
 providing similar anticipative behavior at much lower computational cost
-(0.1 µs vs 100+ ms per step).
+(RETRACTED: no benchmark for this timing claim exists anywhere in
+the package, and there is no MPC to time — see ../RETRACTED.md item 4.)

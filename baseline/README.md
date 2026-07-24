@@ -1,6 +1,18 @@
 # Article Simulation Package — Active Vibration Control of Thin-Walled Milling
 ### Reissner–Mindlin plate edition
 
+> ## ⚠ RETRACTED CLAIMS — READ `RETRACTED.md` FIRST
+>
+> This directory is the **unmodified starting package**, kept as the record
+> against which the audit in `../docs/ASSESSMENT.md` was performed. Several of
+> its headline results do not survive reproduction, and one of them is
+> unattainable in principle. They are listed with locations and evidence in
+> [`RETRACTED.md`](RETRACTED.md).
+>
+> The four lines that fabricated the stability result now `raise` instead of
+> running, so those figures cannot be regenerated. **Do not quote any number
+> from this README.** The reproducible values are in `../docs/ASSESSMENT.md`.
+
 **Topic**: Comparison between LQG and DARC-MPC controllers for chatter mitigation in peripheral milling of cantilever AL6061 plates.
 
 **Target journals**: IEEE TCST · MSSP · Mechatronics · Automatica · CIRP Annals · JSV
@@ -184,7 +196,8 @@ QDA60-200.7 piezoelectric patch model:
 Cutting force model for 3-tooth end-mill:
 - Per-tooth force computation with helix angle
 - Lehmann-Engin model for tangential and normal forces
-- Numba-compiled `precompute_alpha_periodic()` for fast simulation
+- `precompute_alpha_periodic()` exploits the tooth-passing periodicity
+  (the package contains no `numba` import and does not require it)
 - Returns α₃(t), α₄(t) coefficients used by FEM
 
 #### `newmark_solver.py`
@@ -333,52 +346,27 @@ Same pipeline but with realistic piezo non-linearities:
 
 ---
 
-## 📊 Key Results
+## 📊 Key Results — RETRACTED
 
-### RMS Vibration Reduction (T = 0.5 s)
+The tables that stood here reported:
 
-| Scenario | LQG | DARC-MPC | Gain |
-|---|---:|---:|---:|
-| S1 Nominal | 0.628 µm | 0.507 µm | **+19.20%** |
-| S2 Aggressive | 1.253 µm | 1.009 µm | **+19.51%** |
-| S3 Uncertainty | 0.604 µm | 0.488 µm | **+19.22%** |
-| S4 High K_T | 0.817 µm | 0.661 µm | **+19.17%** |
-| **AVERAGE** | **0.825 µm** | **0.666 µm** | **+19.31%** 🏆 |
+* +19.31 % average RMS reduction vs LQG
+* stability domain 21.7x open loop, +41 % vs LQG
+* effective modal damping 31.1 %
 
-### Stability Domain (SLD at 4900 RPM)
-
-| Method | a_p critical | vs Open-Loop |
-|---|---:|---:|
-| Open-Loop | 0.14 mm | 1× |
-| LQG | 2.17 mm | 15.5× |
-| DARC-MPC | **3.05 mm** | **21.7×** (+41% vs LQG) |
-
-### Modal Damping (Mode 1, 521 Hz)
-
-| Configuration | ζ |
-|---|---:|
-| Open-Loop | 0.31% |
-| LQG (sub-optimal) | 13.2% |
-| DARC base (optimal LQG) | 23.9% |
-| DARC-MPC effective | **31.1%** |
-
----
+None is reproducible. Measured instead: **+4.32 %** RMS, reversing to a *loss*
+against a properly tuned baseline; and the stability numbers came from a
+hard-coded `zeta * 1.30`, for a mechanism that cannot move the stability
+boundary at all. See [`RETRACTED.md`](RETRACTED.md) and
+`../docs/ASSESSMENT.md`.
 
 ## 📚 Citation
 
-If you use this code or build upon this work, please cite:
-
-```bibtex
-@article{darcmpc2026,
-  title   = {Deep Adaptive Robust Control with Phase-Aware Neural Feedforward 
-             for Chatter Mitigation in Thin-Walled Milling},
-  author  = {[Author names]},
-  journal = {[Journal name]},
-  year    = {2026},
-  note    = {DARC-MPC achieves +19% RMS vibration reduction and +41% stability 
-             domain extension compared to LQG baseline.}
-}
-```
+The BibTeX entry that stood here was a placeholder `@article{...2026}` with
+`[Author names]`, `[Journal name]` and a `note` field asserting +19 % and
++41 % as established fact. It has been removed: neither number is
+reproducible, and a year-bearing `@article` for unpublished work invites
+mis-citation.
 
 ### Key references
 

@@ -9,8 +9,8 @@ matplotlib>=3.5
 # Numerical optimization (for FEM and Newmark)
 # Already included in scipy
 
-# Optional: for faster execution (numba JIT compilation)
-# numba>=0.56  # uncomment if you want JIT acceleration
+# (an earlier README claimed Numba JIT compilation; the package contains
+#  no numba import and does not use it)
 
 # Note: No external ML library required.
 # The DARC-MPC neural network is implemented from scratch (numpy only).

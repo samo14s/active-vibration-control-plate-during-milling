@@ -139,7 +139,20 @@ print("[3/3] DARC-MPC SLD (optimal LQG base + 30% FF) ...")
 lqg_opt = LQGController(plate_n, dt=DT_FAST, verbose=False)
 lqg_opt.optimize_weights(w_q_list=[1e14], w_qd_list=[1e8], w_r=1.0)
 omega_OPT_n, zeta_OPT_n = extract_modes(lqg_opt.ev_cl, N_MODES)
-zeta_DARC_eff = (np.array(zeta_OPT_n) * 1.30).tolist()
+raise RuntimeError(
+    "RETRACTED (see baseline/RETRACTED.md, item 1).\n"
+    "The original line here was:\n"
+    "    zeta_DARC_eff = (np.array(zeta_OPT_n) * 1.30).tolist()\n"
+    "It fabricates the closed-loop stability result by multiplying the LQG\n"
+    "damping ratios by a hard-coded constant. The DARC controller never\n"
+    "enters the stability computation at all, and every number derived from\n"
+    "this line -- 21.7x, 15.5x, 31.1%, +41% -- is an assumption reported as\n"
+    "a measurement.\n"
+    "The claim is also unattainable in principle: a feedforward signal is\n"
+    "input-additive, so it cannot enter the monodromy matrix and cannot move\n"
+    "the stability boundary. The correct value of that improvement is exactly\n"
+    "zero. See tests/verify_feedforward_cannot_move_lobes.py.\n"
+    "For a certified closed-loop lobe, use src/closed_loop_sld.py.")
 rho_DARC, _ = compute_SLD(RPM_arr, ap_arr,
                             omega_OPT_n.tolist(), zeta_DARC_eff,
                             Dp_avg.tolist(), m_list,

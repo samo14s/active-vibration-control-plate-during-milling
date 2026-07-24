@@ -199,9 +199,35 @@ is certified rather than inferred. Two corrections come with it:
 
 Validation, at 4900 RPM: the certified LQG lobe gives `a_p,crit = 2.01 mm`,
 and direct time-domain simulation places the stability transition between
-1.81 and 2.41 mm. The equivalent-damping substitution gives 2.13 mm — about
-**6 % optimistic**, i.e. it over-promises stability. Modest here, but in the
-wrong direction, and there is no reason it should be small in general.
+1.81 and 2.41 mm.
+
+**How wrong is the substitution? It depends entirely on where you evaluate
+it, and averaging hides the answer.**
+(`tests/verify_substitution_error_along_path.py`, with `Ts = tau/82` exactly)
+
+| evaluated with | substitution error |
+|---|---|
+| the path-averaged `Dp` the baseline SLD scripts use | **+1.1 %** |
+| the local `Dp(x)` at each tool position | **−3.6 % to +45.4 %**, mean +10.2 %, optimistic at 7 of 10 stations |
+
+So a single path-averaged number makes the shortcut look almost exact, while
+the error actually incurred along the pass reaches **+45 % in the optimistic
+direction** — it over-promises stability by nearly half.
+
+The location of the worst error is the interesting part, and it is the
+opposite of the intuitive guess. The +45.4 % occurs at x = 0, where the
+matched fraction is γ = 0.944 — that is, where the actuator is *best* aligned
+with the disturbance and the controller is doing the most work. Where the
+controller has strong authority its own dynamics dominate the loop, and that
+is precisely what collapsing it to a scalar damping ratio throws away. Where
+γ → 0 the controller barely acts, the loop is nearly open, and the
+substitution is nearly right for the trivial reason that there is nothing to
+misrepresent.
+
+*(The earlier figure of ~6 % quoted from `verify_closed_loop_sld.py` came
+from a slightly different configuration — `Ts = 5e-5` s, which does not
+divide `tau` exactly, and a grid-selected weight. The honest statement is the
+range above, not any single number.)*
 
 Reproduce with `tests/verify_closed_loop_sld.py`;
 `tests/verify_monodromy_equivalence.py` checks the fast structured

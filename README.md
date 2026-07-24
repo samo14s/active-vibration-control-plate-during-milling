@@ -145,10 +145,19 @@ forced vibration and surface location error. Moving lobes needs a periodic
 ### Certified lobes differ from the usual shortcut
 
 Closed-loop lobes are commonly drawn by substituting closed-loop damping
-ratios into the *open-loop* formula. Against the certified monodromy at
-4900 RPM that substitution is **~6 % optimistic** (2.13 vs 2.01 mm), i.e. it
-over-promises stability. The certified value is independently corroborated by
-time-domain simulation, which places the transition between 1.81 and 2.41 mm.
+ratios into the *open-loop* formula. Against the certified monodromy, how
+wrong that is depends on where it is evaluated — and averaging hides it:
+
+| evaluated with | substitution error |
+|---|---|
+| path-averaged `Dp` (what the baseline scripts use) | **+1.1 %** |
+| local `Dp(x)` along the pass | **−3.6 % to +45.4 %**, optimistic at 7 of 10 stations |
+
+The worst case sits at x = 0, where γ = 0.944 — where the actuator is *best*
+aligned and the controller dominates the loop, which is exactly what a scalar
+damping ratio cannot represent. The certified value is independently
+corroborated by time-domain simulation, which places the transition between
+1.81 and 2.41 mm.
 
 Treating the modes as independent — as the baseline stability code does —
 differs from the coupled system by up to **20.8 %**, because `Dp Dpᵀ` is rank
@@ -167,6 +176,7 @@ python tests/verify_closed_loop_sld.py          # certified lobe vs time domain
 python tests/verify_fixed_gain_instability.py   # the three-way check
 python tests/analyze_actuator_alignment.py      # reachability along the path
 python tests/verify_feedforward_cannot_move_lobes.py   # feedforward vs stability
+python tests/verify_substitution_error_along_path.py   # how wrong the usual shortcut is
 python tests/audit_baseline_claims.py           # reproduces the baseline claims
 
 python experiments/run_path_study.py            # the integrated study

@@ -234,8 +234,20 @@ at every station rather than at one nominal point.
 Ordered by how much a reviewer will care.
 
 1. **Chip-thickness nonlinearity.** Enforce `h_j > 0` per tooth and axial
-   slice so the tool can leave the material. Without this, no large-amplitude
-   result is meaningful. *(not yet implemented)*
+   slice so the tool can leave the material. *(not yet implemented)*
+
+   **Scope note, and it matters for how the paper is defended.** This defect
+   invalidates *large-amplitude time-domain* results — the baseline's
+   "unstable" traces run to 5 mm, against a 3.98 µm maximum uncut chip, so
+   they are meaningless. It does **not** invalidate the stability results in
+   §3.3 and §4. A stability lobe diagram is a *linearised* statement about
+   growth or decay in the neighbourhood of the nominal periodic motion, and
+   that neighbourhood is exactly where the linear cutting law is valid: the
+   tooth has not yet left the material. The certified Floquet radius, the
+   critical depths, and the fixed-gain instability are therefore all inside
+   the model's validity domain. The nonlinearity governs what happens *after*
+   the boundary is crossed — limit-cycle amplitude, surface finish — which
+   the paper should simply not claim without it.
 2. **Fair benchmark at matched control effort.** LQG, DVF, PPF and a proper
    repetitive controller, each tuned against the reported metric under the
    same voltage budget. `src/baseline_controllers.py` provides the laws and a

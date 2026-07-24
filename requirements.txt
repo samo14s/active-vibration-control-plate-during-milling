@@ -1,0 +1,7 @@
+# Active vibration control of thin flexible workpieces during milling
+#
+# Verified against these versions; nothing here is version-sensitive except
+# that NumPy 2.x removed ndarray.ptp(), which the code does not use.
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.7

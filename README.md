@@ -203,7 +203,12 @@ benefit — so it is the filter doing the work. Consistent with Zhang & Sims
 ## Reproducing
 
 ```bash
-pip install numpy scipy matplotlib
+pip install -r requirements.txt
+
+# everything at once (~15-25 min on 4 cores)
+./run_all_verifications.sh
+
+# or individually
 
 python tests/verify_evolving.py                 # element, quadrature, removal
 python tests/verify_monodromy_equivalence.py    # fast vs dense monodromy

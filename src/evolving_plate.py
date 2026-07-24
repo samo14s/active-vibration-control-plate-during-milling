@@ -63,25 +63,57 @@ from mindlin_q8 import (
     shape_at_point_M, piezo_moment_load_M,
 )
 
+# 3-point Gauss rule, exact for the quartic integrands below.
+_G3 = np.array([-np.sqrt(3.0 / 5.0), 0.0, np.sqrt(3.0 / 5.0)])
+_W3 = np.array([5.0 / 9.0, 8.0 / 9.0, 5.0 / 9.0])
+
 
 # ---------------------------------------------------------------------
 # Unit-thickness element matrices
 # ---------------------------------------------------------------------
-def unit_element_matrices(E, nu, kappa, rho, lex, ley):
+def unit_element_matrices(E, nu, kappa, rho, lex, ley, quadrature="sri"):
     """
     Return (KB1, KS1, MT1, MR1) such that, for thickness h,
 
         K_e(h) = h**3 * KB1 + h * KS1
         M_e(h) = h * MT1 + h**3 * MR1
 
-    Verified against mindlin_q8.stiffness_matrix_M / mass_matrix_M in
-    tests/verify_evolving.py.
+    QUADRATURE
+    ----------
+    "sri" (default) -- selective reduced integration, the standard rule for
+        Q8 Mindlin plates:
+          bending KB1 : 3x3 (full)
+          shear   KS1 : 2x2 (reduced, to avoid shear locking as h -> 0)
+          mass    MT1, MR1 : 3x3 (full)
+
+    "uniform2" -- 2x2 everywhere, reproducing the source MATLAB element
+        bit-for-bit. Retained so the port can still be checked against its
+        origin, but NOT the default, because it under-integrates two things:
+
+        * The mass matrix. N^T Ie N is quartic in each parametric direction,
+          and 2x2 Gauss is exact only to cubic, so the element mass matrix
+          comes out with rank 12 of 24. Assembled and constrained, that
+          leaves 3*N2 zero-mass directions: the global M is singular, so it
+          is not a valid inner product, Cholesky fails, and any solver
+          requiring M positive definite (scipy.linalg.eigh(K, M)) fails
+          outright. Total mass is nonetheless exact, which is why frequencies
+          computed by shift-invert Lanczos still come out very close and the
+          defect goes unnoticed. 3x3 restores full rank at the same total
+          mass.
+
+        * The bending stiffness, which leaves one spurious zero-energy
+          (hourglass) mechanism per element. It does not propagate through an
+          assembled clamped mesh, so it is harmless here, but full bending
+          integration removes it for free.
+
+    Both rules are exercised in tests/verify_evolving.py, which checks that
+    the switch does not move the benchmark frequencies.
     """
     nc = _node_coor(lex, ley)
     D0 = np.array([[1.0, nu, 0.0],
                    [nu, 1.0, 0.0],
                    [0.0, 0.0, (1 - nu) / 2]])
-    Hf1 = E / (12 * (1 - nu ** 2)) * D0          # Hf = h^2 * Hf1
+    Hf1 = E / (12 * (1 - nu ** 2)) * D0           # Hf = h^2 * Hf1
     Hs1 = E * kappa / (2 * (1 + nu)) * np.eye(2)  # Hs = Hs1
 
     KB1 = np.zeros((24, 24))
@@ -89,16 +121,37 @@ def unit_element_matrices(E, nu, kappa, rho, lex, ley):
     MT1 = np.zeros((24, 24))
     MR1 = np.zeros((24, 24))
 
+    if quadrature == "uniform2":
+        g_bend = g_mass = (_G2, np.array([1.0, 1.0]))
+    elif quadrature == "sri":
+        g_bend = g_mass = (_G3, _W3)
+    else:
+        raise ValueError(f"unknown quadrature {quadrature!r}")
+
+    # bending: full (or uniform, per the selected rule)
+    gp, gw = g_bend
+    for I in range(len(gp)):
+        for J in range(len(gp)):
+            Bf, _ = matrix_der_M(nc, gp[I], gp[J])
+            detJ = np.linalg.det(jacobian_M(nc, gp[I], gp[J])[0])
+            KB1 += gw[I] * gw[J] * (Bf.T @ Hf1 @ Bf) * detJ
+
+    # shear: always reduced 2x2, which is what prevents shear locking
     for I in range(2):
         for J in range(2):
-            Bf, Bs = matrix_der_M(nc, _G2[I], _G2[J])
-            N, _, _ = shape_function_M(_G2[I], _G2[J])
-            Jac, _ = jacobian_M(nc, _G2[I], _G2[J])
-            detJ = np.linalg.det(Jac)
-            KB1 += Bf.T @ Hf1 @ Bf * detJ
-            KS1 += Bs.T @ Hs1 @ Bs * detJ
-            MT1 += rho * (N.T @ np.diag([1.0, 0.0, 0.0]) @ N) * detJ
-            MR1 += rho / 12.0 * (N.T @ np.diag([0.0, 1.0, 1.0]) @ N) * detJ
+            _, Bs = matrix_der_M(nc, _G2[I], _G2[J])
+            detJ = np.linalg.det(jacobian_M(nc, _G2[I], _G2[J])[0])
+            KS1 += (Bs.T @ Hs1 @ Bs) * detJ
+
+    # mass: full (or uniform, per the selected rule)
+    gp, gw = g_mass
+    for I in range(len(gp)):
+        for J in range(len(gp)):
+            N, _, _ = shape_function_M(gp[I], gp[J])
+            detJ = np.linalg.det(jacobian_M(nc, gp[I], gp[J])[0])
+            w = gw[I] * gw[J] * detJ
+            MT1 += rho * w * (N.T @ np.diag([1.0, 0.0, 0.0]) @ N)
+            MR1 += rho / 12.0 * w * (N.T @ np.diag([0.0, 1.0, 1.0]) @ N)
 
     return KB1, KS1, MT1, MR1
 
@@ -117,7 +170,8 @@ class EvolvingPlateModel:
 
     def __init__(self, lp, hp, h0, rho, E, nu,
                  N1=30, N2=24, n_modes=3, zeta_modes=None,
-                 kappa=5.0 / 6.0, h_min=0.2e-3, verbose=True):
+                 kappa=5.0 / 6.0, h_min=0.2e-3, quadrature="sri",
+                 verbose=True):
         self.lp, self.hp = lp, hp
         self.rho, self.E, self.nu = rho, E, nu
         self.kappa = kappa
@@ -141,8 +195,9 @@ class EvolvingPlateModel:
         self.h_nominal = float(np.max(self.thickness))
         self._h_initial = self.thickness.copy()
 
+        self.quadrature = quadrature
         self.KB1, self.KS1, self.MT1, self.MR1 = unit_element_matrices(
-            E, nu, kappa, rho, self.lex, self.ley)
+            E, nu, kappa, rho, self.lex, self.ley, quadrature=quadrature)
 
         # element -> global DOF map, built once
         self._dof_map = np.empty((N2, N1, 24), dtype=np.int64)

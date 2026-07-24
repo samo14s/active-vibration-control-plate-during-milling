@@ -8,9 +8,15 @@ Verification of EvolvingPlateModel.
    machine precision, for several thicknesses.
 2. With a uniform thickness field, EvolvingPlateModel must reproduce
    PlateModel's modal frequencies and its D_obs / H_Pe_modal.
-3. Uniform thinning must follow the analytical plate-bending law f ∝ h.
-4. Material removal must be monotone: removing material can only lower the
-   frequencies, never raise them.
+3. The source element's 2x2 mass quadrature must be shown singular, and the
+   selective-reduced-integration rule must restore full rank without moving
+   the benchmark frequencies.
+4. Uniform thinning must follow the analytical plate-bending law f ~ h.
+5. The SIGN of the frequency shift under material removal must depend on
+   where material is taken from (inertia near the tip vs stiffness near the
+   clamp), not merely decrease.
+6. The re-assembly after removal must agree with first-order eigenvalue
+   perturbation theory, with the error converging as O(delta h).
 """
 import _bootstrap  # noqa: F401
 import numpy as np
@@ -29,10 +35,13 @@ D31, H_PA, E_PE, NU_PE = 175e-12, 0.7e-3, 63e9, 0.35
 ok = True
 
 print("=" * 74)
-print(" 1. exact thickness decomposition of the element matrices")
+print(" 1. exact thickness decomposition, checked against the source element")
 print("=" * 74)
+print("   With quadrature='uniform2' the decomposition must reproduce")
+print("   mindlin_q8's element matrices bit-for-bit at every thickness.")
 lex, ley = LP / N1, HP / N2
-KB1, KS1, MT1, MR1 = unit_element_matrices(E_AL, NU, KAPPA, RHO, lex, ley)
+KB1, KS1, MT1, MR1 = unit_element_matrices(E_AL, NU, KAPPA, RHO, lex, ley,
+                                           quadrature="uniform2")
 for h in (0.5e-3, 2e-3, 4e-3, 9e-3):
     Ke_ref = stiffness_matrix_M(E_AL, NU, KAPPA, lex, ley, h)
     Me_ref = mass_matrix_M(RHO, lex, ley, h)
@@ -47,8 +56,73 @@ for h in (0.5e-3, 2e-3, 4e-3, 9e-3):
 
 print()
 print("=" * 74)
+print(" 1b. the source quadrature yields a SINGULAR mass matrix; SRI fixes it")
+print("=" * 74)
+print("   N^T Ie N is quartic in each parametric direction, so the 2x2 rule")
+print("   used by the source element under-integrates it. Total mass stays")
+print("   exact -- which is why the error is invisible in the frequencies --")
+print("   but the matrix loses rank, so it is not a valid inner product.")
+print()
+KB2, KS2, MT2, MR2 = unit_element_matrices(E_AL, NU, KAPPA, RHO, lex, ley,
+                                           quadrature="uniform2")
+KB3, KS3, MT3, MR3 = unit_element_matrices(E_AL, NU, KAPPA, RHO, lex, ley,
+                                           quadrature="sri")
+h = 4e-3
+M2 = h * MT2 + h ** 3 * MR2
+M3 = h * MT3 + h ** 3 * MR3
+r2, r3 = np.linalg.matrix_rank(M2), np.linalg.matrix_rank(M3)
+m2 = np.sum(M2[0::3, 0::3])
+m3 = np.sum(M3[0::3, 0::3])
+m_exact = RHO * h * lex * ley
+print(f"   element mass rank  uniform2 = {r2:2d}/24    sri = {r3:2d}/24")
+print(f"   total element mass uniform2 = {m2:.6e} kg")
+print(f"                      sri      = {m3:.6e} kg")
+print(f"                      exact    = {m_exact:.6e} kg")
+good = (r2 == 12 and r3 == 24
+        and abs(m2 - m_exact) / m_exact < 1e-12
+        and abs(m3 - m_exact) / m_exact < 1e-12)
+ok &= good
+print(f"   {'PASS' if good else 'FAIL'}  (rank restored, total mass unchanged)")
+
+# assembled: the singular rule must fail Cholesky, the SRI rule must not
+import scipy.linalg as _sla
+for tag, quad, expect_ok in (("uniform2", "uniform2", False), ("sri", "sri", True)):
+    q = EvolvingPlateModel(LP, HP, 4e-3, RHO, E_AL, NU, N1=6, N2=5, n_modes=3,
+                           zeta_modes=ZETA, quadrature=quad, verbose=False)
+    Mf = q.M_free.toarray()
+    nz = int(np.sum(np.linalg.eigvalsh(Mf) < 1e-12 * np.linalg.eigvalsh(Mf).max()))
+    try:
+        _sla.cho_factor(Mf)
+        chol = True
+    except Exception:
+        chol = False
+    good = (chol == expect_ok)
+    ok &= good
+    print(f"   assembled 6x5, {tag:8s}: zero-mass directions = {nz:3d}, "
+          f"Cholesky {'OK' if chol else 'FAILS'}   {'PASS' if good else 'FAIL'}")
+
+print()
+print("=" * 74)
+print(" 1c. the quadrature fix does not move the benchmark frequencies")
+print("=" * 74)
+a = EvolvingPlateModel(LP, HP, 4e-3, RHO, E_AL, NU, N1=N1, N2=N2, n_modes=3,
+                       zeta_modes=ZETA, quadrature="uniform2", verbose=False)
+b = EvolvingPlateModel(LP, HP, 4e-3, RHO, E_AL, NU, N1=N1, N2=N2, n_modes=3,
+                       zeta_modes=ZETA, quadrature="sri", verbose=False)
+print(f"   uniform2 (source rule) f = {np.round(a.freq_n, 3)} Hz")
+print(f"   sri      (corrected)   f = {np.round(b.freq_n, 3)} Hz")
+d = np.max(np.abs(b.freq_n - a.freq_n) / a.freq_n) * 100
+good = d < 0.5
+ok &= good
+print(f"   max shift = {d:.3f} %   {'PASS' if good else 'FAIL'}  "
+      f"(the published 519 Hz benchmark is unaffected)")
+
+print()
+print("=" * 74)
 print(" 2. uniform field reproduces PlateModel")
 print("=" * 74)
+print("   Compared with quadrature='uniform2' so this is a like-for-like")
+print("   check of the assembly, not of the quadrature change.")
 H0 = 0.004
 ref = PlateModel(LP, HP, H0, RHO, E_AL, NU, N1=N1, N2=N2, n_modes=3,
                  zeta_modes=ZETA, verbose=False)
@@ -57,7 +131,7 @@ ref.set_observation(LP, HP)
 ref.add_piezo_patch(0, 0.020, 0, 0.060, D31, H_PA, E_PE, NU_PE)
 
 ev = EvolvingPlateModel(LP, HP, H0, RHO, E_AL, NU, N1=N1, N2=N2, n_modes=3,
-                        zeta_modes=ZETA, verbose=False)
+                        zeta_modes=ZETA, quadrature="uniform2", verbose=False)
 ev.precompute_Dp(zp_pos=HP - 0.15e-3, n_pos=201)
 ev.set_observation(LP, HP)
 ev.add_piezo_patch(0, 0.020, 0, 0.060, D31, H_PA, E_PE, NU_PE)

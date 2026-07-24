@@ -1,8 +1,21 @@
 """
 fdm_stability.py
 =================
-Calcul du diagramme de lobes de stabilité (SLD) par la méthode
-Full-Discretization Method (FDM) d'Insperger-Stépán (2002, 2004).
+Calcul du diagramme de lobes de stabilité (SLD).
+
+CORRECTION D'ATTRIBUTION (voir ../RETRACTED.md et ../../docs/ROADMAP.md,
+item 12) : ce module s'annonce comme la "Full-Discretization Method", mais il
+implemente en réalité la SEMI-DISCRETISATION D'ORDRE ZERO -- coefficient gelé
+au début de chaque sous-intervalle, exponentielle matricielle exacte pour la
+partie plante, et terme retardé approché par l'unique échantillon stocké
+x_{i-m}. La référence correcte est donc
+
+    T. Insperger, G. Stépán, "Semi-discretization method for delayed systems",
+    Int. J. Numer. Meth. Engng 55 (2002) 503-518,
+
+et non la FDM (Ding et al. 2010) ni la semi-discrétisation d'ordre un de
+Insperger & Stépán (2004), qui interpole l'état retardé et converge plus vite.
+La distinction change l'ordre de convergence annoncé pour un lobe.
 
 Théorie :
    Le système avec retard régénératif est équivalent à un système

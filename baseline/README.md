@@ -253,9 +253,12 @@ darc.pretrain_iterative_simulation(
 ### 03_analysis — Stability & Robustness
 
 #### `fdm_stability.py`
-Stability Lobe Diagram (SLD) via Full-Discretization Method:
+Stability Lobe Diagram (SLD) via **zeroth-order semi-discretization**
+(attribution corrected — see [`RETRACTED.md`](RETRACTED.md); the module
+previously called itself Full-Discretization, which is a different scheme):
 
-**Theory**: Insperger-Stépán (2004) method computes monodromy matrix Φ over
+**Theory**: Insperger & Stépán, *IJNME* **55** (2002) 503–518, computes the
+monodromy matrix Φ over
 one tooth-passing period τ, then evaluates Floquet multipliers ρ = max|λ(Φ)|.
 - Stable if ρ < 1
 - Unstable (chatter) if ρ ≥ 1

@@ -73,10 +73,28 @@ spectral radius is < 1.
 Passing ctrl_design=None recovers the open-loop lobe through exactly the same
 code path, so open- and closed-loop lobes are strictly comparable.
 
-Reference for the underlying discretisation:
+METHOD ATTRIBUTION (ROADMAP item 12)
+------------------------------------
+The scheme used here is the ZEROTH-ORDER SEMI-DISCRETIZATION method: the
+time-periodic coefficient is frozen at the left endpoint of each subinterval,
+the plant is advanced by an exact matrix exponential, and the delayed term is
+approximated by the single stored sample x_{i-m}. That is
+
+    T. Insperger, G. Stepan, "Semi-discretization method for delayed systems",
+    Int. J. Numer. Meth. Engng 55 (2002) 503-518.
+
+It is NOT the full-discretization method (Ding et al. 2010), which
+interpolates the delayed term rather than holding it, and it is not the
+first-order/updated semi-discretization of
+
     T. Insperger, G. Stepan, "Updated semi-discretization method for periodic
     delay-differential equations with discrete delay", Int. J. Numer. Meth.
-    Engng 61 (2004) 117-141.
+    Engng 61 (2004) 117-141,
+
+which interpolates the delayed state linearly and converges one order faster.
+The distinction matters because the convergence rate quoted for a lobe
+depends on it; the baseline package's `fdm_stability.py` calls itself
+"Full-Discretization Method" while implementing the 2002 zeroth-order scheme.
 """
 from __future__ import annotations
 

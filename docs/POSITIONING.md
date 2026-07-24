@@ -115,6 +115,100 @@ has γ → 0 blind spots that **no** placement removes appears to be new.
 
 ---
 
+## The decisive one: feedforward cannot move the lobes
+
+A third survey, of control synthesis where the delay and periodicity are part
+of the *design* problem, settles the question the starting package's headline
+depends on.
+
+> "**Feedforward cannot move Floquet multipliers.** A signal added at the
+> plant input, however cleverly learned, does not change the closed-loop
+> monodromy operator of the milling LTP-DDE. It cancels exogenous periodic
+> forcing — forced vibration, surface location error, tooth-pass harmonics —
+> and therefore improves surface finish and forced-vibration amplitude. It
+> does NOT enlarge the stability lobe diagram. **Any claim of lobe
+> enlargement from feedforward alone is a fatal, and correct, reviewer
+> objection.**"
+
+`tests/verify_feedforward_cannot_move_lobes.py` demonstrates this in this
+codebase, two ways: the monodromy matrix is bit-identical with and without a
+feedforward (ρ = 0.666337362620496 unchanged at 2 V, 20 V, 150 V, and 1000 V
+across five harmonics), and in time-domain simulation past the certified
+boundary the loop diverges with the feedforward active exactly as without it.
+
+So the starting package's **"+41 % stability domain"** is not merely
+fabricated by its hard-coded ×1.30 multiplier. **The correct value of that
+improvement is exactly zero**, and no amount of better learning would change
+it.
+
+### And the architecture itself is prior art
+
+> "A feedforward signal indexed by the phase of a periodic process and
+> updated pass-to-pass from measured error is, mathematically, one of three
+> equivalent things: repetitive control; adaptive feedforward cancellation /
+> higher-harmonic control; or FxLMS with a spindle-encoder-locked reference…
+> **ILC run continuously over the tooth period, with forgetting, IS
+> repetitive control** — this is textbook. Replacing the linear basis with a
+> neural network is a function-approximator swap inside a known
+> architecture, not a new control principle."
+
+And specifically in machining: Tsao & Tomizuka (1994) for spindle-synchronised
+repetitive control; Rashid & Nicolescu (2006, IJMTM) for adaptive feedforward
+on milling workholding; and decisively **Chen, Zhang, Zhang & Ding (2014,
+ASME JDSMC 136(2):021007)**, which expands the regenerative cutting force in a
+**Fourier series and adapts the coefficients online** — adaptive phase-indexed
+harmonic feedforward for milling chatter, twelve years ago.
+
+### One more reason the internal-model route is limited
+
+Regenerative chatter at a secondary-Hopf (Neimark–Sacker) bifurcation is
+**quasi-periodic**: the chatter frequency is incommensurate with tooth
+passing, so an internal model placed at tooth-pass harmonics has *zero gain*
+at the chatter frequency and by the internal model principle cannot reject it.
+This is why the spindle-speed-variation literature reports SSV works on
+period-doubling but not on quasi-periodic chatter.
+
+The exception is **flip (period-doubling) chatter**, which is 2T-periodic and
+therefore genuinely within reach of a period-doubled internal model. The
+survey found no publication doing that — *"a 2T phase-indexed learned internal
+model aimed specifically at flip lobes is, as far as this search reaches,
+unclaimed."*
+
+### Closest prior art to our own monodromy work — cite and differentiate
+
+**Nazari, Butcher & Bobrenkov (2014)** do periodic-gain delayed feedback with
+Chebyshev collocation of the monodromy operator and spectral-radius
+minimisation. That is the nearest thing to synthesis on the monodromy, and it
+must be cited. Differentiators: they optimise (not schedule) gains, at fixed
+structural dynamics, with no workpiece, no material removal, no tool path and
+no hardware.
+
+Also relevant: **Borgioli et al. (2020)** define a pseudospectral radius
+directly on the LTP-DDE monodromy operator but use it only for *analysis* —
+minimising it over controller parameters is flagged as unclaimed.
+
+### A check we should run and almost nobody does
+
+> "Insperger & Stépán establish a critical depth of cut above which **no
+> digital controller at a given sampling period can stabilise** the process.
+> Almost no applied active-chatter paper checks its claimed enlargement
+> against this bound."
+
+Our multi-rate formulation already carries the sampling period explicitly, so
+this check is cheap here and would strengthen every reported a_p,crit.
+
+### It also explains our own benchmark result
+
+> "Active damping raises the lobe floor but does not move the lobes. The
+> theoretical link (b_lim ∝ 1/|Re G|_min, so roughly proportional to added
+> modal damping) is well understood via Ganguli / Deraemaeker / Preumont."
+
+That is exactly the mechanism behind §4b of `ASSESSMENT.md`: velocity
+feedback beats LQG on stability because it attacks |Re G|_min directly, while
+the quadratic cost optimises something else.
+
+---
+
 ## A second survey, of the active-control side specifically
 
 A separate sweep of piezo-based AVC for thin-walled workpieces (2015–2026)

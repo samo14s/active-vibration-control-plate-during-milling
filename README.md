@@ -171,6 +171,15 @@ python experiments/run_benchmark.py             # matched-effort comparison
   solutions is done (Leissa CCCC to 0.02 %, mesh convergence, `f ∝ h`,
   first-order eigenvalue perturbation with demonstrated O(Δh) convergence);
   **validation against measured data is not**, and the paper should say so.
+- Note the distinction, because it decides how the paper is written:
+  reproducing a published FRF is *verification*, not validation — ASME V&V 10
+  separates "comparison to a benchmark solution" from validation against
+  physical experiment. A simulation-only paper survives in these venues when
+  the deliverable is a method and a certificate, not a percentage.
+- `K_T = 925 MPa` is quoted as a constant, but specific cutting pressure is a
+  power law in chip thickness and this model runs at 2–4 µm, deep in the
+  size-effect regime. The value needs a stated chip thickness and a checked
+  source.
 
 `docs/ASSESSMENT.md` records what was checked in the starting package, which
 of its published claims did not survive reproduction, and what remains to be

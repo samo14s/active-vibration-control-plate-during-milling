@@ -307,20 +307,66 @@ Ordered by how much a reviewer will care.
    Moved to the un-machined lower half here; a sensitivity sweep would
    strengthen the paper.
 
-### Validation without a laboratory
+### Validation without a laboratory — and a correction
 
-In order, and honestly labelled as verification versus validation:
+**Matching a published FRF is *not* validation.** This needs stating plainly
+because it was the original plan for this work. Reproducing someone else's
+published FRF is **code verification / benchmarking**: it shows your solver
+reproduces a solver-plus-specimen you did not build, and says nothing about
+your plate, your clamp, your piezo bond or your force model. In ASME V&V 10
+terms it is "comparison to a benchmark solution", which V&V 10 explicitly
+separates from validation against physical experiment. Calling it validation
+in a manuscript invites the reviewer to make the distinction for you.
 
-- **Code verification (done).** Leissa CCCC to 0.02 %; mesh convergence;
-  analytic `f ∝ h` scaling; first-order eigenvalue perturbation with
-  demonstrated O(Δh) convergence; monodromy cross-checked against
-  time-domain simulation.
-- **Model validation (to do).** Digitise a published measured FRF for a
-  cantilevered thin plate and match magnitude *and* phase, reporting the
-  mismatch rather than only the frequencies. Then reproduce one published
-  stability lobe diagram from a paper that gives full parameters.
-- **State the limits.** Simulation-only is publishable in these venues when
-  the contribution is *methodological* and the verification is thorough —
-  which is the case for the certified lobe and the placement criterion. It is
-  not publishable as a performance claim. The paper should therefore lead
-  with the method, not with a percentage.
+What the venues actually say:
+
+- **MSSP.** Aims & Scope seeks papers with "both theoretical and experimental
+  aspects, or theoretical material of high relevance to practical
+  applications". The clearest written statement is the *Guidelines for
+  Machine Learning Papers in MSSP* (5 Dec 2024): benchmark on more than one
+  dataset, "at least one dataset should usually be experimental", with an
+  exception only "if simulated data is designed appropriately", and it notes
+  such papers are often "rejected without review". *Caveat: that document is
+  formally scoped to ML submissions, and the wording above was read out by a
+  search engine rather than from the PDF — verify it before quoting.*
+- **IEEE TCST.** Scope explicitly covers "analysis and design through
+  simulation" and "novel modeling techniques", and there is **no written rule
+  against simulation-only papers**. The barrier is editorial practice, not
+  policy — which means it cannot be quoted, only anticipated.
+
+**So the strategy is unchanged but its labelling must be exact:**
+
+- **Verification (done, and it is genuinely strong).** Leissa CCCC to 0.02 %;
+  mesh convergence; analytic `f ∝ h` scaling; first-order eigenvalue
+  perturbation with demonstrated O(Δh) convergence; the certified monodromy
+  cross-checked against independent time-domain simulation; the structured
+  monodromy checked against the dense product to 1e-19.
+- **Benchmarking against published results (to do).** Digitise the open-loop
+  FRFs and force coefficients of two or three groups and reproduce their
+  reported closed-loop improvements. Call it benchmarking, not validation.
+  Its value is real but different: no paper in this field publishes
+  machine-readable FRF, modal or SLD data, so releasing the digitised
+  datasets plus a validated open model is itself a contribution — and one of
+  the few genuinely available to a group without a rig.
+- **Lead with the method.** A simulation-only paper survives in these venues
+  when the deliverable is a *method and a certificate*, not a percentage.
+  That is exactly what the certified closed-loop lobe and the placement
+  criterion are. Do not lead with "x % improvement".
+
+**Three parameter problems flagged by the same survey:**
+
+1. `K_T = 925 MPa` is quoted as a constant, but specific cutting pressure is
+   a power law in chip thickness, and at 2–4 µm this model is deep in the
+   size-effect regime. The number is meaningless without a stated `h`. Fix
+   the citation and state the chip thickness it corresponds to.
+2. No published FRF exists at this plate's scale — verified open-access
+   thin-wall cases sit at 2680 Hz or 20–325 Hz, and this plate at ~520 Hz
+   falls in the gap. Expect to benchmark against a *different* geometry and
+   say so.
+3. The Leissa CFFF parameters are only partly verified here (λ₁ = 3.492 and
+   λ₂ = 8.525 confirmed for ν = 0.3; modes 3–6 not independently confirmed).
+   Check them in the original before tabulating.
+
+Closest prior art that may already contain exactly the with/without-control
+lobes needed: **Zhang & Sims (2005), *Smart Mater. Struct.* 14(6):N65–N70**
+(PPF, 7× limiting depth). It could not be opened here. Read it first.

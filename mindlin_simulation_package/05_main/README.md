@@ -27,6 +27,7 @@ runnable stand-alone (`python <script>.py`) and needs only `numpy`/`scipy`/
 | `gen_inprocess_certificate.py` | `inprocess_certificate.png` | In-process closed-loop stability certificate |
 | `gen_digital_twin.py` | `digital_twin.png` | Physics-guided digital twin for robust model-based control |
 | `gen_controlled_vibration.py` | `controlled_vibration.png` | Vibration WITHOUT vs WITH control (twin-calibrated RC-SAC) |
+| `gen_controller_limits.py` | `controller_limits.png` | Stress test: operating envelope and failure boundaries |
 
 ### gen_controlled_vibration.py
 
@@ -36,6 +37,28 @@ both (a) **enables** a deep cut (`a_p = 0.6 mm`) that diverges open-loop —
 turning divergence into a stable ~0.47 µm signal — and (b) **reduces** the
 vibration at a stable cut (`a_p = 0.1 mm`) by ~62 % rms / ~65 % at the mode-1
 peak, with the piezo voltage staying inside ±150 V (max |u| ≈ 25 V).
+
+### gen_controller_limits.py
+
+A deliberate **stress test** that maps where the twin-calibrated RC-SAC stops
+working and identifies the mechanism bounding each edge — the kind of
+operating-envelope characterisation a Q1 reviewer expects:
+
+- **Operating envelope** `a_p^crit(β)`: the twin roughly **doubles** the stable
+  depth of cut at large positive model error versus the fixed model, but the
+  envelope is *not* unbounded.
+- **Authority (saturation) limit** — the ceiling: the required piezo voltage
+  grows with depth and hits **±150 V at ≈ 4.5 mm**; beyond that no tuning can
+  add authority, and control diverges. A *fundamental actuator* limit, not a
+  model limit.
+- **Calibration limit** — the width: the FEM-guided *narrow-band* probe recovers
+  the true frequency to < 2 % only while the true mode stays inside the
+  `(0.80, 1.22)·f_FEM` search band, i.e. **β ∈ [−20 %, +22 %]**; past the edge
+  the estimate clamps and the correction degrades. This is the documented price
+  of the FEM prior — mitigations: a wider band (blunter prior) or a coarse→fine
+  two-stage probe.
+- **Breakdown** — a time trace just beyond the ceiling (`a_p = 5 mm`, β = +9 %)
+  showing the piezo pinned at ±150 V while the plate diverges (~30 ms).
 
 ## main_simulation.py
 

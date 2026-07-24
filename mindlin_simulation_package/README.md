@@ -29,6 +29,7 @@ article_simulation_package/
 │   ├── kirchhoff_q4.py           # Kirchhoff Q4 plate element FEM (reference only, unused)
 │   ├── plate_model.py            # Plate assembly + modal reduction (Mindlin)
 │   ├── inprocess_plate.py        # In-process material removal (time-varying dynamics)
+│   ├── digital_twin.py           # ⭐ physics-guided predictive–corrective digital twin
 │   ├── piezo_actuator.py         # Piezoelectric actuator model (QDA60-200.7)
 │   ├── milling_force.py          # Cutting force model (3-tooth end-mill)
 │   └── newmark_solver.py         # Newmark-β time integration

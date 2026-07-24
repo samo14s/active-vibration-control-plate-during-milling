@@ -16,6 +16,8 @@ python3 "$HERE/verify_inprocess.py"
 echo
 python3 "$HERE/verify_rcsac.py"
 echo
+python3 "$HERE/verify_digital_twin.py"
+echo
 python3 "$HERE/verify_integration.py"
 
 echo

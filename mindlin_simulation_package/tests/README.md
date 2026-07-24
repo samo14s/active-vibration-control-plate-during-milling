@@ -45,6 +45,13 @@ consistency with `PlateModel`, per-pass idempotency of `machine_to`, monotonic
 mass reduction, the correct physical sign (thinning the free tip raises the
 cantilever fundamental), and fixed-basis ROM accuracy.
 
+### `verify_digital_twin.py`
+Checks the physics-guided digital twin ([`../docs/DIGITAL_TWIN.md`](../docs/DIGITAL_TWIN.md)):
+the FEM-guided probe recovers the true mode-1 frequency to < 2 % across ±12 %
+model error; at a deep cut with +12 % error the fixed-model RC-SAC diverges while
+the twin-calibrated controller stays stable; and one calibration tracks the
+in-process frequency along the removal path to < 2 %.
+
 ### `verify_integration.py`
 Builds the Mindlin `PlateModel` with the exact article parameters, checks every
 interface attribute the downstream code relies on, then runs the **package-12

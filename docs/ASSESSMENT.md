@@ -260,41 +260,54 @@ faster).
 ## 4b. Minimising vibration and maximising stability are different objectives
 
 At matched control effort on the nominal plate
-(`experiments/run_benchmark.py`, 60 V budget, every law tuned against the
-same reported objective):
+(`experiments/run_benchmark.py`), under the full protocol — the project's own
+`PiezoActuator` (saturation, slew limit, amplifier lag, hysteresis, 0.1 µm
+sensor noise, 50 µs sensor delay) applied identically to **every** law, a
+common metric window, and 12 noise realisations reported as mean ± std:
 
 | law | gain | u peak [V] | y_rms [µm] | certified a_p,crit [mm] |
 |---|---|---|---|---|
-| open loop | — | 0.00 | 28.487 | 0.071 |
-| velocity feedback | 4.64e4 | **8.92** | 0.166 | **2.401** |
-| static modal position fb | — | 0.00 | 28.488 | 0.071 |
-| LQG | 1.00e18 | 28.53 | **0.134** | 1.983 |
+| open loop | — | 0.00 | 2.6778 ± 0.0000 | 0.0710 |
+| **velocity feedback** | 5.18e4 | 17.05 | **0.2430 ± 0.0040** | **2.4932** |
+| static modal position fb | 1.0e4 | 0.04 | 2.6885 ± 0.0001 | 0.0709 |
+| LQG | 7.20e13 | 14.78 | 0.5051 ± 0.0044 | 1.8577 |
 
-LQG wins on RMS by 19 % and **loses on stability by 17 %**, using 3.2× the
-voltage. Both selected gains are interior optima, not grid boundaries — the
-search reports a flag when they are not, and static modal position feedback
-is flagged as achieving nothing at all, which is correct: a stiffness shift
-does not add damping, and chatter is a damping problem.
+**Velocity feedback dominates LQG on both metrics**: 1.34× the certified
+critical depth at 1.15× the voltage, *and* less than half the residual
+vibration. The y_rms separation is 0.2622 µm against a pooled spread of
+0.0060 µm — **43.8 σ**, so it is not a noise artefact.
 
-That is not a paradox, it is the point. The quadratic cost weights the
-response to an assumed disturbance spectrum; chatter stability is governed by
-how far the negative real part of the plant FRF is pushed back at the chatter
-frequency. Velocity feedback attacks the second quantity directly. A
-controller tuned for one need not win the other.
+Static modal position feedback is correctly flagged as achieving nothing: a
+stiffness shift adds no damping, and chatter is a damping problem. That is
+*not* a verdict on PPF, which adds a second-order filter and is established as
+effective (Zhang & Sims 2005 report 7× limiting depth); certifying real PPF
+requires extending the observer block of the monodromy and is not yet done.
 
-The consequence for the field is concrete: **an RMS reduction is not evidence
-of chatter suppression**, and papers that report only "x % vibration
-reduction" — including the package this work started from — have not
-demonstrated the thing they claim. The stability boundary has to be computed,
-and computed from the real loop.
+### A correction, and why the protocol items mattered
 
-It also connects to §3.3. Velocity feedback here is static in the state; the
-liability in §3.3 was the *observer*. The two results point the same way: the
-observer is the fragile element, and it is not buying stability margin in
-exchange.
+An earlier version of this table — computed **without** the actuator model and
+**without** sensor noise — showed LQG winning on RMS by 19 % while losing on
+stability by 17 %. That ordering does not survive a realistic loop. The
+actuator and noise cost velocity feedback 0.166 → 0.243 µm but cost LQG
+0.134 → 0.505 µm: the higher-gain observer-based design amplifies sensor noise
+far more. Since the project's own sensor spec (0.1 µm RMS) is of the *same
+order* as the closed-loop vibration being controlled (~0.2 µm), an idealised
+comparison at these performance levels does not merely flatter — it can invert
+the ranking.
 
-*(Reported from a single nominal operating point; the ordering should be
-confirmed across the RPM range before it is stated as general.)*
+The general point survives and is strengthened: **minimising a quadratic cost
+is not the same as maximising the stability boundary**, and an RMS reduction
+is not evidence of chatter suppression. The specific ordering is now measured
+under conditions in which it means something.
+
+It also connects to §3.3, and now more strongly. There the *observer* — not
+the regulator — destabilised the loop once the workpiece had thinned. Here the
+observer-based law is both less stable and noisier than plain velocity
+feedback under a realistic sensor. Both results indict the same element.
+
+*(Reported at a single nominal operating point; the ordering should be
+confirmed across the RPM range before being stated as general. The tuning
+curve for every law is written to `results_benchmark.json`.)*
 
 ---
 

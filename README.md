@@ -113,36 +113,26 @@ critical depth of **1.48 mm — 7.1× open loop**.
 
 ### Minimising vibration is not the same as maximising stability
 
-At matched control effort on the nominal plate (60 V budget, every law tuned
-against the same reported objective, both selected gains interior optima):
+At matched control effort, with the project's own actuator model (saturation,
+slew, amplifier lag, hysteresis, 0.1 µm sensor noise) applied to **every** law,
+a common metric window, and 12 noise realisations:
 
 | law | u peak [V] | y_rms [µm] | certified a_p,crit [mm] |
 |---|---|---|---|
-| open loop | 0.00 | 28.487 | 0.071 |
-| velocity feedback | **8.92** | 0.166 | **2.401** |
-| static modal position fb | 0.00 | 28.488 | 0.071 |
-| LQG | 28.53 | **0.134** | 1.983 |
+| open loop | 0.00 | 2.6778 ± 0.0000 | 0.0710 |
+| **velocity feedback** | 17.05 | **0.2430 ± 0.0040** | **2.4932** |
+| static modal position fb | 0.04 | 2.6885 ± 0.0001 | 0.0709 |
+| LQG | 14.78 | 0.5051 ± 0.0044 | 1.8577 |
 
-LQG wins on RMS by 19 % and **loses on stability by 17 %**, at 3.2x the
-voltage. So **an RMS reduction is not evidence of chatter suppression** — a
-point that invalidates the headline metric of a large part of this
-literature, including the package this work started from.
+Velocity feedback dominates LQG on both metrics — 1.34× the certified depth at
+1.15× the voltage, and less than half the vibration, a **43.8 σ** separation.
 
-### Feedforward cannot enlarge the stability domain
-
-A feedforward signal indexed by tooth phase is input-additive, so it never
-multiplies the state, never enters the monodromy matrix, and cannot move the
-stability boundary. Verified two ways in
-`tests/verify_feedforward_cannot_move_lobes.py`: ρ = 0.666337362620496
-**bit-identical** with feedforward at 2 V, 20 V, 150 V and 1000 V across five
-harmonics; and past the certified boundary the loop diverges with the
-feedforward active exactly as without it.
-
-The starting package attributes "+41 % stability domain" to precisely such a
-branch. Beyond being produced by a hard-coded ×1.30 damping multiplier, **the
-correct value is exactly zero**. Feedforward remains worth having — for
-forced vibration and surface location error. Moving lobes needs a periodic
-*feedback* gain K(t) = K(t+T), or modulation of a process parameter.
+Without the actuator model and sensor noise the ordering *inverts* on RMS
+(LQG appears 19 % better). It does not survive a realistic loop: the sensor
+noise spec, 0.1 µm, is the same order as the vibration being controlled, and
+the higher-gain observer amplifies it. **An RMS reduction is not evidence of
+chatter suppression**, and an idealised comparison at these levels can rank
+the laws backwards.
 
 ### Certified lobes differ from the usual shortcut
 

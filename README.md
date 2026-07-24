@@ -25,7 +25,9 @@ baseline/     the uploaded starting package, unmodified (see docs/ASSESSMENT.md)
 src/          new, verified modules
 tests/        verification and audit scripts — every claim below is reproducible
 experiments/  the studies that produce the results
-docs/         assessment of the starting package and what the paper should be
+docs/         ASSESSMENT.md   what was checked in the starting package
+              POSITIONING.md  prior art: what is claimable and what is not
+              ROADMAP.md      must-fix list and a lab-free validation plan
 ```
 
 ### `src/`

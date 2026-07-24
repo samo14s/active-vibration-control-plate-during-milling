@@ -28,6 +28,7 @@ runnable stand-alone (`python <script>.py`) and needs only `numpy`/`scipy`/
 | `gen_digital_twin.py` | `digital_twin.png` | Physics-guided digital twin for robust model-based control |
 | `gen_controlled_vibration.py` | `controlled_vibration.png` | Vibration WITHOUT vs WITH control (twin-calibrated RC-SAC) |
 | `gen_controller_limits.py` | `controller_limits.png` | Stress test: operating envelope and failure boundaries |
+| `gen_probe_robustness.py` | `probe_robustness.png` | Stress test of the calibration probe (noise / duration / amplitude) |
 
 ### gen_controlled_vibration.py
 
@@ -59,6 +60,27 @@ operating-envelope characterisation a Q1 reviewer expects:
   two-stage probe.
 - **Breakdown** — a time trace just beyond the ceiling (`a_p = 5 mm`, β = +9 %)
   showing the piezo pinned at ±150 V while the plate diverges (~30 ms).
+
+### gen_probe_robustness.py
+
+A stress test of the **calibration probe itself** — the twin's single point of
+failure, since the whole advantage rests on one short measurement. It pushes the
+three probe-design knobs to breakdown at β = +9 % and averages each point over
+20 noise realisations (shaded band = worst case):
+
+- **Sensor noise**: calibration holds < 2 % up to **σ ≈ 1.6 µm**, then the
+  receptance peak is buried and the estimate jumps to ~26 %. A real capacitive/
+  laser sensor sits at 1–10 nm — a **150–1500× margin**.
+- **Probe length**: the mode (ζ ≈ 0.003) needs ~90 ms to ring up, yet the
+  zero-padded peak-pick still recovers f₁ from as little as **T ≈ 30 ms**.
+- **Excitation amplitude**: even against a stressed 100 nm noise floor,
+  **amp ≥ 2 V** suffices (the ±150 V actuator has ample headroom).
+- **Closed-loop consequence**: at a deep cut (`a_p = 3.5 mm`) the controller
+  stays stable across the whole realistic noise range and only diverges once
+  σ ≳ 4 µm — i.e. when calibration error exceeds ~10 %.
+
+**Conclusion**: the probe is *not* the practical bottleneck; the binding limit
+is the **actuator authority** (`gen_controller_limits.py`).
 
 ## main_simulation.py
 

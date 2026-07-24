@@ -9,6 +9,34 @@ This directory contains the **main entry points** for running the simulation.
 | `main_simulation.py` | Full LQG vs DARC-MPC comparison | Console + figs |
 | `main_realistic_piezo.py` | Same but with piezo non-linearities | Console + figs |
 
+## Demonstration generators (Mindlin edition)
+
+Self-contained scripts that produce the figures in `../docs/`. Each is
+runnable stand-alone (`python <script>.py`) and needs only `numpy`/`scipy`/
+`matplotlib`.
+
+| Script | Figure | Shows |
+|---|---|---|
+| `gen_response_figures.py` | `response_OL_vs_LQG.png` | Temporal + frequency response, no control vs LQG |
+| `gen_material_removal_sim.py` | `inprocess_dynamics.png` | In-process material-removal modal drift |
+| `gen_freeend_removal.py` | `freeend_ap1mm.png` | a_p = 1 mm single free-end pass |
+| `gen_freeend_lqg.py` | `freeend_lqg.png` | LQG on the free-end removal scenario |
+| `gen_freeend_resonance.py` | `freeend_resonance.png` | Controller efficiency as drift meets cutting frequency |
+| `gen_worst_scenario.py` | `worst_scenario.png` | Worst-case stable-depth / saturation limit |
+| `gen_rcsac_strategy.py` | `rcsac_strategy.png` | RC-SAC regeneration-cancelling strategy |
+| `gen_inprocess_certificate.py` | `inprocess_certificate.png` | In-process closed-loop stability certificate |
+| `gen_digital_twin.py` | `digital_twin.png` | Physics-guided digital twin for robust model-based control |
+| `gen_controlled_vibration.py` | `controlled_vibration.png` | Vibration WITHOUT vs WITH control (twin-calibrated RC-SAC) |
+
+### gen_controlled_vibration.py
+
+The closed-loop pay-off of the digital twin, under a realistic **+9 % modal
+error**. A single FEM-guided probe keeps the RC-SAC tuned, and the controller
+both (a) **enables** a deep cut (`a_p = 0.6 mm`) that diverges open-loop —
+turning divergence into a stable ~0.47 µm signal — and (b) **reduces** the
+vibration at a stable cut (`a_p = 0.1 mm`) by ~62 % rms / ~65 % at the mode-1
+peak, with the piezo voltage staying inside ±150 V (max |u| ≈ 25 V).
+
 ## main_simulation.py
 
 The **primary script** for reproducing the article results.

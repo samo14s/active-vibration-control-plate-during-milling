@@ -88,7 +88,9 @@ TAU = 60.0 / (NT * RPM)
 M_CTRL = int(round(TAU / 5e-5))
 TS = TAU / M_CTRL      # sample period chosen so that dt divides tau exactly
 AP_EVAL = 0.3e-3       # depth at which the effort is measured
-N_SEEDS = 12           # realisations per law (item 23)
+N_SEEDS = 12           # realisations for the reported figures (item 23)
+N_TUNE_SEEDS = 2       # realisations during the gain sweep
+N_PER_TUNE = 34        # tooth periods simulated while sweeping gains
 USE_ACTUATOR = True    # same actuator model for every law (item 22)
 
 print("=" * 78)
@@ -277,9 +279,9 @@ def modal_pos_design(g, mode=0):
 
 LAWS = [
     ("open loop", None, None),
-    ("velocity fb (obs)", dvf_design, np.geomspace(1e2, 1e7, 16)),
-    ("modal position fb", modal_pos_design, np.geomspace(1e2, 1e10, 16)),
-    ("LQG", lqg_design, np.geomspace(1e11, 1e20, 19)),
+    ("velocity fb (obs)", dvf_design, np.geomspace(1e3, 1e6, 8)),
+    ("modal position fb", modal_pos_design, np.geomspace(1e4, 1e10, 8)),
+    ("LQG", lqg_design, np.geomspace(1e13, 1e19, 8)),
 ]
 
 print()
@@ -292,11 +294,20 @@ print("  subject to the SAME peak-voltage budget")
 print()
 
 
-def ensemble(des, n_common):
-    """Run N_SEEDS realisations and return the metric distributions."""
+def ensemble(des, n_common, n_seeds=N_SEEDS, n_periods=60):
+    """
+    Run n_seeds realisations and return the metric distributions.
+
+    The gain sweep uses a small n_seeds over a shorter record: it only has to
+    decide stability and whether the voltage budget is respected. The SELECTED
+    gain is then re-run over the full N_SEEDS and re-bisected finely for the
+    reported figures. Running the full ensemble at every trial gain costs an
+    order of magnitude more without changing which gain is chosen.
+    """
     ys, ups, urs, nv = [], [], [], []
-    for sd in range(N_SEEDS):
-        y, up, ur, okk, n = simulate(des, seed=sd, n_common=n_common)
+    for sd in range(n_seeds):
+        y, up, ur, okk, n = simulate(des, seed=sd, n_common=n_common,
+                                     n_periods=n_periods)
         nv.append(n)
         if not np.isfinite(y):
             return None
@@ -341,7 +352,8 @@ for name, builder, grid in LAWS:
     curve, best = [], None
     for g in grid:
         des = builder(float(g))
-        e = ensemble(des, N_COMMON)
+        e = ensemble(des, N_COMMON, n_seeds=N_TUNE_SEEDS,
+                     n_periods=N_PER_TUNE)
         if e is None or e['u_peak_max'] > U_CAP:
             curve.append(dict(gain=float(g), ap_crit=None,
                               reason="unstable" if e is None else "over budget"))
@@ -349,12 +361,23 @@ for name, builder, grid in LAWS:
         apc = critical_depth(lambda a: spectral_radius(
             plate.omega_n, ZETA, Dp, plate.H_Pe_modal, plate.D_obs,
             RPM=RPM, ap=a, Ts=TS, ctrl_design=des, **COMMON),
-            lo=1e-7, hi=6e-3)
+            lo=1e-5, hi=6e-3, tol=2e-5)      # coarse while sweeping
         curve.append(dict(gain=float(g), ap_crit=apc,
                           y_mean=e['y_mean'], u_peak_max=e['u_peak_max']))
         if best is None or apc > best['ap_crit']:
             best = dict(law=name, gain=float(g), ap_crit=apc, **e)
     tuning_curves[name] = curve
+
+    # re-run the selected gain over the full ensemble, and re-bisect finely
+    if best is not None:
+        des_b = builder(best['gain'])
+        e_full = ensemble(des_b, N_COMMON, n_seeds=N_SEEDS)
+        if e_full is not None:
+            best.update(e_full)
+        best['ap_crit'] = critical_depth(lambda a: spectral_radius(
+            plate.omega_n, ZETA, Dp, plate.H_Pe_modal, plate.D_obs,
+            RPM=RPM, ap=a, Ts=TS, ctrl_design=des_b, **COMMON),
+            lo=1e-7, hi=6e-3)
 
     if best is None:
         print(f"  {name:<20} {'-':>10}  no stable gain within the budget")

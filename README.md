@@ -36,7 +36,20 @@ docs/         assessment of the starting package and what the paper should be
 | `evolving_plate.py` | Cantilever Mindlin plate with a **per-element thickness field**, so material removal changes the modal model. Thickness dependence is factored analytically, so re-assembly is a sparse rebuild rather than 720 element integrations. Also puts the piezo patch into the structure and takes its moment arm to the composite neutral axis. |
 | `machining_path.py` | A machining programme (radial layers × axial bands) and the sequence of workpiece models it induces. |
 | `actuator_placement.py` | Worst-case-over-path actuator layout: maximise `min_s γ(s)`, the reachable fraction of the disturbance, instead of modal strain energy at one frequency. |
-| `baseline_controllers.py` | Established laws for fair comparison — DVF, PPF, and a repetitive controller with a printable convergence certificate — plus a common tuning routine under a shared effort budget. |
+| `baseline_controllers.py` | Established laws for fair comparison — DVF, PPF, and a repetitive controller with a printable convergence certificate — plus a common tuning routine under a shared effort budget. These are *time-domain* laws with a `step()` interface for the Newmark solver. |
+
+Note that `experiments/run_benchmark.py` does **not** use those `step()`
+objects: certifying a law through the monodromy requires it in observer +
+gain state-space form, so the benchmark builds state-space equivalents
+directly. Two consequences are stated rather than glossed:
+
+- its "velocity feedback" reconstructs velocity through the same Kalman
+  observer as every other law, so it is *not* true collocated DVF and does
+  not inherit DVF's unconditional-stability property — the sensor and
+  actuator here are not collocated anyway;
+- its "modal position feedback" is the static stiffness-shift limit of PPF,
+  not full PPF. Certifying the second-order PPF filter needs the observer
+  block of the monodromy extended, which is not yet done.
 
 ---
 

@@ -1,15 +1,18 @@
 # What to do next
 
-**Status: 23 of 24 must-fix items done, one partial.**
+**Status: all 24 must-fix items are done.**
 
-Outstanding work, all of it flagged inline below:
-- item 17 is partial — the chip geometry is reported, but `K_T` is still a
-  constant and needs the published power law, plus edge and process-damping
-  terms;
-- `dt = tau/328` (item 13) is settled but the time-domain runs still use
-  `tau/82`;
-- a real Monte Carlo (item 5 / part B step 6) is worth doing, though no claim
-  now depends on it.
+The only thing left in part A is data, not code: the size-effect, edge and
+process-damping machinery is implemented, verified and inert by default, but
+its coefficients for AL6061-T6 must be read off Wang et al. (2018) before
+they are switched on for a published result. See part B step 4.
+
+Beyond the must-fix list, two things were added because the audit's own
+findings made them necessary:
+- **uncertainty quantification** (part B step 6), which turned out to give
+  the strongest single result available to a lab-less study;
+- **PPF certified with its filter**, because the benchmark's static-position
+  result was at risk of being read as a verdict on PPF, which it is not.
 
 
 Two lists: defects that must be repaired before anything is submitted, and a
@@ -37,7 +40,12 @@ literature surveys; items already done here are marked.
 4. ✅ **Delete the Numba claim** (`README.md`:187 — no `numba` import anywhere,
    not in `requirements.txt`) and the "0.1 µs vs 100+ ms per step" MPC timing
    claim (no benchmark exists in the package).
-5. ✅ **The Monte Carlo claim is withdrawn.** `run_uncertainty_analysis` does
+5. ✅ **Withdrawn, and then done properly.**
+   `experiments/run_uncertainty_quantification.py` propagates the unmeasurable
+   parameters through the certified boundary: the open-loop 5–95 band spans
+   21.5×, closing the loop collapses it to 2.7×, and the sensitivity ranking
+   puts clamp compliance first and modal damping fourth at 1.4 %.
+   The original claim as it stood: `run_uncertainty_analysis` does
    not exist; the documented ±15 % is actually ω ±2 % and K_T ±5 %;
    `run_monte_carlo` is never called; "Figure 14 — Robustness Monte Carlo" is
    a boxplot over four deterministic scenarios. Recorded in
@@ -73,8 +81,12 @@ literature surveys; items already done here are marked.
     :242–249.
 13. ✅ **`dt` settled at `tau/328`.** At `tau/82` (49.8 µs) mode 3 is detuned
     5.86 % against a 0.54 % half-power bandwidth — about 11×. `tau/328`
-    (12.4 µs) brings every retained mode inside its own bandwidth. *Adopting
-    it in the time-domain runs, which still use `tau/82`, is outstanding.*
+    (12.4 µs) brings every retained mode inside its own bandwidth.
+    Note the distinction the multi-rate formulation makes: the CONTROLLER
+    sample period stays at `tau/82` because that is hardware, while the PLANT
+    integration is refined via `refine`. `run_discretisation_study.py`
+    publishes the convergence in `refine` at fixed controller rate, which is
+    the only way to refine one without silently changing the other.
 
 ### Physics
 
@@ -89,11 +101,18 @@ literature surveys; items already done here are marked.
 16. ✅ **Moment arm to the composite neutral axis** — done: 2.022 mm, not
     2.350 mm, a 16.2 % overstatement. Quote the resulting static tip
     deflection per volt.
-17. ◐ **Cutting speed and chip thickness reported** — `chip_thickness_limits`
-    gives `h_max` = 3.98 µm, `h_mean` = 2.00 µm, 154 m/min. **Outstanding:**
-    replace the constant `K_T = 925 MPa` with the published chip-thickness
-    power law (part B step 4), and add edge/ploughing and process-damping
-    terms, both of which matter at a few microns.
+17. ✅ **Chip geometry reported and the physics implemented.**
+    `chip_thickness_limits` gives `h_max` = 3.98 µm, `h_mean` = 2.00 µm,
+    154 m/min. `nonlinear_milling_force` now carries the size-effect law
+    `K_t(h) = K_tc (h/h_ref)^-x`, edge coefficients `K_te`/`K_re`, and process
+    damping `C_pd = K_pd a_p / V_c` — all **off by default**, so enabling one
+    is a visible decision. Verified: the power law is exact at the calibration
+    chip and 1.41× the constant value at 0.5 µm; the edge share rises to
+    99.4 % as vibration thins the chip; the process damping falls as 1/V_c
+    (10.7 % added damping at 1200 RPM → 0.9 % at 9800 RPM), which is its
+    physical fingerprint.
+    **The coefficients are data, not code:** read them off Wang et al. (2018),
+    part B step 4, before switching any of this on for a published result.
 18. ✅ **Move the probe off the machined surface** — done. The baseline put an
     eddy-current sensor at the free corner in the same 0.15 mm band as the
     tool path, coincident with the cutter at end of pass.
@@ -158,7 +177,12 @@ Long 2023 (1.5 → 6 mm); Du, Liu, Dai & Long 2024 (0.1 → 0.8 mm); Ozsoy, Sims
 & Ozturk 2022 (2.6×); Aggogeri et al. 2021 (96 % at 1130 Hz); Zhang & Sims
 2005 (7×, PPF).
 
-**Step 6 — Uncertainty quantification.** *The substitute for a laboratory, and
+**Step 6 — Uncertainty quantification.** ✅ **done** —
+`experiments/run_uncertainty_quantification.py`; see `ASSESSMENT.md` §4c. The
+headline is that closing the loop collapses the 5–95 band on the stability
+boundary from 21.5× to 2.7×, and that modal damping matters far less than
+fixture compliance once the loop is closed.
+Original note: *The substitute for a laboratory, and
 the strongest single move available.* Propagate what you cannot measure —
 modal damping, clamp stiffness, bond compliance, `K_T` and `K_r`, `d31`, patch
 thickness tolerance — through to the certified `a_p,crit`, and report the

@@ -1,0 +1,10 @@
+=== mu grid, F_WU x NOISE axes ===
+  F1000_N1e-03_C30_V150 i1 : mu_syn 14.946  mu_full   -    a_lim x0.36  volt 3269  zmin 0.51% | machined x7.27  volt 1663  zmin -27.10%  infeas
+  F1000_N1e-03_C30_V150 i2 : mu_syn 1.992  mu_full   -    a_lim x14.31  volt 323  zmin 0.54% | machined x10.07  volt 174  zmin 0.50%  infeas
+  F1000_N1e-03_C30_V170 i1 : mu_syn 7.699  mu_full   -    a_lim x0.85  volt 1864  zmin 0.50% | machined x19.49  volt 6330  zmin -19.66%  infeas
+  F1000_N1e-03_C30_V170 i2 : mu_syn 3.864  mu_full   -    a_lim x8.61  volt 257  zmin 0.52% | machined x3.67  volt 1438  zmin -0.75%  infeas
+  F1000_N1e-03_C45_V150 i1 : mu_syn 8.433  mu_full   -    a_lim x0.10  volt 53427  zmin -0.03% | machined x1.15  volt 5109  zmin 0.25%  infeas
+  F1000_N1e-03_C45_V170 i1 : mu_syn 12.950  mu_full   -    a_lim x0.74  volt 6999  zmin -0.22% | machined x2.39  volt 2851  zmin 0.41%  infeas
+  F1000_N1e-03_C45_V170 i2 : mu_syn 0.690  mu_full   -    a_lim x10.15  volt 168  zmin 0.52% | machined x4.30  volt 648  zmin -0.56%  infeas
+  F1000_N1e-03_C45_V170 i3 : mu_syn 0.636  mu_full   -    a_lim x6.92  volt 303  zmin 0.57% | machined x0.62  volt 7618  zmin -3.30%  infeas
+  F1000_N1e-03_C45_V170 i4 : mu_syn 0.661  mu_full   -    a_lim x6.68  volt 305  zmin 0.55% | machined x1.21  volt 4567  zmin -4.96%  infeas

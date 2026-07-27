@@ -32,7 +32,7 @@ from avc_plant import Plant, Ctrl, VLIM, ZMIN
 def parse_tag(fn):
     """Weights out of the file name; defaults are the legacy values."""
     w = dict(C=None, V=None, FWU=2000.0, NOISE=1e-3, WUFLAT=False)
-    if re.search(r'_W_', fn):
+    if re.search(r'_W\d*_', fn):        # tune3 tags are W_..., tune4 W4_...
         w['WUFLAT'] = True
     m = re.search(r'_F(\d+)_', fn)
     if m:

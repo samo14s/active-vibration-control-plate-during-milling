@@ -1,0 +1,43 @@
+=== PD design ===
+loaded _pd.npz: kp 3.161e+06  kd 1.612e+05
+
+=== mu-synthesis weight grid ===
+  C20_V110 i1 : mu_syn 15.814  mu_full   -    a_lim x0.76  volt 6670  zmin 0.39% | machined x0.44  volt 11679  zmin -17.73%  infeas
+  C20_V110 i2 : mu_syn 0.834  mu_full   -    a_lim x7.07  volt 328  zmin 0.69% | machined x1.29  volt 5529  zmin -6.99%  infeas
+  C20_V130 i1 : mu_syn 21.211  mu_full   -    a_lim x0.81  volt 6141  zmin 0.39% | machined x0.48  volt 10789  zmin -12.72%  infeas
+  C20_V130 i2 : mu_syn 0.818  mu_full   -    a_lim x6.84  volt 334  zmin 0.70% | machined x3.54  volt 1930  zmin -7.05%  infeas
+  C20_V150 : timeout
+  C20_V170 : timeout
+  C20_V200 i1 : mu_syn 25.308  mu_full   -    a_lim x2.08  volt 2127  zmin 0.51% | machined x0.20  volt 22116  zmin -8.52%  infeas
+  C25_V110 i1 : mu_syn 7.915  mu_full   -    a_lim x1.09  volt 1930  zmin 0.50% | machined x2.60  volt 4638  zmin -19.66%  infeas
+  C25_V110 i2 : mu_syn 0.930  mu_full   -    a_lim x8.41  volt 257  zmin 0.56% | machined x2.22  volt 2711  zmin -2.78%  infeas
+  C25_V110 i3 : mu_syn 0.889  mu_full   -    a_lim x9.35  volt 181  zmin 0.61% | machined x1.75  volt 2407  zmin -1.96%  infeas
+  C25_V130 i1 : mu_syn 7.217  mu_full   -    a_lim x0.96  volt 5264  zmin 0.50% | machined x0.29  volt 17009  zmin -18.95%  infeas
+  C25_V130 i2 : mu_syn 0.765  mu_full   -    a_lim x6.86  volt 331  zmin 0.65% | machined x0.55  volt 12536  zmin -6.79%  infeas
+  C25_V150 : timeout
+  C25_V170 i1 : mu_syn 19.660  mu_full   -    a_lim x0.90  volt 5488  zmin 0.43% | machined x0.44  volt 11656  zmin -12.49%  infeas
+  C25_V170 i2 : mu_syn 0.757  mu_full   -    a_lim x6.90  volt 296  zmin 0.66% | machined x5.19  volt 1103  zmin -5.56%  infeas
+  C25_V200 i1 : mu_syn 22.785  mu_full   -    a_lim x1.21  volt 3956  zmin 0.51% | machined x0.33  volt 15033  zmin -10.22%  infeas
+  C25_V200 i2 : mu_syn 0.744  mu_full   -    a_lim x6.60  volt 343  zmin 0.68% | machined x2.28  volt 2911  zmin -6.96%  infeas
+  C30_V110 i1 : mu_syn 15.112  mu_full   -    a_lim x0.34  volt 3949  zmin 0.51% | machined x7.77  volt 1753  zmin -28.75%  infeas
+  C30_V110 i2 : mu_syn 0.817  mu_full   -    a_lim x7.18  volt 315  zmin 0.58% | machined x1.47  volt 4148  zmin -6.28%  infeas
+  C30_V130 i1 : mu_syn 7.129  mu_full   -    a_lim x1.00  volt 1985  zmin 0.50% | machined x5.17  volt 21735  zmin -20.35%  infeas
+  C30_V130 i2 : mu_syn 0.934  mu_full   -    a_lim x10.58  volt 185  zmin 0.53% | machined x3.43  volt 1617  zmin -0.89%  infeas
+  C30_V130 i3 : mu_syn 0.747  mu_full   -    a_lim x5.76  volt 347  zmin 0.57% | machined x8.78  volt 671  zmin -7.25%  infeas
+  C30_V130 i4 : mu_syn 15.061  mu_full   -    a_lim x3.11  volt 848  zmin -5.84% | machined x1.01  volt 3493  zmin 0.26%  infeas
+  C30_V150 i1 : mu_syn 5.733  mu_full   -    a_lim x1.32  volt 1815  zmin 0.50% | machined x0.01  volt 430004  zmin -19.37%  infeas
+  C30_V150 i2 : mu_syn 0.731  mu_full   -    a_lim x6.90  volt 335  zmin 0.61% | machined x1.18  volt 5156  zmin -6.65%  infeas
+  C30_V170 i1 : mu_syn 13.955  mu_full   -    a_lim x0.87  volt 5821  zmin 0.45% | machined x0.37  volt 13721  zmin -18.39%  infeas
+  C30_V170 i2 : mu_syn 0.710  mu_full   -    a_lim x6.65  volt 347  zmin 0.63% | machined x0.39  volt 15310  zmin -6.76%  infeas
+  C30_V200 i1 : mu_syn 17.966  mu_full   -    a_lim x0.88  volt 5624  zmin 0.43% | machined x0.44  volt 11724  zmin -13.87%  infeas
+  C30_V200 i2 : mu_syn 0.712  mu_full   -    a_lim x7.63  volt 223  zmin 0.60% | machined x7.86  volt 527  zmin -2.96%  infeas
+  C30_V200 i3 : mu_syn 1.069  mu_full   -    a_lim x12.37  volt 182  zmin 0.52% | machined x3.06  volt 5206  zmin -0.40%  infeas
+  C30_V200 i4 : mu_syn 19.519  mu_full   -    a_lim x4.33  volt 1037  zmin 0.55% | machined x4.41  volt 1563  zmin -8.05%  infeas
+  C35_V110 i1 : mu_syn 13.401  mu_full   -    a_lim x0.34  volt 3647  zmin 0.51% | machined x6.71  volt 1929  zmin -27.30%  infeas
+  C35_V110 i2 : mu_syn 6.508  mu_full   -    a_lim x6.75  volt 393  zmin 0.53% | machined x6.46  volt 698  zmin -1.09%  infeas
+  C35_V130 i1 : mu_syn 5.843  mu_full   -    a_lim x1.17  volt 1704  zmin -0.00% | machined x10.71  volt 1106  zmin -17.73%  infeas
+  C35_V130 i2 : mu_syn 2.139  mu_full   -    a_lim x6.72  volt 317  zmin 0.58% | machined x1.81  volt 3650  zmin -4.67%  infeas
+  C35_V150 i1 : mu_syn 6.622  mu_full   -    a_lim x0.90  volt 2066  zmin 0.50% | machined x3.77  volt 3343  zmin -20.87%  infeas
+  C35_V150 i2 : mu_syn 0.831  mu_full   -    a_lim x13.48  volt 144  zmin 0.52% | machined x3.74  volt 776  zmin 0.17%  infeas
+  C35_V150 i3 : mu_syn 0.994  mu_full   -    a_lim x6.23  volt 321  zmin 0.53% | machined x1.11  volt 3262  zmin -0.35%  infeas
+  C35_V170 : timeout

@@ -224,3 +224,4 @@ _res_cb_*.npz
 _pd.npz
 _smoke*
 compare_out.txt
+recert_log.txt

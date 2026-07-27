@@ -1,0 +1,21 @@
+=== mu focused grid ===
+  W4_F2000_C45_V110 i1 : mu_syn 15.233  mu_full   -    a_lim x0.64  volt 131  zmin 0.32% | machined x0.86  volt 92  zmin 0.41%  infeas
+  W4_F2000_C45_V130 i1 : mu_syn 15.294  mu_full   -    a_lim x0.57  volt 189  zmin 0.28% | machined x0.85  volt 117  zmin 0.39%  infeas
+  W4_F2000_C60_V110 i1 : mu_syn 14.564  mu_full   -    a_lim x0.60  volt 115  zmin 0.30% | machined x0.76  volt 88  zmin 0.38%  infeas
+  W4_F2000_C60_V130 i1 : mu_syn 15.811  mu_full   -    a_lim x0.27  volt 405  zmin 0.14% | machined x0.51  volt 209  zmin 0.26%  infeas
+
+=== combined focused grid ===
+  W4_F1400_g05_C45_V150 i1 : mu_syn 2.740  mu_full   -    a_lim x9.03  volt 175  zmin 0.50% | machined x9.48  volt 382  zmin 0.18%  infeas
+  W4_F1400_g05_C45_V150 i2 : mu_syn 10.901  mu_full   -    a_lim x0.86  volt 227  zmin 0.42% | machined x1.50  volt 97  zmin 0.46%  infeas
+  W4_F1400_g05_C45_V150 i3 : mu_syn 3.227  mu_full   -    a_lim x2.32  volt 755  zmin 0.50% | machined x3.02  volt 491  zmin 0.12%  infeas
+  W4_F1400_g05_C60_V150 i1 : mu_syn 4.360  mu_full 4.358  a_lim x6.12  volt 116  zmin 0.50% | machined x4.62  volt 108  zmin 0.49%  FEAS
+  W4_F2000_g05_C45_V150 : timeout
+  W4_F2000_g05_C60_V150 : timeout
+  W4_F1400_g07_C45_V150 i1 : mu_syn 2.982  mu_full 8.262  a_lim x10.58  volt 130  zmin 0.50% | machined x8.91  volt 126  zmin 0.45%  FEAS
+  W4_F1400_g07_C60_V150 i1 : mu_syn 16.015  mu_full   -    a_lim x0.06  volt 1989  zmin 0.03% | machined x0.38  volt 320  zmin 0.19%  infeas
+  W4_F2000_g07_C45_V150 i1 : mu_syn 10.127  mu_full   -    a_lim x8.46  volt 1178  zmin 0.04% | machined x7.28  volt 1041  zmin -0.06%  infeas
+  W4_F2000_g07_C45_V150 i2 : mu_syn 1.829  mu_full   -    a_lim x12.02  volt 145  zmin 0.50% | machined x2.00  volt 360  zmin 0.10%  infeas
+  W4_F2000_g07_C60_V150 i1 : mu_syn 3.732  mu_full 3.799  a_lim x7.29  volt 115  zmin 0.50% | machined x5.87  volt 111  zmin 0.48%  FEAS
+  W4_F2000_g07_C60_V150 i2 : mu_syn 10.131  mu_full   -    a_lim x2.01  volt 92  zmin 0.28% | machined x2.44  volt 92  zmin 0.28%  infeas
+
+focused grid done

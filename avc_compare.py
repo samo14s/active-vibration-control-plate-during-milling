@@ -80,19 +80,27 @@ def main():
     shutil.copy(fcb, 'ctrl_combined.npz')
     shutil.copy('_pd.npz', 'pd_gains.npz')
 
-    # certify PPF and PD on the same full structure, with the weights of the
-    # SELECTED mu design, so the mu row of the table is comparable across
-    # all four columns
-    import re
+    # one COMMON certificate for all four laws: mixed-mu (real modal deltas
+    # + real actuator gain via G-scales) on the full six-mode structure, at
+    # the physical budget V = 150 V/N and a 45 um/N performance bound, flat
+    # control weight.  Certifying every law on the same structure at the
+    # same weights is what makes the mu row of the table a comparison
+    # rather than four unrelated numbers.
     import control as ct
     import avc_mu
-    mC, mV = re.search(r'_C(\d+)_V(\d+)_', fmu).groups()
-    avc_mu.C_TARGET, avc_mu.V_TARGET = float(mC) * 1e-6, float(mV)
+    CERT = dict(C=45e-6, V=150.0, FWU=2000.0, NOISE=1e-3, FLAT=True)
+    avc_mu.C_TARGET, avc_mu.V_TARGET = CERT['C'], CERT['V']
+    avc_mu.F_WU, avc_mu.NOISE = CERT['FWU'], CERT['NOISE']
+    avc_mu.WU_FLAT = CERT['FLAT']
     P_full, sc = avc_mu.gen_plant(P, P.tools['corner (100, 80)'], unc=None)
-    for k in ('PPF', 'PD'):
+    mu_mx = {}
+    for k in laws:
         Ks = avc_mu._scale_ctrl(laws[k], sc)
-        peaks_mu[k], _ = avc_mu.mu_cert(ct.ssdata(Ks), ct.ssdata(P_full),
-                                        mu_om, sc)
+        mu_mx[k] = avc_mu.mu_curve_mixed(ct.ss(Ks), ct.ss(P_full),
+                                         mu_om / sc['w_ref'])
+        peaks_mu[k] = float(mu_mx[k].max())
+        print('  certified %-24s mixed mu %.3f' % (laws[k].name, peaks_mu[k]),
+              flush=True)
 
     # ---------------------------------------------------- nominal
     Pm = Plant(freq_scale=REMOVAL)          # machined plate, same mode shapes
@@ -198,16 +206,16 @@ def main():
 
     # ---------------------------------------------------- fig 3 : mu + robustness
     fig, ax = plt.subplots(1, 2, figsize=(13, 4.4))
-    ax[0].semilogx(mu_om / 2 / np.pi, mu_c, lw=1.7, color=COL['mu'],
-                   label='mu-synthesis (peak %.2f)' % mu_peak)
-    ax[0].semilogx(cb_om / 2 / np.pi, cb_c, lw=1.7, color=COL['combined'],
-                   label='PD + mu combined (peak %.2f)' % cb_peak)
+    for k in ['PPF', 'PD', 'mu', 'combined']:
+        ax[0].semilogx(mu_om / 2 / np.pi, mu_mx[k], lw=1.7, color=COL[k],
+                       label='%s (peak %.2f)' % (laws[k].name, peaks_mu[k]))
     ax[0].axhline(1.0, color='k', lw=1, ls='--')
     ax[0].text(12, 1.03, 'robust performance boundary', fontsize=8)
-    ax[0].set_xlabel('frequency [Hz]'); ax[0].set_ylabel('mu upper bound')
-    ax[0].set_title('Structured singular value, FULL uncertainty structure\n'
-                    '(all six modes + actuator gain)', fontsize=11,
-                    fontweight='bold')
+    ax[0].set_xlabel('frequency [Hz]')
+    ax[0].set_ylabel('mixed-mu upper bound')
+    ax[0].set_title('Mixed-mu certificate, full structure (six real modal\n'
+                    'deltas + actuator gain), at C = 45 µm/N, V = 150 V/N',
+                    fontsize=10.5, fontweight='bold')
     ax[0].legend(fontsize=8.5)
 
     ks = ['PPF', 'PD', 'mu', 'combined']

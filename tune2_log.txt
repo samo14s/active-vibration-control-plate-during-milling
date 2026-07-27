@@ -8,3 +8,76 @@
   F1000_N1e-03_C45_V170 i2 : mu_syn 0.690  mu_full   -    a_lim x10.15  volt 168  zmin 0.52% | machined x4.30  volt 648  zmin -0.56%  infeas
   F1000_N1e-03_C45_V170 i3 : mu_syn 0.636  mu_full   -    a_lim x6.92  volt 303  zmin 0.57% | machined x0.62  volt 7618  zmin -3.30%  infeas
   F1000_N1e-03_C45_V170 i4 : mu_syn 0.661  mu_full   -    a_lim x6.68  volt 305  zmin 0.55% | machined x1.21  volt 4567  zmin -4.96%  infeas
+  F1000_N1e-02_C30_V150 : timeout
+  F1000_N1e-02_C30_V170 i1 : mu_syn 26.657  mu_full   -    a_lim x0.93  volt 2031  zmin 0.50% | machined x16.80  volt 1502  zmin -19.95%  infeas
+  F1000_N1e-02_C45_V150 : timeout
+  F1000_N1e-02_C45_V170 : timeout
+  F1400_N1e-03_C30_V150 : timeout
+  F1400_N1e-03_C30_V170 i1 : mu_syn 5.919  mu_full   -    a_lim x1.29  volt 1708  zmin 0.50% | machined x0.00  volt 1565201  zmin -18.68%  infeas
+  F1400_N1e-03_C30_V170 i2 : mu_syn 0.742  mu_full   -    a_lim x6.98  volt 326  zmin 0.60% | machined x0.83  volt 7230  zmin -6.11%  infeas
+  F1400_N1e-03_C45_V150 : timeout
+  F1400_N1e-03_C45_V170 i1 : mu_syn 10.520  mu_full   -    a_lim x0.35  volt 3345  zmin 0.51% | machined x6.59  volt 1865  zmin -26.46%  infeas
+  F1400_N1e-03_C45_V170 i2 : mu_syn 0.895  mu_full   -    a_lim x13.54  volt 176  zmin 0.09% | machined x1.13  volt 3263  zmin -2.65%  infeas
+  F1400_N1e-02_C30_V150 i1 : mu_syn 26.889  mu_full   -    a_lim x1.09  volt 1997  zmin 0.51% | machined x1.94  volt 956  zmin -19.95%  infeas
+  F1400_N1e-02_C30_V170 i1 : mu_syn 14.475  mu_full   -    a_lim x1.57  volt 1859  zmin 0.50% | machined x2.39  volt 2142  zmin -18.53%  infeas
+  F1400_N1e-02_C45_V150 : timeout
+  F1400_N1e-02_C45_V170 i1 : mu_syn 25.610  mu_full   -    a_lim x1.67  volt 2428  zmin -8.07% | machined x2.29  volt 918  zmin -10.08%  infeas
+
+=== combined grid, F_WU x NOISE axes ===
+  F1000_N1e-03_g03_C30_V150 i1 : mu_syn 14.946  mu_full   -    a_lim x0.36  volt 3270  zmin 0.51% | machined x7.27  volt 1663  zmin -27.10%  infeas
+  F1000_N1e-03_g03_C30_V150 i2 : mu_syn 2.239  mu_full   -    a_lim x13.72  volt 608  zmin 0.54% | machined x9.51  volt 215  zmin 0.49%  infeas
+  F1000_N1e-03_g03_C45_V150 i1 : mu_syn 11.015  mu_full   -    a_lim x0.51  volt 2581  zmin 0.51% | machined x10.16  volt 923  zmin -21.75%  infeas
+  F1000_N1e-03_g03_C45_V150 i2 : mu_syn 0.939  mu_full   -    a_lim x12.46  volt 142  zmin 0.51% | machined x5.96  volt 214  zmin 0.38%  infeas
+  F1000_N1e-03_g03_C45_V150 i3 : mu_syn 1.007  mu_full   -    a_lim x3.79  volt 398  zmin 0.53% | machined x1.22  volt 6290  zmin -7.44%  infeas
+  F1000_N1e-03_g05_C30_V150 i1 : mu_syn 14.946  mu_full   -    a_lim x0.36  volt 3269  zmin 0.51% | machined x7.27  volt 1663  zmin -27.10%  infeas
+  F1000_N1e-03_g05_C30_V150 i2 : mu_syn 0.761  mu_full   -    a_lim x7.49  volt 296  zmin 0.58% | machined x1.97  volt 3067  zmin -5.43%  infeas
+  F1000_N1e-03_g05_C45_V150 i1 : mu_syn 11.015  mu_full   -    a_lim x0.51  volt 2581  zmin 0.51% | machined x10.16  volt 923  zmin -21.75%  infeas
+  F1000_N1e-03_g05_C45_V150 i2 : mu_syn 0.939  mu_full   -    a_lim x12.46  volt 142  zmin 0.51% | machined x5.96  volt 214  zmin 0.38%  infeas
+  F1000_N1e-03_g05_C45_V150 i3 : mu_syn 1.047  mu_full   -    a_lim x3.85  volt 410  zmin 0.53% | machined x0.15  volt 53866  zmin -7.69%  infeas
+  F1000_N1e-03_g05_C45_V150 i4 : mu_syn 0.676  mu_full   -    a_lim x6.63  volt 294  zmin 0.55% | machined x2.62  volt 1914  zmin -4.44%  infeas
+  F1000_N1e-03_g07_C30_V150 i1 : mu_syn 14.946  mu_full   -    a_lim x0.36  volt 3269  zmin 0.51% | machined x7.27  volt 1663  zmin -27.10%  infeas
+  F1000_N1e-03_g07_C30_V150 i2 : mu_syn 0.761  mu_full   -    a_lim x7.49  volt 296  zmin 0.58% | machined x1.97  volt 3067  zmin -5.43%  infeas
+  F1000_N1e-03_g07_C45_V150 i1 : mu_syn 11.015  mu_full   -    a_lim x0.51  volt 2583  zmin 0.51% | machined x10.16  volt 923  zmin -21.75%  infeas
+  F1000_N1e-03_g07_C45_V150 i2 : mu_syn 0.939  mu_full   -    a_lim x12.46  volt 142  zmin 0.51% | machined x5.96  volt 214  zmin 0.38%  infeas
+  F1000_N1e-03_g07_C45_V150 i3 : mu_syn 1.525  mu_full   -    a_lim x13.49  volt 205  zmin 0.50% | machined x7.31  volt 11802  zmin -0.13%  infeas
+  F1000_N1e-02_g03_C30_V150 i1 : mu_syn 52.828  mu_full   -    a_lim x0.37  volt 3273  zmin 0.51% | machined x9.33  volt 1267  zmin -22.85%  infeas
+  F1000_N1e-02_g03_C30_V150 i2 : mu_syn 0.802  mu_full   -    a_lim x9.90  volt 262  zmin 0.55% | machined x5.39  volt 1300  zmin -2.62%  infeas
+  F1000_N1e-02_g03_C30_V150 i3 : mu_syn 0.736  mu_full   -    a_lim x7.32  volt 255  zmin 0.61% | machined x2.13  volt 1809  zmin -3.09%  infeas
+  F1000_N1e-02_g03_C45_V150 : timeout
+  F1000_N1e-02_g05_C30_V150 i1 : mu_syn 52.828  mu_full   -    a_lim x0.37  volt 3273  zmin 0.51% | machined x9.33  volt 1267  zmin -22.85%  infeas
+  F1000_N1e-02_g05_C30_V150 i2 : mu_syn 0.802  mu_full   -    a_lim x9.91  volt 262  zmin 0.55% | machined x5.39  volt 1300  zmin -2.62%  infeas
+  F1000_N1e-02_g05_C30_V150 i3 : mu_syn 0.733  mu_full   -    a_lim x7.30  volt 254  zmin 0.60% | machined x2.34  volt 1634  zmin -3.09%  infeas
+  F1000_N1e-02_g05_C30_V150 i4 : mu_syn 0.744  mu_full   -    a_lim x9.35  volt 160  zmin 0.57% | machined x3.80  volt 703  zmin -1.49%  infeas
+  F1000_N1e-02_g05_C45_V150 i1 : mu_syn 6.647  mu_full   -    a_lim x0.56  volt 9430  zmin 0.17% | machined x0.28  volt 19965  zmin -0.08%  infeas
+  F1000_N1e-02_g05_C45_V150 i2 : mu_syn 0.811  mu_full   -    a_lim x13.09  volt 265  zmin 0.51% | machined x0.87  volt 7638  zmin -2.11%  infeas
+  F1000_N1e-02_g05_C45_V150 i3 : mu_syn 0.704  mu_full   -    a_lim x10.68  volt 261  zmin 0.52% | machined x1.92  volt 3405  zmin -2.12%  infeas
+  F1000_N1e-02_g05_C45_V150 i4 : mu_syn 1.911  mu_full   -    a_lim x8.70  volt 1016  zmin 0.49% | machined x2.95  volt 312  zmin 0.15%  infeas
+  F1000_N1e-02_g07_C30_V150 i1 : mu_syn 52.828  mu_full   -    a_lim x0.37  volt 3273  zmin 0.51% | machined x9.33  volt 1267  zmin -22.85%  infeas
+  F1000_N1e-02_g07_C30_V150 i2 : mu_syn 0.802  mu_full   -    a_lim x9.91  volt 262  zmin 0.55% | machined x5.40  volt 1300  zmin -2.62%  infeas
+  F1000_N1e-02_g07_C30_V150 i3 : mu_syn 0.885  mu_full   -    a_lim x7.36  volt 254  zmin 0.61% | machined x2.09  volt 1842  zmin -3.06%  infeas
+  F1000_N1e-02_g07_C45_V150 i1 : mu_syn 5.090  mu_full   -    a_lim x0.45  volt 11646  zmin 0.20% | machined x0.36  volt 16233  zmin -0.11%  infeas
+  F1000_N1e-02_g07_C45_V150 i2 : mu_syn 0.953  mu_full   -    a_lim x12.39  volt 264  zmin 0.51% | machined x2.02  volt 4864  zmin -2.19%  infeas
+  F1000_N1e-02_g07_C45_V150 i3 : mu_syn 0.718  mu_full   -    a_lim x11.21  volt 266  zmin 0.51% | machined x1.59  volt 4503  zmin -2.04%  infeas
+  F1000_N1e-02_g07_C45_V150 i4 : mu_syn 0.699  mu_full   -    a_lim x9.57  volt 155  zmin 0.54% | machined x5.82  volt 334  zmin -1.22%  infeas
+  F1400_N1e-03_g03_C30_V150 i1 : mu_syn 7.075  mu_full   -    a_lim x1.02  volt 1855  zmin 0.50% | machined x4.20  volt 3568  zmin -19.20%  infeas
+  F1400_N1e-03_g03_C30_V150 i2 : mu_syn 0.949  mu_full   -    a_lim x8.39  volt 333  zmin 0.54% | machined x12.87  volt 681  zmin -6.61%  infeas
+  F1400_N1e-03_g03_C45_V150 i1 : mu_syn 10.692  mu_full   -    a_lim x0.34  volt 3122  zmin 0.51% | machined x4.42  volt 2747  zmin -25.32%  infeas
+  F1400_N1e-03_g03_C45_V150 i2 : mu_syn 0.654  mu_full   -    a_lim x6.89  volt 319  zmin 0.56% | machined x1.08  volt 5113  zmin -4.92%  infeas
+  F1400_N1e-03_g05_C30_V150 : timeout
+  F1400_N1e-03_g05_C45_V150 i1 : mu_syn 10.692  mu_full   -    a_lim x0.34  volt 3123  zmin 0.51% | machined x4.42  volt 2747  zmin -25.32%  infeas
+  F1400_N1e-03_g05_C45_V150 i2 : mu_syn 0.654  mu_full   -    a_lim x6.89  volt 319  zmin 0.56% | machined x1.09  volt 5107  zmin -4.92%  infeas
+  F1400_N1e-03_g07_C30_V150 i1 : mu_syn 7.179  mu_full   -    a_lim x1.02  volt 1841  zmin 0.50% | machined x3.07  volt 4781  zmin -19.53%  infeas
+  F1400_N1e-03_g07_C30_V150 i2 : mu_syn 3.784  mu_full   -    a_lim x3.37  volt 1370  zmin 0.52% | machined x1.81  volt 688  zmin 0.37%  infeas
+  F1400_N1e-03_g07_C30_V150 i3 : mu_syn 13.163  mu_full 13.163  a_lim x2.02  volt 76  zmin 0.47% | machined x1.96  volt 86  zmin 0.50%  FEAS
+  F1400_N1e-03_g07_C45_V150 i1 : mu_syn 34.772  mu_full   -    a_lim x0.06  volt 91168  zmin 0.02% | machined x0.98  volt 5910  zmin 0.28%  infeas
+  F1400_N1e-02_g03_C30_V150 i1 : mu_syn 26.889  mu_full   -    a_lim x1.09  volt 1997  zmin 0.50% | machined x1.98  volt 956  zmin -19.95%  infeas
+  F1400_N1e-02_g03_C45_V150 i1 : mu_syn 9.183  mu_full   -    a_lim x1.67  volt 1388  zmin -4.00% | machined x0.25  volt 16529  zmin 0.26%  infeas
+  F1400_N1e-02_g03_C45_V150 i2 : mu_syn 1.358  mu_full   -    a_lim x13.61  volt 510  zmin 0.51% | machined x0.70  volt 11020  zmin -2.61%  infeas
+  F1400_N1e-02_g03_C45_V150 i3 : mu_syn 0.678  mu_full   -    a_lim x8.99  volt 288  zmin 0.54% | machined x4.30  volt 1443  zmin -2.85%  infeas
+  F1400_N1e-02_g05_C30_V150 i1 : mu_syn 26.889  mu_full   -    a_lim x1.09  volt 1997  zmin 0.50% | machined x1.97  volt 956  zmin -19.95%  infeas
+  F1400_N1e-02_g05_C45_V150 i1 : mu_syn 10.252  mu_full   -    a_lim x2.09  volt 1352  zmin -4.64% | machined x0.18  volt 22387  zmin 0.22%  infeas
+  F1400_N1e-02_g07_C30_V150 i1 : mu_syn 26.889  mu_full   -    a_lim x1.09  volt 1997  zmin 0.50% | machined x1.98  volt 956  zmin -19.95%  infeas
+  F1400_N1e-02_g07_C45_V150 i1 : mu_syn 6.712  mu_full   -    a_lim x0.91  volt 2594  zmin -2.45% | machined x0.37  volt 11746  zmin 0.28%  infeas
+  F1400_N1e-02_g07_C45_V150 i2 : mu_syn 2.084  mu_full   -    a_lim x8.95  volt 120  zmin 0.50% | machined x4.26  volt 168  zmin 0.22%  infeas
+
+supplementary grid done

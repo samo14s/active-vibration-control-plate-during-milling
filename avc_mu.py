@@ -267,6 +267,107 @@ def mu_curve(K, P, om):
     return vals, ds
 
 
+# ------------------------------------------------- mixed (real) mu bound
+def mu_ub_mixed(M, x0=None):
+    """Mixed-mu upper bound (Fan-Tits-Doyle / Young form) for the block
+    structure [nu REAL scalars ; one full COMPLEX 2x2 performance block]:
+
+        mu <= min_{D>0, G real}  min { beta :
+              sigma_max[ (I+G^2)^-1/4 (D M D^-1 / beta - jG) (I+G^2)^-1/4 ] <= 1 }
+
+    with diagonal D (performance block's D pinned to 1) and G supported on
+    the real-parameter channels only.  With G = 0 this reduces exactly to
+    the complex-D bound, so it can only tighten it.  The tightening is what
+    makes the certificate non-vacuous here: delta_3..6 are frequency shifts
+    of 0.5 %-damped modes, and treating them as complex admits phantom
+    damping perturbations that no controller inside the voltage budget
+    could ever cover (observed complex-D peaks of 10-30 on designs whose
+    physical replay is clean)."""
+    nu = M.shape[0] - 2
+
+    def beta_of(ld, g):
+        d = np.exp(np.concatenate([ld, [0.0]]))
+        S = np.diag(np.concatenate([d[:nu], [d[nu], d[nu]]]))
+        X = S @ M @ np.linalg.inv(S)
+        Gd = np.concatenate([g, [0.0, 0.0]])
+        q = (1.0 + Gd ** 2) ** -0.25
+        jG = np.diag(1j * Gd)
+
+        def ok(beta):
+            Y = q[:, None] * (X / beta - jG) * q[None, :]
+            return np.linalg.svd(Y, compute_uv=False)[0] <= 1.0
+
+        hi = max(float(np.linalg.svd(X, compute_uv=False)[0]), 1e-8)
+        for _ in range(60):                 # with G != 0, beta may need to
+            if ok(hi):                      # exceed sigma_max(X): expand
+                break                       # the bracket before bisecting
+            hi *= 2.0
+        else:
+            return hi
+        lo = 1e-8
+        if ok(lo):
+            return lo
+        for _ in range(60):
+            mid = np.sqrt(lo * hi)
+            if ok(mid):
+                hi = mid
+            else:
+                lo = mid
+            if hi / lo < 1.001:
+                break
+        return hi
+
+    def cost(th):
+        return beta_of(th[:nu], th[nu:])
+
+    if x0 is None:
+        # Seed D on the complex-D optimum and g on the analytic per-channel
+        # optimum of the DIAGONAL problem, g_i = Im(X_ii) / beta0.  Without
+        # this the default NM simplex steps g by 2.5e-4 from zero, sees a
+        # locally flat cost and never leaves the complex-D answer -- the
+        # bound "converged" without tightening anything.
+        b0, xD = mu_ub(M)
+        d = np.exp(np.concatenate([xD, [0.0]]))
+        S = np.diag(np.concatenate([d[:nu], [d[nu], d[nu]]]))
+        X = S @ M @ np.linalg.inv(S)
+        g0 = np.array([X[i, i].imag for i in range(nu)]) / max(b0, 1e-12)
+        x0 = np.concatenate([xD, g0])
+    else:
+        x0 = np.asarray(x0, float)
+    dim = 2 * nu
+    steps = np.concatenate([np.full(nu, 0.3),
+                            np.maximum(0.5, 0.3 * np.abs(x0[nu:]))])
+    simplex = np.vstack([x0] + [x0 + steps[k] * np.eye(dim)[k]
+                                for k in range(dim)])
+    r = minimize(cost, x0, method='Nelder-Mead',
+                 options={'xatol': 1e-3, 'fatol': 1e-4,
+                          'maxiter': 150 * dim,
+                          'initial_simplex': simplex})
+    return float(r.fun), r.x
+
+
+def mu_curve_mixed(K, P, om):
+    CL = ct.ss(P).lft(ct.ss(K), 1, 1)
+    A, B, C, D = ct.ssdata(CL)
+    I = np.eye(A.shape[0])
+    vals = np.empty(len(om))
+    x0 = None
+    for i, w in enumerate(om):
+        M = C @ np.linalg.solve(1j * w * I - A, B) + D
+        vals[i], x0 = mu_ub_mixed(M, x0)    # warm start from the previous point
+        if i % 10 == 0:
+            x0 = None                       # periodic cold restart: the NM
+                                            # simplex drifts into local minima
+                                            # along a warm-started sweep
+    return vals
+
+
+def mu_cert_mixed(K_ss, P_full, om, sc):
+    """Certificate on the full structure with the mixed-mu bound."""
+    mu = mu_curve_mixed(ct.ss(*K_ss), ct.ss(*P_full), om / sc['w_ref'])
+    return float(mu.max()), mu
+
+
 # ---------------------------------------------------------------- D fitting
 def fit_d(om, mag, order=2):
     """Stable minimum-phase fit d(s) = k prod(s+z_i)/prod(s+p_i) to |d|(om)."""

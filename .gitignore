@@ -223,3 +223,4 @@ _res_mu_*.npz
 _res_cb_*.npz
 _pd.npz
 _smoke*
+compare_out.txt

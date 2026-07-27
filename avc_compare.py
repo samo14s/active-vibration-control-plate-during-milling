@@ -34,8 +34,9 @@ def load_best(pattern, label):
     """Selection rule, in order of preference:
        1. two-plant feasible (stable + <= VLIM + >= ZMIN on the fresh AND
           the machined plate, stable at mid-excursion) AND certified
-          (full-structure peak mu < 1): largest fresh a_lim;
-       2. two-plant feasible only (flagged by the caller via peak >= 1).
+          (full-structure peak MIXED mu < 1 at the design's own weights):
+          largest fresh a_lim;
+       2. two-plant feasible only (its mu peak lands >= 1 in the table).
     The old workflow admitted the combined law at 151.3 V/N with a 2 %
     'tolerance' -- that concession is gone; VLIM is VLIM."""
     cands = []
@@ -48,7 +49,8 @@ def load_best(pattern, label):
                 and float(d['m_zeta_min']) >= ZMIN)
         if not feas:
             continue
-        cands.append((float(d['a_lim']), float(d['peak']), fn, d))
+        pk = float(d['peak_mixed']) if 'peak_mixed' in d.files else float(d['peak'])
+        cands.append((float(d['a_lim']), pk, fn, d))
     if not cands:
         raise RuntimeError('no two-plant-feasible design for ' + label)
     certified = [c for c in cands if np.isfinite(c[1]) and c[1] < 1.0]
@@ -56,7 +58,7 @@ def load_best(pattern, label):
     best = max(pool, key=lambda c: c[0])
     d = best[3]
     K = Ctrl(d['Ak'], d['Bk'].ravel(), d['Ck'].ravel(), float(d['Dk']), label)
-    return K, float(d['peak']), d['mu'], d['om'], best[2]
+    return K, best[1], d['mu'], d['om'], best[2]
 
 
 def main():

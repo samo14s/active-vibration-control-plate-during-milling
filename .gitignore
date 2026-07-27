@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AVC tuning-campaign intermediates (the selected designs are committed as
+# pd_gains.npz / ctrl_mu.npz / ctrl_combined.npz; the full grid is not)
+_res_mu_*.npz
+_res_cb_*.npz
+_pd.npz
+_smoke*

@@ -81,6 +81,8 @@ def _cell_worker(q, kind, params):
             avc_mu.F_WU = params['FWU']
         if 'NOISE' in params:
             avc_mu.NOISE = params['NOISE']
+        if 'WUFLAT' in params:
+            avc_mu.WU_FLAT = params['WUFLAT']
         if kind == 'mu':
             recs, om, P_full, sc = avc_mu.mu_ctrl_all(
                 _P, n_iter=params['n_iter'], verbose=False)

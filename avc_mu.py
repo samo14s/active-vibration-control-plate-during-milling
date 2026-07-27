@@ -56,11 +56,21 @@ F_WU = 2000.0         # Hz    control weight corner
 NOISE = 1e-3          # sensor noise, as a fraction of the peak d->y magnitude
 
 
+WU_FLAT = False    # legacy Wu is 1/(10 V_TARGET) below F_WU -- the resonant
+                   # voltage peaks of modes 1-2 sit exactly in that weak zone,
+                   # which is how 300+ V/N designs sailed through gamma < 1.
+                   # The flat shape holds 1/V_TARGET through the resonances
+                   # and still rises to 10/V_TARGET above the corner.
+
+
 def _weights():
     wp = 2 * np.pi * F_WP
     Wp = ct.tf([1.0 / C_TARGET * wp], [1.0, wp])
     wz, wpu = 2 * np.pi * F_WU, 2 * np.pi * F_WU * 10
-    Wu = ct.tf([1.0 / V_TARGET, 1.0 / V_TARGET * wz], [1.0, wpu])
+    if WU_FLAT:
+        Wu = ct.tf([10.0 / V_TARGET, 10.0 * wz / V_TARGET], [1.0, wpu])
+    else:
+        Wu = ct.tf([1.0 / V_TARGET, 1.0 / V_TARGET * wz], [1.0, wpu])
     return Wp, Wu
 
 

@@ -28,7 +28,7 @@ REMOVAL = np.array([1.17, 1.11, 1.05, 1.05, 1.05, 1.05])
 
 # ------------------------------------------------------------------ plant
 class Plant:
-    def __init__(self, freq_scale=None):
+    def __init__(self, freq_scale=None, zeta=None):
         f, Phi, bmod, bvec, nodes, K, M, free = modal(NX, NY, XP0, YP0, NM)
         self.f_patched = f.copy()
         if freq_scale is not None:
@@ -37,8 +37,15 @@ class Plant:
         self.wn = 2 * np.pi * f
         self.bmod = bmod
         self.nodes = nodes
+        self.Phi = Phi
+        # per-mode damping; scalar ZETA kept as the legacy default so every
+        # earlier result reproduces, the paper-matched configuration passes
+        # the measured Table-4 vector instead
+        self.zeta = np.full(NM, ZETA) if zeta is None \
+            else np.broadcast_to(np.asarray(zeta, float), (NM,)).copy()
 
         node_at = lambda x, y: int(np.argmin((nodes[:, 0] - x) ** 2 + (nodes[:, 1] - y) ** 2))
+        self._node_at = node_at
         self.tools = {
             'corner (100, 80)': Phi[3 * node_at(Lx, Ly), :].copy(),
             'mid free edge (50, 80)': Phi[3 * node_at(Lx / 2, Ly), :].copy(),
@@ -50,9 +57,13 @@ class Plant:
         self.A = np.zeros((2 * n, 2 * n))
         self.A[:n, n:] = np.eye(n)
         self.A[n:, :n] = -np.diag(self.wn ** 2)
-        self.A[n:, n:] = -np.diag(2 * ZETA * self.wn)
+        self.A[n:, n:] = -np.diag(2 * self.zeta * self.wn)
         self.Bu = np.zeros((2 * n, 1)); self.Bu[n:, 0] = bmod
         self.Cy = np.zeros((1, 2 * n)); self.Cy[0, :n] = self.cS
+
+    def edge_D(self, x_mm):
+        """w-mode-shape row at the cutting point (x_mm, upper edge)."""
+        return self.Phi[3 * self._node_at(x_mm * 1e-3, Ly), :].copy()
 
     def Bw(self, cT):
         B = np.zeros((2 * NM, 1)); B[NM:, 0] = cT
@@ -62,9 +73,15 @@ class Plant:
         C = np.zeros((1, 2 * NM)); C[0, :NM] = cT
         return C
 
-    def open_loop_frf(self, cT, om):
-        return sum(cT[k] ** 2 / (self.wn[k] ** 2 - om ** 2 + 2j * ZETA * self.wn[k] * om)
+    def frf(self, cout, cin, om):
+        """Generic modal FRF  sum_k cout_k cin_k / (wn_k^2 - w^2 + 2j z w w)."""
+        om = np.asarray(om)
+        return sum(cout[k] * cin[k] /
+                   (self.wn[k] ** 2 - om ** 2 + 2j * self.zeta[k] * self.wn[k] * om)
                    for k in range(NM))
+
+    def open_loop_frf(self, cT, om):
+        return self.frf(cT, cT, om)
 
     def static_compliance(self, cT):
         return float(sum(cT[k] ** 2 / self.wn[k] ** 2 for k in range(NM)))

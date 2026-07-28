@@ -108,7 +108,8 @@ def gen_plant(plant, cT, scaled=True, inner=None, unc=None):
     A = np.zeros((2 * n, 2 * n))
     A[:n, n:] = np.eye(n)
     A[n:, :n] = -np.diag(wbar ** 2)
-    A[n:, n:] = -np.diag(2 * ZETA * wbar)
+    zt = getattr(plant, 'zeta', np.full(n, ZETA))
+    A[n:, n:] = -np.diag(2 * zt * wbar)
 
     b = plant.bmod
     iu = nu + 2                     # column of u ; [w_d(:), w_da, d, n, u]
@@ -121,7 +122,7 @@ def gen_plant(plant, cT, scaled=True, inner=None, unc=None):
 
     om = 2 * np.pi * np.linspace(50, 4500, 4000)
     dy = np.abs(sum(plant.cS[k] * cT[k] /
-                    (wbar[k] ** 2 - om ** 2 + 2j * ZETA * wbar[k] * om)
+                    (wbar[k] ** 2 - om ** 2 + 2j * zt[k] * wbar[k] * om)
                     for k in range(n))).max()
     w_noise = NOISE * dy
 

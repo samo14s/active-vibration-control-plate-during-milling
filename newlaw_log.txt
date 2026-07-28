@@ -44,3 +44,13 @@ Traceback (most recent call last):
     u += float(ctrl.Ck @ x[2 * n:])
          ^^^^^^^^^^^^^^^^^^^^^^^^^^
 TypeError: only 0-dimensional arrays can be converted to Python scalars
+
+--- post-fix completion note ---
+The traceback above (milling_sim float() on a 1-element array, numpy 2
+strictness) was fixed in avc_fdm.py and ONLY the time-sim section was
+re-run; every artefact above it in this log is from the original run.
+Re-run output (saved to _newlaw_sim.npz):
+  uncontrolled |y|max 7657.0 um  |u|max 0.0 V
+  pd           |y|max 167.8 um   |u|max 200.0 V   (saturated)
+  new          |y|max 7.0 um     |u|max 200.0 V   (saturated)
+newlaw driver done

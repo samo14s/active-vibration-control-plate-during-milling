@@ -239,11 +239,19 @@ def synth_floor(dat, bank=None, vbar=VBAR, verbose=True):
     bank = basis_bank() if bank is None else bank
     B = eval_bank(bank, om)                     # (nb, nw)
     nb = B.shape[0]
+    # per-column preconditioning: scale each basis function so that a unit
+    # coefficient contributes O(vbar) voltage; folded back into theta after
+    # the solve, so realisation and certificates are unaffected
+    W1typ = np.exp(np.mean([np.log(np.maximum(
+        np.abs(cs.get('W1', cs['GsD'])), 1e-12)) for cs in dat['cases']],
+        axis=0))
+    gcol = vbar / np.maximum(np.abs(B) * W1typ[None, :], 1e-30).max(axis=1)
+    Bs = B * gcol[:, None]
     th = cp.Variable(nb)
     c = cp.Variable()
     cons = []
-    Qre = B.real.T @ th                         # (nw,)
-    Qim = B.imag.T @ th
+    Qre = Bs.real.T @ th                        # (nw,)
+    Qim = Bs.imag.T @ th
     mul = cp.multiply
     CSCALE = max((np.abs(cs['GDD']) - cs['GDD'].real).max()
                  for cs in dat['cases'])            # normalise the c-cones
@@ -269,9 +277,8 @@ def synth_floor(dat, bank=None, vbar=VBAR, verbose=True):
                        cp.vstack([mul(w, Qre), mul(w, Qim)]).T, axis=1))
     prob = cp.Problem(cp.Minimize(c), cons)
     stat = None
-    for solver, kw in [(cp.CLARABEL, {}),
-                       (cp.SCS, dict(max_iters=60000)),
-                       (cp.ECOS, {})]:
+    for solver, kw in [(cp.CLARABEL, {}), (cp.ECOS, {}),
+                       (cp.SCS, dict(max_iters=20000))]:
         try:
             prob.solve(solver=solver, verbose=False, **kw)
             if th.value is not None:
@@ -279,11 +286,14 @@ def synth_floor(dat, bank=None, vbar=VBAR, verbose=True):
                 break
         except Exception:
             continue
+    if th.value is None:
+        raise RuntimeError('floor SOCP: no solver converged')
     if verbose:
         print('floor SOCP: %s   c* = %.4e um/N' % (stat, c.value * CSCALE))
     kap = abs(mm.kappa4())
     floor = UM / (kap * c.value * CSCALE)
-    return np.asarray(th.value), float(c.value * CSCALE), float(floor), bank
+    return (np.asarray(th.value) * gcol, float(c.value * CSCALE),
+            float(floor), bank)
 
 
 def synth_scheduled(dat, rpm, bank=None, vbar=VBAR, verbose=False):
@@ -296,11 +306,16 @@ def synth_scheduled(dat, rpm, bank=None, vbar=VBAR, verbose=False):
     bank = basis_bank() if bank is None else bank
     B = eval_bank(bank, om)
     nb = B.shape[0]
+    W1typ = np.exp(np.mean([np.log(np.maximum(
+        np.abs(cs.get('W1', cs['GsD'])), 1e-12)) for cs in dat['cases']],
+        axis=0))
+    gcol = vbar / np.maximum(np.abs(B) * W1typ[None, :], 1e-30).max(axis=1)
+    Bs = B * gcol[:, None]
     th = cp.Variable(nb)
     c = cp.Variable()
     cons = []
-    Qre = B.real.T @ th
-    Qim = B.imag.T @ th
+    Qre = Bs.real.T @ th
+    Qim = Bs.imag.T @ th
     mul = cp.multiply
     CSCALE = max((np.abs(cs['GDD']) - cs['GDD'].real).max()
                  for cs in dat['cases'])
@@ -322,19 +337,21 @@ def synth_scheduled(dat, rpm, bank=None, vbar=VBAR, verbose=False):
                        cp.vstack([mul(w, Qre), mul(w, Qim)]).T, axis=1))
     prob = cp.Problem(cp.Minimize(c), cons)
     for solver, kw in [(cp.CLARABEL, {}), (cp.ECOS, {}),
-                       (cp.SCS, dict(max_iters=100000))]:
+                       (cp.SCS, dict(max_iters=20000))]:
         try:
             prob.solve(solver=solver, verbose=False, **kw)
             if th.value is not None:
                 break
         except Exception:
             continue
+    if th.value is None:
+        raise RuntimeError('scheduled LP: no solver converged')
     kap = abs(mm.kappa4())
     ap = UM / (kap * max(c.value * CSCALE, 1e-18))
     if verbose:
         print('  %5.0f rpm scheduled LP: %s  ap %.3f mm'
               % (rpm, prob.status, ap * 1e3))
-    return np.asarray(th.value), float(ap)
+    return np.asarray(th.value) * gcol, float(ap)
 
 
 # -------------------------------------------------------------- frontier

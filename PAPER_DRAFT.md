@@ -37,15 +37,18 @@ receptance is affine in Q and |·|−Re(·) is 2-Lipschitz, the same algebra
 yields a controller-independent *authority frontier*: an upper bound on
 the depth floor achievable by ANY internally-stabilising LTI controller
 through the given patch under the given voltage budget. On the IJMS-274
-benchmark the frontier evaluates to ap* ≈ {0.70–0.82} mm — quantitatively
+benchmark the frontier evaluates to ap* = 0.74–0.77 mm — quantitatively
 explaining the 0.8 mm experimental ceiling reported there, and proving
 that the next unit of improvement on this plant must come from actuator
-authority, not controller sophistication. Against the benchmark's
-µ-synthesis-plus-time-delay control and against PD/PPF/µ baselines
-re-tuned under identical two-plant feasibility rules, the proposed law
-{multiplies the full-discretisation stability floor by ×{…} at equal
-voltage / reaches {…} % of the physical frontier}, with a controller of
-order {≤24}.
+authority, not controller sophistication. The layered law — collocated
+passive damping carrying the drift-fragile physics, the convex program
+spending the budgeted remainder — guarantees a 0.42–0.47 mm floor at
+53–57 % of that frontier with the voltage budget met by construction,
+multiplies the full-discretisation stability floor ×13 over the
+uncontrolled plate, lifts individual operating speeds a further 2–4× by a
+per-speed LP, and at the benchmark's chatter test point leaves 7 µm of
+vibration where the passive law alone leaves 168 µm against the same
+200 V hardware limit.
 
 ---
 
@@ -120,30 +123,74 @@ order {≤24}.
     re-synthesis, cross-stage FDM verification of the frozen law.
 3.5 Speed-scheduled LP variant.
 
-## 4. Results (Section 4) — filled from artefacts
+## 4. Results (Section 4) — computed on the committed artefacts
 
-- drift sweep table {…}: floor vs drift window, frontier line, uncontrolled
-  line ("the price of robustness").
-- per-stage table {…}: floor / frontier / achieved % / order / peak V/N.
-- FDM SLDs {…}: uncontrolled vs new law (fresh), stage-matched machined,
-  frozen-law cross-stage; lift factors at 3600/4900/5400 rpm and at the
-  benchmark's S-point.
-- scheduled-LP lifts at the test speeds {…}.
-- time-domain showcase at S: displacement/voltage traces {…}.
-- comparison table vs PPF / PD / µ / µ+delayed-PD (benchmark's law family,
-  re-tuned honestly): floors, retention across removal, voltage, order.
+**Authority frontier (contribution 2).** Per removal stage: 0.744 / 0.767 /
+0.766 mm (fresh / mid / machined) at V̄ = 150 V/N. The benchmark's best
+*experimental* result — robust µ + time-delay control — reached exactly
+0.8 mm before chattering at every tested speed. The frontier says that
+number is the actuator's, not the controller's: no LTI law through this
+patch under this budget can guarantee more, and the authority map
+(figs/paper_authority.png) shows the deficit concentrated at the mode-1/2
+band at the far edge positions.
+
+**Passive layer.** The collocated PD inner loop alone lifts the guaranteed
+(worst-phase, all-speed) ZOA floor from 0.028 to 0.557 mm and the FDM
+minimum over 3000–7000 rpm from 0.035 to 1.31 mm — but it saturates the
+budget: its drift-case peak voltage is 175 V/N > 150, and in the time
+domain at the benchmark's S point it rides the 200 V hardware limit with
+168 µm of residual vibration. Passive damping earns its floor by spending
+voltage it does not meter.
+
+**Layered law (contributions 1 & 3).** With the inner de-rated to 0.85 and
+the convex layer solving the budgeted floor problem (V̄ = 140 in design,
+≤ 150 verified): guaranteed floor 0.415–0.467 mm across the three stages —
+53–57 % of the frontier — certified for ±1 % drift between re-solves, peak
+voltage 140 V/N by construction, all modes at or above their open-loop
+damping. FDM verification: min 0.47 mm (fresh), 0.63 mm (machined,
+stage-matched). At the S point the time response is 7 µm — 24× below the
+passive law at the same saturation cap and three orders below uncontrolled
+(7.7 mm, divergent). The drift sweep prices robustness explicitly:
+0.436 / 0.386 / 0.219 mm at 0.5 / 1 / 2 % windows (first-order-solver
+accuracy limits the sweep's resolution beyond that; every quoted floor is
+re-verified exactly on the realised controller).
+
+**Adaptive necessity (contribution 3).** The fresh-stage law FROZEN and
+replayed on the machined plate destabilises at many speeds (FDM limit → 0),
+while the stage-matched re-solve — a seconds-long convex program — restores
+a 0.63 mm floor. Robustness to a +17 % mode-1 excursion is not a property a
+fixed narrow-authority law can carry; it is a scheduling property, and
+convexity is what makes the schedule certifiable.
+
+**Speed-scheduled LP (contribution 4).** At known speeds the lobe itself is
+maximised: 1.26 mm @ 3600, 0.55 mm @ 4900, 1.87 mm @ 5400 rpm (ZOA) —
+2–4× the broadband floor at the same budget, covering the benchmark's
+operating points with margin.
 
 ## 5. Reservations to state, not bury
 
-- ZOA is the design surrogate; interrupted cutting (ae/D=1 %) makes it
-  conservative in places — all comparative claims rest on the FDM, and the
-  FDM-to-ZOA gap is reported per law.
+- ZOA is the design surrogate; interrupted cutting (ae/D = 1 %) makes it
+  conservative and lobe-blind — all comparative claims rest on the FDM.
+  The FDM, in turn, is a *linear* instrument: it ignores the voltage
+  budget entirely, which is exactly why the passive law's 1.31 mm FDM
+  minimum overstates its usable depth (it saturates at 0.3 mm in the
+  nonlinear simulation). The certified-budget comparison is the fair one;
+  both are reported.
 - The frontier bounds LTI feedback through the given sensor/actuator pair
   under a per-frequency voltage spec; nonlinear or non-causal schemes are
   outside its scope (delayed-feedback laws that exploit τ are covered by
   the scheduled variant's algebra, not by the broadband frontier).
+- The interior-point solver fails over to a first-order one on the largest
+  programs (status `optimal_inaccurate`); every design is therefore
+  re-verified by exact linear algebra on the realised controller before it
+  is reported, and the balanced-truncation acceptance test is a floor
+  recomputation, not an H∞-error heuristic.
 - κ₄ carries the benchmark's own 0.3–2.9× coefficient band; it scales
   every law's floor identically and is reported as a band on absolute
   numbers, never on ratios.
 - Mode shapes are frozen across removal (as in the benchmark); modes 3–6
-  removal shifts are assumed (+5 %) — sensitivity reported.
+  removal shifts are assumed (+5 %) — sensitivity to this assumption is a
+  planned experiment.
+- Controller order is 87 before reduction on these runs (the acceptance
+  test rejected deeper truncation at the 2 % floor-change tolerance);
+  order-vs-floor trade curves belong in the final manuscript.

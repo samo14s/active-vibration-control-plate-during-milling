@@ -239,3 +239,50 @@ campaign logs (`tune_log.txt` … `tune4_log.txt`) are the full provenance:
 | `figs/cmp_robust.png` | mixed-µ certificates and productivity before/after material removal |
 | `ref/` | previous session's report, figures and controllers (provenance) |
 | `tune*_log.txt` | campaign logs: every candidate, every draw |
+
+---
+
+# Part 2 — the IJMS-274 milling model on this plant, and the new control strategy
+
+The benchmark paper behind this plant (Du, Liu, Dai & Long, IJMS 274 (2024)
+109257) was matched model-for-model on our MITC4 FEM — periodic milling-force
+coefficients (3 teeth, Ø10 mm, helix 35°, kc = 925 MPa, kn = 0.26, µc = 0.2,
+down milling, ae = 0.1 mm), single tooth-passing delay, moving upper-edge
+cutting position, their measured damping (0.31/0.17/0.27/0.56/0.35 %) and
+their measured removal shifts (f1 +17 %, f2 +9 %). Validation: our patched
+modes sit within 1.9 % of their MEASURED plant (closer than their own
+theoretical model on modes 2–3), the independently calibrated piezo constant
+matches their datasheet patch to 0.3 %, and the full-discretisation method
+reproduces their uncontrolled stability landscape — 0.035 mm floor, tall
+lobes at 3600/5400 rpm, their test point S (4900 rpm, 0.3 mm) unstable.
+
+On this model a NEW control strategy was built as the intended journal
+contribution (see `PAPER_DRAFT.md` for the full manuscript skeleton):
+
+1. **Chatter-proofing = budgeted passivation, solved exactly.** The
+   guaranteed depth floor is 1/(κ₄·max_ω[|G|−Re G]) — zero exactly when the
+   cutting-point receptance is positive real — and with a Youla/IMC
+   parametrisation it is maximised as a second-order-cone program: global
+   optimum, no D-K draws, no weights.
+2. **The actuator-authority frontier**: a controller-independent bound,
+   ap* = 0.74–0.77 mm here, that no LTI law through this patch under
+   150 V/N can exceed — numerically explaining the benchmark's 0.8 mm
+   experimental ceiling, and mapping where (frequency × position) the patch
+   runs out of authority.
+3. **Layered robustness**: the collocated passive PD carries the
+   drift-fragile physics (floor ×19 alone, but budget-blind: 175 V/N at
+   drift, saturated at S with 168 µm residual), the convex layer spends the
+   remaining budget optimally (guaranteed 0.42–0.47 mm inside 140 V/N,
+   certified for ±1 % drift between re-solves, 53–57 % of the frontier,
+   7 µm at S against the same 200 V limit).
+4. **Removal-adaptive scheduling**: the fresh-stage law frozen on the
+   machined plant destabilises (FDM limit → 0 at many speeds); the
+   stage-matched convex re-solve — seconds — restores 0.63 mm. Robustness
+   to a +17 % excursion is a scheduling property, not a fixed-law property.
+5. **Per-speed LP**: 1.26 / 0.55 / 1.87 mm at 3600 / 4900 / 5400 rpm —
+   2–4× the broadband floor at the same budget.
+
+Figures: `figs/paper_sld.png`, `figs/paper_frontier.png`,
+`figs/paper_time.png`, `figs/paper_authority.png`; artefacts
+`_newlaw_*.npz` are reproduced by `avc_newlaw.py`; the campaign log is
+`newlaw_log.txt`.

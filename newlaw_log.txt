@@ -1,0 +1,46 @@
+grids: synth 455 pts, verify 715 pts
+ZOA floors: uncontrolled 0.0280 mm   PD inner alone 0.5568 mm
+=== inner-gain sweep (fresh stage, drift 1%%) ===
+  g 0.70 : V0max 144  SOCP floor 0.3593  verified 0.4155 mm  volt 140.1  ok
+  g 0.85 : V0max 161  SOCP floor 0.4100  verified 0.4455 mm  volt 140.2  ok
+  g 1.00 : V0max 175  SOCP floor 0.4054  verified 0.4114 mm  volt 140.1  ok
+chosen inner gain: 0.85
+=== drift sweep (fresh stage, damped layer) ===
+  drift 0.5% : guaranteed floor 0.4360 mm
+  drift 1.0% : guaranteed floor 0.3863 mm
+  drift 2.0% : guaranteed floor 0.2193 mm
+  drift 4.0% : guaranteed floor 0.3507 mm
+=== stage fresh ===
+floor SOCP: optimal_inaccurate/SCS   c* = 5.8107e+01 um/N
+  SOCP floor 0.3982 mm | frontier 0.744 mm (53 %) | order 87->87
+  realised: floor 0.4250 mm  volt 140.1 V/N  stable True  zmin 0.39%
+=== stage mid ===
+floor SOCP: optimal_inaccurate/SCS   c* = 5.3259e+01 um/N
+  SOCP floor 0.4344 mm | frontier 0.767 mm (57 %) | order 87->87
+  realised: floor 0.4644 mm  volt 140.0 V/N  stable True  zmin 0.38%
+=== stage machined ===
+floor SOCP: optimal_inaccurate/SCS   c* = 5.4742e+01 um/N
+  SOCP floor 0.4227 mm | frontier 0.766 mm (55 %) | order 87->87
+  realised: floor 0.4666 mm  volt 140.1 V/N  stable True  zmin 0.38%
+=== speed-scheduled designs (fresh stage) ===
+  3600 rpm : ZOA scheduled ap 1.263 mm
+  4900 rpm : ZOA scheduled ap 0.553 mm
+  5400 rpm : ZOA scheduled ap 1.871 mm
+=== FDM verification (worst position x = 100 mm) ===
+  uncontrolled SLD: min 0.035 mm
+  PD inner SLD:     min 1.312 mm
+  new law SLD:      min 0.469 mm  (lift x13.3 over uncontrolled)
+  machined, stage-matched law: min 0.625 mm
+  machined, FROZEN fresh law:  min 0.000 mm
+=== time sim at S (4900 rpm, ap 0.3 mm) ===
+  uncontrolled |y|max 7599.4 um   |u|max 0.0 V
+Traceback (most recent call last):
+  File "/home/user/active-vibration-control-plate-during-milling/avc_newlaw.py", line 230, in <module>
+    main()
+  File "/home/user/active-vibration-control-plate-during-milling/avc_newlaw.py", line 221, in main
+    t, y, u = fdm.milling_sim(P0, D, 4900.0, 0.3e-3, KK, T_end=0.35)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/active-vibration-control-plate-during-milling/avc_fdm.py", line 182, in milling_sim
+    u += float(ctrl.Ck @ x[2 * n:])
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: only 0-dimensional arrays can be converted to Python scalars

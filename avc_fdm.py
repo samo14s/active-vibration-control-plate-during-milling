@@ -179,7 +179,7 @@ def milling_sim(plant, D, rpm, ap, ctrl=None, T_end=0.5, dt=None,
         if ctrl is not None:
             u = ctrl.Dk * float(cS @ x[:n])
             if ctrl.order:
-                u += float(ctrl.Ck @ x[2 * n:])
+                u += float(np.asarray(ctrl.Ck @ x[2 * n:]).ravel()[0])
             u = float(np.clip(u, -vmax, vmax))
         else:
             u = 0.0

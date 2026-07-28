@@ -95,8 +95,9 @@ def reduce_ctrl(K, P, om, target=24):
 
 def main():
     from avc_pd import pd_ctrl
+    from avc_combined import scale_ctrl_gain
     par = np.load('_pd.npz')
-    K_in = pd_ctrl(float(par['kp']), float(par['kd']), float(par['wc']),
+    K_pd = pd_ctrl(float(par['kp']), float(par['kd']), float(par['wc']),
                    'PD inner')
     omv = dense_grid()
     oms = synth_grid()
@@ -104,14 +105,37 @@ def main():
           flush=True)
     P0 = Plant(zeta=mm.ZETA_PAPER)
     f_unc = zoa_floor_of_K(P0, Ctrl(np.zeros((0, 0)), [], [], 0.0), omv)
-    f_pd = zoa_floor_of_K(P0, K_in, omv)
+    f_pd = zoa_floor_of_K(P0, K_pd, omv)
     print('ZOA floors: uncontrolled %.4f mm   PD inner alone %.4f mm'
           % (f_unc * 1e3, f_pd * 1e3), flush=True)
+
+    # ------------------------------- 0. inner-gain choice (fresh stage)
+    # the inner loop must leave voltage headroom at the drifted cases or
+    # the convex layer spends itself shaving the inner's own peaks
+    print('=== inner-gain sweep (fresh stage, drift 1%%) ===', flush=True)
+    best = None
+    for g in [0.7, 0.85, 1.0]:
+        K_in = scale_ctrl_gain(K_pd, g, 'PD inner x%.2f' % g)
+        dat = af.stage_data_damped(K_in, om=oms, drift=0.01)
+        v0max = max(np.abs(c['V0']).max() for c in dat['cases'])
+        th, c, floor, bank = af.synth_floor(dat, vbar=VMARGIN, verbose=False)
+        K = af.realise_damped(th, bank, P0, K_in)
+        fK = zoa_floor_of_K(P0, K, omv)
+        r = score(P0, K)
+        ok = r['stable'] and r['volt'] <= 150.0
+        print('  g %.2f : V0max %.0f  SOCP floor %.4f  verified %.4f mm  volt %.1f  %s'
+              % (g, v0max, floor * 1e3, fK * 1e3, r['volt'],
+                 'ok' if ok else 'REJECT'), flush=True)
+        if ok and (best is None or fK > best[1]):
+            best = (g, fK)
+    G_IN = best[0]
+    print('chosen inner gain: %.2f' % G_IN, flush=True)
 
     # ---------------------------------------------------- 1. drift sweep
     print('=== drift sweep (fresh stage, damped layer) ===', flush=True)
     drift_out = []
     for drift in [0.005, 0.01, 0.02, 0.04]:
+        K_in = scale_ctrl_gain(K_pd, G_IN, 'PD inner')
         dat = af.stage_data_damped(K_in, om=oms, drift=drift)
         th, c, floor, bank = af.synth_floor(dat, vbar=VMARGIN, verbose=False)
         drift_out.append((drift, floor))
@@ -122,6 +146,7 @@ def main():
 
     # ---------------------------------------- 2-3. per-stage designs
     DRIFT = 0.01
+    K_in = scale_ctrl_gain(K_pd, G_IN, 'PD inner')
     stages_out = {}
     for tag, scale in STAGES:
         print('=== stage %s ===' % tag, flush=True)

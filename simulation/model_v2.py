@@ -1,111 +1,53 @@
 """
-model_v2 — base gelee CORRIGEE (campagne v2).
-
-Deux corrections par rapport a sim_kit/simulation_base.py :
-
-  1. patch piezo au coin INFERIEUR DROIT, ORIENTE HORIZONTALEMENT
-     (60 mm selon x, 20 mm selon z), du meme cote que le capteur (100, 80) ;
-  2. amortissements modaux MESURES par Du et al. (Tableau 4).
-
-Le patch est par ailleurs COLLE et non soude (voir PATCH dans
-simulation_base.py) : le rendement de transfert eta = 0.886 reduit le
-raidissement composite et H_Pe dans les memes proportions. Cela ne change ni
-l'occupation des creux ni les frequences des zeros -- eta est un scalaire, il
-se simplifie dans les rapports de residus qui fixent les zeros.
+model_v2 — RETRACTATION : ce module ne differe plus de la base figee.
 
 --------------------------------------------------------------------------
-POURQUOI CETTE POSITION DE PATCH — l'argument reel
+CE QUI S'EST PASSE
 --------------------------------------------------------------------------
-Le seul jeu de donnees qui discrimine la position du patch est la Fig. 12(b)
-de Du et al. (transfert tension -> deplacement, capteur au coin superieur
-droit). Ce qu'elle contient de robuste n'est pas le niveau en dB (voir plus
-bas), mais la REPARTITION des creux profonds entre les modes :
+Ce module deplacait le patch piezoelectrique au coin INFERIEUR DROIT, oriente
+HORIZONTALEMENT (60 mm selon x, 20 mm selon z), au motif que c'etait la seule
+configuration reproduisant la signature de la Fig. 12(b) de Du et al. :
+l'occupation (1, 1, 0, 1) des intervalles inter-mode par les creux profonds.
 
-    creux profonds mesures : 788 Hz, 1493 Hz, 3609 Hz
-    modes mesures          : 540, 1068, 2787, 3351, 4122 Hz
-    -> occupation par intervalle inter-mode : (1, 1, 0, 1)
+C'ETAIT UNE ERREUR DE SELECTION DE MODELE. La Fig. 11 de l'article — la photo
+de l'experience modale qui a PRODUIT la Fig. 12 — montre l'actionneur : un
+rectangle nettement plus haut que large, au coin INFERIEUR GAUCHE, montant du
+bord encastre. La Fig. 2 (schema) le dessine de la meme facon, et la Fig. 17
+precise « Actuator is in the back » pour le banc de fraisage : le « right lower
+corner » de la Section 5 et le « left lower corner » de la Section 4.1 sont donc
+LE MEME coin physique vu des deux faces. L'article ne se contredit pas.
 
-Cette occupation est une signature de SIGNE, insensible a l'amortissement et
-a l'echelle : pour G = somme r_i/(w_i^2 - w^2), l'intervalle k contient un
-nombre IMPAIR de zeros si sign(r_k) == sign(r_{k+1}), un nombre PAIR sinon.
-Elle ne peut donc pas etre ajustee : soit une configuration la reproduit,
-soit non. Sur les quatre configurations compatibles avec l'article
-(coin gauche/droit x orientation verticale/horizontale) :
+La bonne configuration est celle de la base figee : coin inferieur gauche,
+VERTICAL 20 x 60 mm. Elle est corroboree par le premier mode, une fois la
+couche de colle modelisee :
 
-    configuration            occupation   accord
-    bas-gauche 20x60 (v1)    (0, 0, 1, 0)   non
-    bas-droit   20x60        (1, 1, 1, 1)   non
-    bas-gauche  60x20        (0, 2, 0, 0)   non
-    bas-droit   60x20        (1, 1, 0, 1)   OUI   <- retenue ici
-
-Une seule convient, et c'est celle-ci. C'est verifie a l'execution par
-`check_patch_position()`, appele depuis `make_sim()`.
-
-Coherent avec la Section 5 de l'article (« pasted in the right lower corner
-of the plate back »). La Section 4.1 dit « left lower corner » pour la meme
-experience modale : l'article se contredit, probablement parce que gauche et
-droite s'echangent selon la face observee. Les donnees tranchent, pas le texte.
+      vertical   (base)      : f1 = 538.3 Hz     mesure : 540.0 Hz   (-0.3 %)
+      horizontal (ex-"v2")   : f1 = 567.5 Hz                         (+5.1 %)
 
 --------------------------------------------------------------------------
-CE QUE CETTE CONFIGURATION NE REPRODUIT PAS — a savoir avant de s'en servir
+CE QUE CELA APPREND SUR LE MODELE DE COUPLAGE
 --------------------------------------------------------------------------
-* Les FREQUENCES des creux sont fausses au milieu de la bande :
+Avec la bonne geometrie, l'occupation calculee est (0, 0, 1, 0) et non
+(1, 1, 0, 1). Ce desaccord ne dit donc RIEN sur la position du patch : il
+mesure un defaut de H_Pe. Il rejoint le creux mesure a 1493 Hz, que le modele
+place a 2827 Hz — meme cause, un couplage dont la REPARTITION MODALE est
+fausse.
 
-      mesure : 788    1493    3609 Hz
-      modele : 819    2654    3755 Hz
-      ecart  : +3.9 %  +77.7 %  +4.0 %
+    grandeur                     modele        mesure (Fig. 12b)
+    occupation des intervalles   (0, 0, 1, 0)  (1, 1, 0, 1)
+    creux en bande               2827 Hz       788 / 1493 / 3609 Hz
 
-  Le premier et le dernier sont bons a 4 % pres, le deuxieme est hors de
-  portee : aucune des quatre configurations, ni aucun decalage de patch ou de
-  capteur teste, ne descend ce zero jusqu'a 1493 Hz. Il faudrait un rapport
-  de residus |r2/r1| ~ 0.95 alors que le modele donne 1.52. C'est une limite
-  du modele de couplage, pas du choix de position.
-
-* Le premier mode reste a 567.5 Hz contre 540 Hz mesures (+5.1 %), et C'EST UN
-  PROBLEME OUVERT. On a longtemps invoque ici le collage imparfait pour
-  l'expliquer ; la couche de colle est maintenant MODELISEE (shear lag,
-  plate_model.shear_lag_efficiency) et cet argument NE TIENT PAS :
-
-      sans raidissement                        : 521.1 Hz
-      horizontal, collage parfait              : 572.3 Hz
-      horizontal, epoxy G=1 GPa / t=30 um      : 567.5 Hz   mesure : 540.0 Hz
-      vertical,   epoxy G=1 GPa / t=30 um      : 538.3 Hz
-
-  Une colle structurale donne eta = 0.886 : elle ne retire que 0.9 point sur
-  les 6. Fermer l'ecart demanderait eta = 0.359, soit une colle ~500 fois plus
-  souple qu'un epoxy -- un film, pas un joint colle.
-
-  Le conflit est donc frontal et il ne se resorbe pas :
-    - un balayage de 62 positions x 2 orientations ne trouve QUE DEUX
-      positions reproduisant l'occupation (1,1,0,1), toutes deux horizontales
-      en pied de plaque (x1 = 30 et 40 mm), a f1 = 570.5 et 567.5 Hz ;
-    - les positions qui donnent f1 = 540 Hz a 0.2 % pres sont TOUTES verticales,
-      et AUCUNE ne reproduit l'occupation ;
-    - la ponderation anisotrope de l'Eq. (14) de l'article n'y change rien non
-      plus (teste sur rho de 0 a 1).
-
-  On garde donc cette position sur le critere de l'occupation, parce que c'est
-  une signature de SIGNE qu'aucun reglage ne peut fabriquer, alors que l'ecart
-  en frequence porte sur une amplitude que le modele de raidissement smeared
-  peut surestimer. Mais c'est un choix argumente, pas une preuve : les deux
-  criteres se contredisent, et la contradiction est documentee plutot
-  qu'enterree.
-
-* Le NIVEAU absolu de H_Pe reste non valide : la Fig. 12(a) implique une
-  souplesse statique 6.34 fois celle d'une plaque de Kirchhoff aux dimensions
-  du Tableau 1, et contredit les propres lobes de stabilite de l'article
-  (Fig. 13). Voir VERIFICATION.md, point F9.
-
-||H|| = 0.4924 (x1.85 vs la base v1) : plus d'autorite actionneur.
-Frequences recalibrees identiques (erreur <= 0.67 % vs mesures Du).
+Corriger cela demande un terme DEPENDANT DU MODE dans H_Pe. Un facteur
+scalaire — gain actionneur, rendement de collage — ne peut rien y faire : il se
+simplifie dans les rapports de residus qui fixent les zeros. Ce chemin-la est
+ferme, avec preuve (VERIFICATION.md, section 5).
 
 --------------------------------------------------------------------------
-AMORTISSEMENTS
+POURQUOI CE MODULE EXISTE ENCORE
 --------------------------------------------------------------------------
-La base d'origine utilisait 0.30 % aux modes 4 et 5 ; le Tableau 4 donne
-0.56 % et 0.35 %. Le mode 4 etait donc sous-amorti d'un facteur 1.87, ce qui
-exagerait le spillover de commande et rendait la boucle marginale. Correction
-appuyee sur la donnee publiee, pas sur un choix libre.
+`run_demo.py` importe `make_sim`, et les diagnostics `antiresonances()` /
+`notch_occupancy()` restent utiles pour surveiller le modele de couplage. Le
+nom « v2 » n'a plus de sens : make_sim() renvoie exactement SimBase().
 """
 import os
 import sys
@@ -116,14 +58,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "sim_kit"))
 import simulation_base as SB                                    # noqa: E402
 
+# Geometrie du patch : celle de la base, confirmee par la Fig. 11 de l'article.
 PATCH_V2 = dict(SB.PATCH)
-PATCH_V2.update({"x1": 0.04, "x2": 0.10, "z1": 0.0, "z2": 0.02})
 
-# Amortissements modaux : valeurs MESUREES par Du et al. (Tableau 4).
-ZETA_DU = [0.0031, 0.0017, 0.0027, 0.0056, 0.0035]
+# Amortissements mesures (Tableau 4). Desormais portes par la base elle-meme ;
+# conserve pour compatibilite d'appel.
+ZETA_DU = list(SB.ZETA_MODES)
 
-# Fig. 12(b) numerisee : creux profonds, et leur repartition par intervalle
-# inter-mode. C'est la signature qui identifie la position du patch.
+# Fig. 12(b) numerisee : creux profonds mesures et leur repartition par
+# intervalle inter-mode. LE MODELE NE LA REPRODUIT PAS — voir l'en-tete.
 NOTCH_HZ = (788.0, 1493.0, 3609.0)
 NOTCH_OCCUPANCY = (1, 1, 0, 1)
 
@@ -151,42 +94,45 @@ def antiresonances(plate):
 
 
 def notch_occupancy(plate):
-    """Nombre de zeros dans chaque intervalle inter-mode (tuple de n_modes-1)."""
+    """Nombre de zeros dans chaque intervalle inter-mode (tuple de n_modes-1).
+
+    Signature de SIGNE, insensible a l'amortissement et a toute mise a
+    l'echelle de H_Pe : l'intervalle k contient un nombre impair de zeros si
+    sign(r_k) == sign(r_{k+1}), pair sinon.
+    """
     f = np.asarray(plate.omega_n).ravel() / (2 * np.pi)
     z = antiresonances(plate)
     return tuple(int(((z > f[k]) & (z < f[k + 1])).sum())
                  for k in range(len(f) - 1))
 
 
-def check_patch_position(plate, verbose=False):
-    """Verifie que la configuration reproduit la signature de la Fig. 12(b).
+def report_notch_signature(plate, verbose=True):
+    """Compare la signature calculee a la mesure. NE LEVE PAS d'exception.
 
-    Leve AssertionError si l'occupation des intervalles differe de la mesure —
-    c'est le seul critere qui distingue les quatre positions de patch
-    compatibles avec l'article.
+    Le desaccord est un ecart CONNU du modele de couplage, documente dans
+    l'en-tete ; en faire une assertion reviendrait a le maquiller en contrainte
+    de conception — ce qui avait justement conduit a deplacer le patch a tort.
     """
     occ = notch_occupancy(plate)
     if verbose:
         z = antiresonances(plate)
         f = np.asarray(plate.omega_n).ravel() / (2 * np.pi)
         zi = z[(z > f[0]) & (z < f[-1])]
-        print(f"[model_v2] occupation des intervalles : {occ} "
-              f"(mesure {NOTCH_OCCUPANCY})")
-        print(f"[model_v2] zeros en bande : {np.round(zi, 0)} Hz "
-              f"(mesure {list(NOTCH_HZ)})")
-    assert occ == NOTCH_OCCUPANCY, (
-        f"occupation des creux {occ} != mesure {NOTCH_OCCUPANCY} : la position "
-        "du patch ne reproduit plus la signature de la Fig. 12(b)")
+        flag = "conforme" if occ == NOTCH_OCCUPANCY else "ECART CONNU"
+        print(f"[model_v2] occupation {occ} vs mesure {NOTCH_OCCUPANCY} "
+              f"-> {flag}")
+        print(f"[model_v2] creux en bande {np.round(zi, 0)} Hz "
+              f"vs mesure {list(NOTCH_HZ)}")
     return occ
 
 
 def make_sim(verbose=False, zeta_du=True):
-    """Construit la base v2. N'ecrit PAS dans les constantes de module de
-    `simulation_base` : la configuration est passee par arguments, donc un
-    `SimBase()` construit ensuite dans le meme processus reste la base v1."""
+    """Construit la base. Identique a SimBase() : la geometrie de patch qui
+    distinguait autrefois ce module etait fausse (voir l'en-tete)."""
     sim = SB.SimBase(verbose=verbose, patch=PATCH_V2,
                      zeta=list(ZETA_DU) if zeta_du else None)
-    check_patch_position(sim.plate, verbose=verbose)
+    if verbose:
+        report_notch_signature(sim.plate)
     return sim
 
 
@@ -197,12 +143,6 @@ if __name__ == "__main__":
     D = np.asarray(p.D_obs).ravel()
     print(f"\n||H|| = {np.linalg.norm(H):.4f} N/V")
     print("signes H*D_obs :", np.sign(H * D).astype(int))
-    z = antiresonances(p)
-    f = np.asarray(p.omega_n).ravel() / (2 * np.pi)
-    zi = z[(z > f[0]) & (z < f[-1])]
-    print("\ncreux tension -> deplacement :")
-    for zm, zc in zip(NOTCH_HZ, zi):
-        print(f"   mesure {zm:7.1f} Hz   modele {zc:7.1f} Hz   "
-              f"ecart {100 * (zc / zm - 1):+6.1f} %")
-    print("\nle creux central reste hors de portee du modele de couplage :")
-    print("voir la section 'CE QUE CETTE CONFIGURATION NE REPRODUIT PAS'.")
+    print(f"eta (colle)    : {p.eta_bond:.4f}")
+    print("\nLa repartition modale de H_Pe est fausse : c'est le seul ecart")
+    print("structurel qui subsiste. Voir VERIFICATION.md, sections F4 et 5.")

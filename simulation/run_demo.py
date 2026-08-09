@@ -7,23 +7,30 @@ Usage :
     python run_demo.py --full     # + perturbations reservees (plus long)
 
 Base : plaque encastree-libre 5 modes calibree sur Du et al. (IJMS 2024),
-avec les DEUX corrections validees contre la Fig. 12 et le Tableau 4 :
-patch piezo inferieur droit horizontal, et amortissements modaux mesures
-(0.31 / 0.17 / 0.27 / 0.56 / 0.35 %). Le patch y est COLLE et non soude
-(shear lag, eta = 0.886) : l'autorite actionneur est 11 % plus faible qu'avec
-l'hypothese de collage parfait utilisee auparavant.
+patch piezo VERTICAL 20 x 60 mm au coin inferieur gauche — la configuration que
+montre la photo de la Fig. 11 de l'article. Une version precedente de ce fichier
+utilisait un patch horizontal au coin inferieur droit : c'etait une erreur, voir
+l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), et patch
+COLLE et non soude (shear lag, eta = 0.886).
 
 Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
 
                      3000    4200    4900    6000    7200   pire cas
-    boucle ouverte  0.0598  0.0598  0.0462  0.0929  0.2114   0.0462
-    LQG modal       0.5612  0.6720  0.6020  0.5262  0.8838   0.5262
-    ESO propose     0.5398  0.6351  0.5845  0.5262  0.8255   0.5262
+    boucle ouverte  0.0773  0.0754  0.0579  0.1026  0.2600   0.0579
+    LQG modal       0.6953  0.7186  0.6040  0.4194  0.9674   0.4194
+    ESO propose     0.7011  0.7206  0.5904  0.4038  0.9246   0.4038
 
-c.-a-d. performance SATUREE : trois architectures de richesse croissante
-atteignent le meme plafond — les pires cas du LQG et de l'ESO sont ici
-IDENTIQUES (0.5262 mm, tous deux a 6000 tr/min). C'est le resultat central
-de l'etude.
+c.-a-d. performance SATUREE : deux architectures de richesse tres differente
+atteignent le meme plafond (0.42 et 0.40 mm, soit 3.7 % d'ecart, contre 0.058
+mm en boucle ouverte). C'est le resultat central de l'etude, et il survit a la
+correction de geometrie.
+
+MISE EN GARDE. Les reglages X_LQG et X_ESO ci-dessous ont ete optimises sur la
+geometrie de patch PRECEDENTE, qui etait fausse. Le tableau mesure donc ce que
+CES reglages-la donnent sur le modele corrige, pas ce que chaque architecture
+peut atteindre au mieux. Une comparaison d'architectures equitable demande de
+refaire l'optimisation sur la base corrigee ; en l'etat, l'ecart de 3.7 % entre
+LQG et ESO n'est pas interpretable comme un avantage de l'un sur l'autre.
 
 Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
 6e-5 METRES, soit 0.060 mm, plus grossiere que la limite en boucle ouverte

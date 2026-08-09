@@ -56,6 +56,12 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
   trois modes n'en reproduit que deux.
 * **Patch au coin inferieur gauche, capteur au coin oppose.** Deplacer l'un ou
   l'autre change le classement modal et invalide toute comparaison anterieure.
+* **Patch VERTICAL 20 x 60 mm au coin inferieur gauche.** Confirme par la photo
+  de la Fig. 11 de l'article (l'experience modale qui a produit la Fig. 12) :
+  rectangle plus haut que large, montant du bord encastre. La Section 5 le dit
+  « right lower corner of the plate back » et la Section 4.1 « left lower
+  corner » : c'est le meme coin vu des deux faces (Fig. 17, « Actuator is in
+  the back »).
 * **Convention de signe des efforts = Eq. (13) de l'article.** L'article se
   contredit entre son Eq. (13) et l'enchainement de ses Eqs. (1)(2)(5)(10)(A.4).
   Les deux conventions donnent des diagrammes de lobes quasiment
@@ -109,6 +115,14 @@ la souplesse est leur inverse — une raideur 6.34 fois trop faible donnerait
 f1 = 214 Hz au lieu de 540 Hz. Les lobes de stabilite de l'article (Fig. 13)
 s'accordent d'ailleurs avec la valeur raide. L'echelle en dB de la Fig. 12 est
 donc inexploitable.
+
+La REPARTITION MODALE de `H_Pe` est fausse elle aussi, et c'est un ecart
+distinct du niveau : le modele place un seul creux de transfert a 2827 Hz la ou
+la mesure en montre trois (788 / 1493 / 3609 Hz). Aucun facteur scalaire ne
+peut le corriger — il se simplifie dans les rapports de residus qui fixent les
+zeros — et aucune position de patch ni ponderation de couplage testee n'y
+parvient (`verification/09`, `verification/10`). C'est le seul ecart structurel
+qui subsiste dans le modele.
 
 Consequence directe : **le niveau de `H_Pe` n'est pas calibre**, puisqu'il ne
 pourrait l'etre que par le rapport des deux courbes. Les 487.5 um/N du tableau

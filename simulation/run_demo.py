@@ -4,87 +4,96 @@ run_demo.py — reproduit le resultat principal de la campagne v3.
 Usage :
     cd simulation
     python run_demo.py            # tableau nominal (3 architectures)
-    python run_demo.py --full     # + perturbations reservees (plus long)
+    python run_demo.py --full     # + perturbations reservees (~15 min)
 
 Base : plaque encastree-libre 5 modes calibree sur Du et al. (IJMS 2024),
 patch piezo VERTICAL 20 x 60 mm au coin inferieur gauche — la configuration que
 montre la photo de la Fig. 11 de l'article. Une version precedente de ce fichier
 utilisait un patch horizontal au coin inferieur droit : c'etait une erreur, voir
-l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), et patch
-COLLE et non soude (shear lag, eta = 0.886), avec le couplage
-membrane-flexion du patch colle d'un seul cote (-11.6 % sur H_Pe).
+l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), patch COLLE
+et non soude (shear lag, eta = 0.886), couplage membrane-flexion du patch colle
+d'un seul cote, et repartition modale de H_Pe identifiee sur la Fig. 12(b).
 
->>> ETAT TRANSITOIRE — LES DEUX TABLEAUX CI-DESSOUS SONT PERIMES. <<<
-X_LQG vient d'etre remplace par le resultat de la re-optimisation sur le critere
-corrige (pire cas 0.3241 mm, six perturbations sur six). X_ESO est encore
-l'ancien : sa recherche tourne. Les tableaux datent des DEUX anciens reglages et
-seront regeneres d'un seul bloc quand elle aura fini. Ne pas les citer en l'etat.
-
-Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT = 0.60 s :
+Resultat, b_lim en mm, horizon T = simulation_base.T_LIMIT = 0.60 s, critere
+sigma <= 0.05 /s :
 
                      3000    4200    4900    6000    7200   pire cas
     boucle ouverte  0.0676  0.0734  0.0501  0.1026  0.2153   0.0501
-    LQG modal       0.3533  0.3416  0.3572  0.2542  0.6934   0.2542
+    LQG modal       0.3611  0.3844  0.3241  0.3475  0.6720   0.3241
     ESO propose     0.3552  0.3591  0.3688  0.2561  0.6856   0.2561
 
-c.-a-d. performance SATUREE : deux architectures de richesse tres differente
-atteignent le meme plafond a 0.7 % pres, contre 0.0501 mm en boucle ouverte.
-C'est le resultat central de l'etude, et il survit a tout ce qui precede.
+soit x6.5 et x5.1 sur la limite libre du pire cas.
 
-TOUS CES CHIFFRES ONT BAISSE D'ENVIRON 19 % avec la correction du critere de
-stabilite (defaut F12). L'ancien critere -- rapport de RMS entre les deux
-moities de la fenetre -- declarait stables des coupes qui divergent plus tard :
-sur 144 cas dont la verite a ete etablie a T = 1.60 s, il se trompait 8 fois, et
-TOUJOURS en declarant stable ce qui diverge. Le critere actuel, un taux de
-croissance exponentiel sigma <= 0.05 /s mesure sur la reponse ETABLIE, se
-trompe 0 fois sur les memes 144 cas. Toute valeur anterieure a cette correction
-est optimiste et n'est PAS comparable a celles-ci. Voir verification/15.
+LA "PERFORMANCE SATUREE" N'EXISTE PLUS. Ce fichier a longtemps annonce que deux
+architectures de richesse tres differente atteignaient le meme plafond a 0.7 %
+pres, et en faisait le resultat central de l'etude. Sous le critere de stabilite
+corrige (defaut F12) l'ecart est de 26.6 %, et il est dans le sens INVERSE de
+l'attendu : c'est le LQG, la structure la plus pauvre, qui mene. L'egalite etait
+un artefact du critere optimiste.
 
 `--full` rejoue le tableau sous les six perturbations reservees, le correcteur
-restant synthetise sur la plaque nominale (donc un vrai essai d'erreur de
+restant synthetise sur la plaque NOMINALE (donc un vrai essai d'erreur de
 modele). Pire cas sur les cinq vitesses :
 
     perturbation    boucle ouverte    LQG modal      ESO propose
-    nominal             0.0501          0.2542         0.2561
-    K x0.90             0.0423          0.2503         0.2522
-    K x1.10             0.0443          0.3455         0.3552
-    C x0.80             0.0404          0.2542         0.2542
-    kc x2.9             0.0000 (*)      0.0870         0.0870
-    H x0.50             0.0501          0.1764         0.1764
-    H x2.00             0.0501          0.0000         0.0000
+    nominal             0.0501          0.3241         0.2561
+    K x0.90             0.0423          0.2697         0.2522
+    K x1.10             0.0443          0.1590       **0.3552**
+    C x0.80             0.0404          0.3222         0.2542
+    kc x2.9             0.0000 (*)      0.1104         0.0870
+    H x0.50             0.0501          0.1784         0.1764
+    H x2.00             0.0501        **0.3436**       0.0000
 
-LA LIGNE H x2.00 EST LE RESULTAT LE PLUS IMPORTANT DE CE TABLEAU. Les deux
-correcteurs y perdent le controle. Or le NIVEAU de H_Pe n'est pas valide
-(defaut F9) et le gain statique mesure sur la Fig. 12(b) vaut 2.94 fois celui du
-modele : le facteur 2 n'est donc pas une marge academique, c'est le milieu de
-l'incertitude reelle. Sous le critere precedent cette ligne affichait 0.3708 mm
-pour le LQG -- une valeur rassurante et fausse.
+TROIS LECTURES, DONT DEUX CONTREDISENT CE QUE CE FICHIER DISAIT AVANT.
 
-Il faut le dire clairement : ces correcteurs n'ont pas de marge de gain
-actionneur, et ce sont les memes reglages qu'avant. Ce n'est pas la correction
-du critere qui les a degrades, c'est elle qui a cesse de le cacher.
+1. La ligne H x2.00 ne tue plus le LQG — elle le FAVORISE : 0.3436 mm contre
+   0.3241 en nominal. Ce fichier annoncait "les deux correcteurs y perdent le
+   controle" et en faisait son resultat le plus important. C'etait vrai des
+   reglages d'alors, pas de la commande : doubler le gain actionneur double
+   l'autorite, et si la boucle reste stable la limite MONTE. Il fallait
+   contraindre la recherche sur cette perturbation pour trouver un reglage qui
+   le fasse ; c'est fait, et ca marche. Le point compte parce que le NIVEAU de
+   H_Pe n'est pas valide (defaut F9) et que le gain statique mesure sur la
+   Fig. 12(b) vaut 2.94 fois celui du modele : le facteur 2 n'est pas une marge
+   academique, c'est le milieu de l'incertitude reelle.
 
-(*) 0.0000 signifie "en dessous de la borne basse de la bissection", soit
-0.02 mm : sous kc x2.9 la coupe libre est instable des la plus petite passe
-testee. C'est un vrai zero, pas un artefact.
+2. Le LQG ne domine PAS partout. Sous K x1.10 le classement s'inverse
+   franchement : 0.1590 contre 0.3552 pour l'ESO, soit un facteur 2.2 dans
+   l'autre sens. "6 sur 6" veut dire qu'il passe le crible a 0.10 mm sous les
+   six perturbations, pas qu'il est meilleur sous chacune.
 
-kc x2.9 reste hors d'atteinte pour les deux correcteurs a la profondeur de
-crible de retune.py (0.10 mm) ; ils y tiennent 0.0870 mm, ce qui reste tres
-au-dessus de la limite libre correspondante.
+3. L'ESO s'effondre sous H x2.00 : zero a quatre vitesses sur cinq. Ce sont de
+   VRAIS zeros et non des artefacts de bissection — verifie en allongeant
+   l'horizon, tout diverge (voir verification/15). Il echoue aussi le crible
+   sous kc x2.9 (0.0870 < 0.10 mm). D'ou son 4 sur 6.
 
-Les reglages viennent de `retune.py both`. Le critere qu'il maximise -- la
-limite nominale du pire cas -- est mal pose dans les deux sens (butee
-permanente sans contrainte ; effondrement sous perturbation avec la seule
-non-saturation), d'ou les contraintes de non-saturation ET de robustesse ; voir
-retune.py. Sous le critere corrige, la re-optimisation ne trouve rien de mieux
-que ces reglages-la, et le crible de robustesse n'est franchi que par 2 des 6
-perturbations : le "5 sur 6" annonce precedemment etait lui aussi un artefact du
-critere optimiste.
+(*) 0.0000 en boucle ouverte signifie "sous la borne basse de la bissection",
+soit 0.02 mm : avec des coefficients de coupe presque triples, la coupe libre
+est instable des la plus petite passe testee. Vrai zero, pas artefact.
+
+Les reglages viennent de `retune.py both`, relance en entier sur le critere
+corrige. Le critere qu'il maximise -- la limite nominale du pire cas -- est mal
+pose dans les deux sens (butee permanente sans contrainte ; effondrement sous
+perturbation avec la seule non-saturation), d'ou les contraintes de
+non-saturation ET de robustesse ; voir retune.py.
+
+X_LQG est NOUVEAU : +27 % sur le reglage precedent mesure au meme etalon,
+premiere tenue complete des six perturbations, et la plus basse tension crete
+des candidats (33 V pour 150 V disponibles).
+
+X_ESO est INCHANGE, et ce n'est pas un oubli : sur 20 particules x 20
+iterations, la recherche n'a jamais fait mieux que sa graine -- le score n'a pas
+bouge d'un millieme du premier au vingtieme tour. Deux lectures restent
+ouvertes, que cette campagne ne separe pas : ou l'ESO n'a pas de reglage robuste
+dans les bornes de BOUNDS, ou son espace a sept dimensions est trop creux pour
+que 400 evaluations le trouvent.
 
 MISE EN GARDE HISTORIQUE. Les chiffres de ce fichier ont ete regeneres apres la
 correction de `blim`, apres la correction de la geometrie du patch, apres
-l'identification de la repartition modale de H_Pe sur la Fig. 12(b), et enfin
-apres la correction du critere de stabilite lui-meme.
+l'identification de la repartition modale de H_Pe sur la Fig. 12(b), apres la
+correction du critere de stabilite lui-meme, et enfin apres la re-optimisation
+des deux correcteurs sur ce critere. Aucune valeur anterieure a la derniere de
+ces etapes n'est comparable a celles-ci.
 """
 import argparse
 import copy
@@ -102,15 +111,24 @@ from competitors import ModalLQG                             # noqa: E402
 
 SPEEDS = [3000, 4200, 4900, 6000, 7200]
 
-# Reglages RE-OPTIMISES sur la base corrigee (retune.py both). Les valeurs
-# d'origine -- X_ESO = [-8.229, -0.437, 0.550, -7.874, 0.367, 230297.916,
-# 1.615] et X_LQG = [-8.263, 1.901, -7.284] -- avaient ete obtenues sur une
-# geometrie de patch fausse ET sur une repartition modale de couplage fausse ;
-# sur la base corrigee elles saturent l'amplificateur aux cinq vitesses.
+# Reglages issus de `retune.py both`, sous contrainte de non-saturation ET de
+# robustesse : le critere de limite nominale seul est mal pose dans les deux
+# sens, voir retune.py.
 #
-# L'optimisation est SOUS CONTRAINTE de non-saturation ET de robustesse : le
-# critere de limite nominale seul est mal pose dans les deux sens, voir
-# retune.py. Les reglages ci-dessous dominent ceux d'origine.
+# Les valeurs d'origine -- X_ESO = [-8.229, -0.437, 0.550, -7.874, 0.367,
+# 230297.916, 1.615] et X_LQG = [-8.263, 1.901, -7.284] -- avaient ete obtenues
+# sur une geometrie de patch fausse ET sur une repartition modale de couplage
+# fausse ; sur la base corrigee elles saturent l'amplificateur aux cinq
+# vitesses.
+#
+# LES DEUX LIGNES N'ONT PAS LE MEME STATUT, et c'est le resultat lui-meme :
+#   X_LQG a ete TROUVE par la recherche sur le critere corrige (iteration 12),
+#     et domine le reglage precedent sur les trois colonnes a la fois : +27 %
+#     de limite nominale, 6 perturbations sur 6 au lieu de 4, et 33 V de crete
+#     au lieu de 39.
+#   X_ESO est la GRAINE, c.-a-d. le reglage deja publie : la meme recherche,
+#     avec les memes contraintes, n'a rien trouve de mieux en 20 x 20
+#     evaluations. Ce n'est pas un reste d'une version precedente de ce fichier.
 X_ESO = [-8.3861, 3.2814, 1.0339, -9.9052, 0.7112, 273969.8996, 2.1823]
 X_LQG = [-8.6678, -1.1613, -4.5628]
 

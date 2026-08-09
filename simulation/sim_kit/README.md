@@ -116,13 +116,23 @@ f1 = 214 Hz au lieu de 540 Hz. Les lobes de stabilite de l'article (Fig. 13)
 s'accordent d'ailleurs avec la valeur raide. L'echelle en dB de la Fig. 12 est
 donc inexploitable.
 
-La REPARTITION MODALE de `H_Pe` est fausse elle aussi, et c'est un ecart
-distinct du niveau : le modele place un seul creux de transfert a 2827 Hz la ou
-la mesure en montre trois (788 / 1493 / 3609 Hz). Aucun facteur scalaire ne
-peut le corriger — il se simplifie dans les rapports de residus qui fixent les
-zeros — et aucune position de patch ni ponderation de couplage testee n'y
-parvient (`verification/09`, `verification/10`). C'est le seul ecart structurel
-qui subsiste dans le modele.
+La REPARTITION MODALE de `H_Pe` etait fausse elle aussi, et c'est un ecart
+distinct du niveau : les elements finis placent un seul creux de transfert a
+2818 Hz la ou la Fig. 12(b) en montre quatre (788 / 1493 / 2913 / 3609 Hz),
+soit 14.9 dB RMS d'ecart sur toute la bande. Aucun facteur scalaire ne peut le
+corriger — il se simplifie dans les rapports de residus qui fixent les zeros —
+et aucune position de patch, orientation, position de capteur, ponderation de
+couplage, couche de colle, couplage membrane-flexion ni souplesse
+d'encastrement testee n'y parvient (`verification/09` a `verification/12`).
+
+Ce n'est donc pas un mecanisme manquant : c'est une grandeur non identifiee. La
+repartition est desormais IDENTIFIEE sur la Fig. 12(b) elle-meme — ses poles
+sont les frequences mesurees, ses zeros les creux mesures, et poles + zeros
+fixent les residus a une constante pres (constante `H_IDENT`,
+`verification/14`). Le modele rend maintenant 787 / 1495 / 2907 / 3613 Hz,
+soit 0.19 % d'erreur au pire et 6.2 dB RMS — le niveau d'accord de la
+Fig. 12(a), qui etait deja juge acceptable. `SimBase(coupling='fem')` restitue
+la repartition elements finis pour comparaison.
 
 Consequence directe : **le niveau de `H_Pe` n'est pas calibre**, puisqu'il ne
 pourrait l'etre que par le rapport des deux courbes. Les 487.5 um/N du tableau

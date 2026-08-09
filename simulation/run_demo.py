@@ -31,6 +31,22 @@ corrige (defaut F12) l'ecart est de 26.6 %, et il est dans le sens INVERSE de
 l'attendu : c'est le LQG, la structure la plus pauvre, qui mene. L'egalite etait
 un artefact du critere optimiste.
 
+MAIS CES 26.6 % NE SURVIVENT PAS A L'INCERTITUDE, et il faut le dire ici parce
+que c'est ce tableau qu'on lira. En propageant l'incertitude que l'article
+porte -- les cinq facteurs varies ENSEMBLE, verification/18 -- le classement en
+PROFONDEUR s'inverse : sur les tirages ou les deux correcteurs tiennent, l'ESO
+est typiquement le PLUS PROFOND (rapport median LQG/ESO = 0.85, et le LQG ne
+gagne que dans 24 % de ces tirages). Les chiffres nominaux ci-dessus sont eux
+aussi optimistes : 0.3241 est le 72e centile du tirage, 0.2561 le 64e.
+
+Ce que le LQG gagne vraiment n'est pas de la profondeur, c'est de la FIABILITE.
+Il s'effondre a zero dans 4 % des tirages contre 32 % pour l'ESO, et il tient
+0.10 mm aux cinq vitesses dans 94.8 % des tirages contre 67.8 %. Les deux
+enonces sont vrais en meme temps parce qu'ils repondent a deux questions
+differentes : "jusqu'ou peut-on couper quand ca marche" et "est-ce que ca
+marche". Le tableau nominal ne repond qu'a la premiere, et la melange a la
+seconde en prenant le pire cas.
+
 `--full` rejoue le tableau sous les six perturbations reservees, le correcteur
 restant synthetise sur la plaque NOMINALE (donc un vrai essai d'erreur de
 modele). Pire cas sur les cinq vitesses :

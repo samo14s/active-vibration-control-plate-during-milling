@@ -168,7 +168,69 @@ def sample(rng, n):
     return out
 
 
+def figure(npz_path):
+    """Trace depuis le .npz : tornade de sensibilite + lois de la limite."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    d = np.load(npz_path, allow_pickle=False)
+    ARCH = [str(x) for x in d['arch']]
+    base = {a: float(v) for a, v in zip(ARCH, d['base'])}
+    names = [str(x) for x in d['oat_names']]
+    lo, hi, bnd = d['oat_lo'], d['oat_hi'], d['oat_bounds']
+    iL = ARCH.index('LQG')
+
+    fig, ax = plt.subplots(1, 2, figsize=(13.5, 5.6))
+
+    # --- tornade : effet de chaque parametre, un a la fois, sur le LQG
+    eff = [max(abs(lo[i, iL] - base['LQG']), abs(hi[i, iL] - base['LQG']))
+           for i in range(len(names))]
+    o = np.argsort(eff)
+    for k, i in enumerate(o):
+        a, b = lo[i, iL], hi[i, iL]
+        ax[0].barh(k, abs(b - a), left=min(a, b), height=.6,
+                   color='#1f4e79', alpha=.85)
+        ax[0].text(max(a, b) + .012, k, f'x{bnd[i,0]:.2f} - x{bnd[i,1]:.2f}',
+                   va='center', fontsize=8, color='.35')
+    ax[0].axvline(base['LQG'], color='#c00000', lw=1.6,
+                  label=f"publie = {base['LQG']:.4f} mm")
+    ax[0].set_yticks(np.arange(len(o)))
+    ax[0].set_yticklabels([names[i] for i in o])
+    ax[0].set_xlim(0, None)
+    ax[0].set_xlabel('limite du pire cas, LQG [mm]')
+    ax[0].set_title('Un parametre a la fois : ce qui porte le resultat')
+    ax[0].legend(loc='lower right', fontsize=9)
+    ax[0].grid(alpha=.3, axis='x')
+
+    # --- lois simultanees
+    bins = np.linspace(0, max(d['blim_LQG'].max(), d['blim_ESO'].max())*1.02, 26)
+    ax[1].hist(d['blim_LQG'], bins=bins, alpha=.55, color='#1f4e79',
+               label=f"LQG  (median {np.median(d['blim_LQG']):.4f})")
+    ax[1].hist(d['blim_ESO'], bins=bins, alpha=.55, color='#2e7d32',
+               label=f"ESO  (median {np.median(d['blim_ESO']):.4f})")
+    ax[1].axvline(base['LQG'], color='#1f4e79', ls='--', lw=1.8,
+                  label=f"LQG publie {base['LQG']:.4f}")
+    ax[1].axvline(base['ESO'], color='#2e7d32', ls='--', lw=1.8,
+                  label=f"ESO publie {base['ESO']:.4f}")
+    ax[1].axvline(base['libre'], color='k', ls=':', lw=1.4,
+                  label=f"libre nominal {base['libre']:.4f}")
+    ax[1].set_xlabel('limite du pire cas sur les cinq vitesses [mm]')
+    ax[1].set_ylabel(f"tirages (n = {len(d['blim_LQG'])})")
+    ax[1].set_title('Tous les parametres varies ENSEMBLE')
+    ax[1].legend(fontsize=8)
+    ax[1].grid(alpha=.3)
+
+    fig.tight_layout()
+    out = os.path.join(_HERE, 'uncertainty.png')
+    fig.savefig(out, dpi=130)
+    print(f'figure  : {out}')
+
+
 if __name__ == '__main__':
+    if '--plot' in sys.argv:
+        figure(os.path.join(_HERE, 'uncertainty_mc.npz'))
+        sys.exit(0)
     t0 = time.time()
     print(__doc__.split('Duree')[0])
     print('=' * 76)
@@ -255,8 +317,17 @@ if __name__ == '__main__':
     print(f'   marge libre nominale : {base["libre"]:.4f} mm ; '
           f'P(LQG sous cette valeur) = '
           f'{100*float((vl < base["libre"]).mean()):.1f} %')
-    np.savez(os.path.join(_HERE, 'uncertainty_mc.npz'),
+    npz = os.path.join(_HERE, 'uncertainty_mc.npz')
+    np.savez(npz,
              **{f'blim_{a}': summary[a] for a in ARCH},
-             base=np.array([base[a] for a in ARCH]))
-    print(f'\ndonnees : {os.path.join(_HERE, "uncertainty_mc.npz")}')
+             base=np.array([base[a] for a in ARCH]),
+             arch=np.array(ARCH),
+             oat_names=np.array([u[0] for u in UNCERT]),
+             oat_lo=np.array([[R[(u[0], 'bas', a)] for a in ARCH]
+                              for u in UNCERT]),
+             oat_hi=np.array([[R[(u[0], 'haut', a)] for a in ARCH]
+                              for u in UNCERT]),
+             oat_bounds=np.array([[u[1], u[2]] for u in UNCERT]))
+    print(f'\ndonnees : {npz}')
+    figure(npz)
     print(f'termine en {time.time()-t0:.0f} s')

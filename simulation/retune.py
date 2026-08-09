@@ -92,6 +92,24 @@ de perturbations le candidat encaisse ; la recherche a progresse 4 -> 5 -> 6 et
 a franchi le seuil de faisabilite a la 12e iteration. Le critere n'a pas change,
 seule sa lisibilite par l'optimiseur.
 
+ET L'ESO, LUI, N'A RIEN TROUVE. Meme recherche, memes contraintes, meme ordre
+de PERTURB, 20 particules x 20 iterations : le meilleur reste la GRAINE, c.-a-d.
+le reglage deja publie, a 4 sur 6 (echecs kc x2.9 et H x2.00). Le score n'a pas
+bouge d'un millieme du premier au vingtieme tour.
+
+    architecture   reglage retenu        pire cas nominal   perturbations
+    LQG modal      nouveau (iteration 12)    0.3241 mm         6 sur 6
+    ESO propose    la graine, inchangee      0.2561 mm         4 sur 6
+
+Ce n'est pas un echec de la recherche, c'est un RESULTAT, et il contredit
+l'attente naturelle : la memoire de l'article donnerait l'avantage a
+l'architecture la plus riche. Sous le critere corrige c'est l'inverse -- le
+LQG, plus pauvre, domine sur les deux colonnes a la fois. Deux lectures
+restent ouvertes et ce script ne les separe pas : ou l'ESO n'a pas de reglage
+robuste dans les bornes de BOUNDS, ou son espace a sept dimensions est trop
+creux pour que 400 evaluations le trouvent. La seconde se testerait en
+elargissant la recherche ; la premiere, en elargissant les bornes.
+
 Methode. PSO, meme famille que l'optimisation d'origine. Le reglage courant est
 injecte comme particule 0, ce qui garantit de ne pas faire pire que l'existant.
 Les particules sont evaluees en parallele (une par coeur).

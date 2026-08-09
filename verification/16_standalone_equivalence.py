@@ -274,6 +274,38 @@ print(f"   occupation     : {pf.notch_occupancy()}  (identifie : "
 assert pf.notch_occupancy() != (1, 1, 1, 1), \
     "la version EF devrait justement NE PAS reproduire la mesure"
 
+# ---------------------------------------------------------------- 7. contrat
+print("\n7. CONTRAT D'INTERFACE (proprietes de milling_plant seul)")
+
+# le squelette documente doit tourner tel quel et ne rien commander
+dt_c, tau_c = plant.sampling(4900)
+r0 = plant.run(None, rpm=4900, ap=0.05e-3)
+rt = plant.run(MP.ControllerTemplate(dt_c, tau_c), rpm=4900, ap=0.05e-3)
+print(f"   ControllerTemplate : {rt['peak_u']:.3f} V, RMS identique a la "
+      f"boucle ouverte : {abs(r0['rms_um'] - rt['rms_um']) < 1e-12}")
+assert rt['peak_u'] == 0.0 and abs(r0['rms_um'] - rt['rms_um']) < 1e-12
+
+# la saturation est appliquee PAR LE SIMULATEUR, quel que soit le correcteur
+rs = plant.run(lambda y: -1e12*y, rpm=4900, ap=0.05e-3)
+print(f"   gain enorme -> crete appliquee {rs['peak_u']:.1f} V "
+      f"(V_MAX = {MP.V_MAX:.0f})")
+assert rs['peak_u'] <= MP.V_MAX + 1e-9
+
+# u_prev rendu au correcteur est la tension SATUREE, pas la commande brute :
+# un observateur doit voir ce qui a REELLEMENT ete applique
+vus = []
+
+
+def _espion(y, u_prev):
+    vus.append(u_prev)
+    return -1e12*y
+
+
+plant.run(_espion, rpm=4900, ap=0.05e-3)
+print(f"   max |u_prev| vu par le correcteur : {max(map(abs, vus)):.1f} V")
+assert max(map(abs, vus)) <= MP.V_MAX + 1e-9, \
+    "u_prev doit etre la tension saturee, sinon un observateur diverge"
+
 print('\n' + '=' * 74)
 print('milling_plant.py est numeriquement identique a la base a cinq fichiers.')
 print('TOUTES LES VERIFICATIONS PASSENT.')

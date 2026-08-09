@@ -72,4 +72,4 @@ if __name__ == "__main__":
         print(f"   avec k = 5                  : {G1[i]:8.2f} um/N   "
               f"({20*np.log10(G1[i]/G0[i]):+.1f} dB)")
 
-    print("\nreperes a battre : limite 0.0605 mm, pic 481 um/N, J = 11.14 sans controle")
+    print("\nreperes a battre : limite 0.0605 mm, pic 488 um/N, J = 11.15 sans controle")

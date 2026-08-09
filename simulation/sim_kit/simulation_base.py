@@ -17,13 +17,13 @@ la FORME de la reponse, PAS son niveau : voir la mise en garde plus bas.
 
 CE QUI EST VALIDE
   * cinq resonances mesurees   : 536.4 / 1071.8 / 2778.6 / 3358.7 / 4122.6 Hz
-    predites par le modele EF  : +0.9 / +2.0 / -1.5 / +1.2 / +1.4 %
+    predites par le modele EF  : +0.4 / +1.5 / -1.9 / +0.8 / +0.7 %
   * quatre antiresonances mesurees : 734 / 2161 / 3001 / 3805 Hz
-    modele a cinq modes calibre    : 732 / 2122 / 3006 / 3943 Hz
-    ecarts                         : +0.3 / -1.8 / +0.2 / +3.6 %
+    modele a cinq modes calibre    : 731 / 2123 / 3009 / 3938 Hz
+    ecarts                         : +0.5 / -1.8 / +0.3 / +3.5 %
     (comparaison faite sur la reception AU POINT DE FRAPPE, residus D_obs^2 :
      c'est la grandeur mesuree en Fig. 12a, marteau et capteur au meme coin.
-     Un modele a TROIS modes ne donne que deux antiresonances -- 742 / 2408 Hz,
+     Un modele a TROIS modes ne donne que deux antiresonances -- 741 / 2407 Hz,
      dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
   * les deux premiers modes sont QUASI A EGALITE pour la criticite : par la
     theorie moyennee d'ordre 0 sur ce meme modele, mode 1 seul -> 0.0495 mm,
@@ -40,15 +40,15 @@ CE QUI EST VALIDE
 CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
   Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
   (1 um/N), vaut 43.8 um/N. Une plaque de Kirchhoff aux dimensions du Tableau 1
-  donne 6.90 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.36.
+  donne 6.92 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.34.
   Ce n'est pas une erreur du modele. Les memes matrices K et M reproduisent les
   CINQ frequences mesurees a 2 % pres ; or la souplesse est K^-1. Une raideur
-  6.36 fois trop faible donnerait f1 = 540/sqrt(6.36) = 214 Hz, pas 540 Hz. En
+  6.34 fois trop faible donnerait f1 = 540/sqrt(6.34) = 214 Hz, pas 540 Hz. En
   termes modaux, 43.8 um/N exigerait D_obs[0]^2 = 504 alors que la normalisation
   en masse du premier mode plafonne ce carre vers 45 : un facteur 11 sur une
   quantite qui n'a aucune liberte. De plus les propres lobes de stabilite de
   l'article (Fig. 13, 0.03-0.05 mm) s'accordent avec la valeur RAIDE ; une
-  plaque 6.36 fois plus souple donnerait ~0.008 mm.
+  plaque 6.34 fois plus souple donnerait ~0.008 mm.
 
   Conclusion : l'echelle en dB de la Fig. 12 n'est pas exploitable. Comme
   H_Pe ne peut se calibrer que par le rapport des deux courbes, LE NIVEAU DE
@@ -79,6 +79,11 @@ leve une exception si un ecart depasse la tolerance.
   * amortissements modaux mesures (Tableau 4) : 0.31 / 0.17 / 0.27 / 0.56 / 0.35 %.
   * patch QDA60-20-0.7 dans le coin inferieur gauche, capteur au coin superieur
     droit oppose.
+  * patch COLLE, pas soude : couche d'epoxy G_adh = 1 GPa, t_adh = 30 um, d'ou
+    1/Gamma = 0.874 mm et un rendement de transfert eta = 0.886 qui reduit a la
+    fois le raidissement composite (58.3 % -> 51.7 %) et H_Pe (-11.4 %). Ni
+    G_adh ni t_adh ne sont donnes par l'article ; les annuler restitue le
+    collage parfait supposé auparavant.
 
 --------------------------------------------------------------------------------
 3. INTERFACE CORRECTEUR
@@ -142,8 +147,16 @@ F_MEASURED = [536.4, 1071.8, 2778.6, 3358.7, 4122.6]   # Hz, numerisees
 # de commande a 3359 Hz.
 ZETA_MODES = [0.0031, 0.0017, 0.0027, 0.0056, 0.0035]
 
+# Le patch n'est pas soude a la plaque : il est COLLE. La couche de colle ne
+# transmet le cisaillement que sur ~1/Gamma depuis chaque bord, d'ou un
+# rendement de transfert eta < 1 qui reduit A LA FOIS le raidissement composite
+# et le couplage piezoelectrique (plate_model.shear_lag_efficiency, theorie de
+# Crawley & de Luis 1987). Ni G_adh ni t_adh ne sont donnes par l'article :
+# valeurs d'un epoxy structural courant. Les mettre a None restitue le collage
+# parfait suppose auparavant.
 PATCH = dict(x1=0.0, x2=0.020, z1=0.0, z2=0.060,
-             d31=175e-12, thickness=0.7e-3, E=63e9, nu=0.35)
+             d31=175e-12, thickness=0.7e-3, E=63e9, nu=0.35,
+             G_adh=1.0e9, t_adh=30e-6)
 SENSOR_XZ = (0.100, 0.080)                            # coin superieur droit
 V_MAX = 150.0                                         # V, borne amplificateur
 
@@ -222,7 +235,8 @@ class SimBase:
         p.precompute_Dp(zp_pos=PLATE_H - 0.15e-3, n_pos=2001)
         p.set_observation(*SENSOR_XZ)
         p.add_piezo_patch(patch['x1'], patch['x2'], patch['z1'], patch['z2'],
-                          patch['d31'], patch['thickness'], patch['E'], patch['nu'])
+                          patch['d31'], patch['thickness'], patch['E'], patch['nu'],
+                          G_adh=patch.get('G_adh'), t_adh=patch.get('t_adh'))
         if gain_H != 1.0:
             p.H_Pe_modal = np.asarray(p.H_Pe_modal, float)*gain_H
         p.calibrate_frequencies(F_MEASURED)

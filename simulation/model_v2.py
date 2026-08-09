@@ -7,6 +7,12 @@ Deux corrections par rapport a sim_kit/simulation_base.py :
      (60 mm selon x, 20 mm selon z), du meme cote que le capteur (100, 80) ;
   2. amortissements modaux MESURES par Du et al. (Tableau 4).
 
+Le patch est par ailleurs COLLE et non soude (voir PATCH dans
+simulation_base.py) : le rendement de transfert eta = 0.886 reduit le
+raidissement composite et H_Pe dans les memes proportions. Cela ne change ni
+l'occupation des creux ni les frequences des zeros -- eta est un scalaire, il
+se simplifie dans les rapports de residus qui fixent les zeros.
+
 --------------------------------------------------------------------------
 POURQUOI CETTE POSITION DE PATCH — l'argument reel
 --------------------------------------------------------------------------
@@ -46,8 +52,8 @@ CE QUE CETTE CONFIGURATION NE REPRODUIT PAS — a savoir avant de s'en servir
 * Les FREQUENCES des creux sont fausses au milieu de la bande :
 
       mesure : 788    1493    3609 Hz
-      modele : 818    2655    3750 Hz
-      ecart  : +3.8 %  +77.8 %  +3.9 %
+      modele : 819    2654    3755 Hz
+      ecart  : +3.9 %  +77.7 %  +4.0 %
 
   Le premier et le dernier sont bons a 4 % pres, le deuxieme est hors de
   portee : aucune des quatre configurations, ni aucun decalage de patch ou de
@@ -55,27 +61,42 @@ CE QUE CETTE CONFIGURATION NE REPRODUIT PAS — a savoir avant de s'en servir
   de residus |r2/r1| ~ 0.95 alors que le modele donne 1.52. C'est une limite
   du modele de couplage, pas du choix de position.
 
-* Le premier mode monte a 572.3 Hz contre 540 Hz mesures (+6.0 %). Ce n'est
-  PAS un argument contre cette position : `_add_patch_structure` suppose un
-  collage PARFAIT, alors que la couche de colle ne transmet le cisaillement
-  que partiellement. Les deux bornes physiques encadrent la mesure dans les
-  deux orientations :
+* Le premier mode reste a 567.5 Hz contre 540 Hz mesures (+5.1 %), et C'EST UN
+  PROBLEME OUVERT. On a longtemps invoque ici le collage imparfait pour
+  l'expliquer ; la couche de colle est maintenant MODELISEE (shear lag,
+  plate_model.shear_lag_efficiency) et cet argument NE TIENT PAS :
 
-      sans raidissement            : 521.1 Hz
-      horizontal, collage parfait  : 572.3 Hz     mesure : 540.0 Hz
-      vertical,   collage parfait  : 541.1 Hz
+      sans raidissement                        : 521.1 Hz
+      horizontal, collage parfait              : 572.3 Hz
+      horizontal, epoxy G=1 GPa / t=30 um      : 567.5 Hz   mesure : 540.0 Hz
+      vertical,   epoxy G=1 GPa / t=30 um      : 538.3 Hz
 
-  Le premier mode ne discrimine donc pas l'orientation ; il ne fait que fixer
-  une raideur de collage inconnue. Que la configuration verticale tombe tout
-  pres de 540 Hz est une coincidence : elle compense un modele de plaque nue
-  deja 3.5 % trop souple.
+  Une colle structurale donne eta = 0.886 : elle ne retire que 0.9 point sur
+  les 6. Fermer l'ecart demanderait eta = 0.359, soit une colle ~500 fois plus
+  souple qu'un epoxy -- un film, pas un joint colle.
+
+  Le conflit est donc frontal et il ne se resorbe pas :
+    - un balayage de 62 positions x 2 orientations ne trouve QUE DEUX
+      positions reproduisant l'occupation (1,1,0,1), toutes deux horizontales
+      en pied de plaque (x1 = 30 et 40 mm), a f1 = 570.5 et 567.5 Hz ;
+    - les positions qui donnent f1 = 540 Hz a 0.2 % pres sont TOUTES verticales,
+      et AUCUNE ne reproduit l'occupation ;
+    - la ponderation anisotrope de l'Eq. (14) de l'article n'y change rien non
+      plus (teste sur rho de 0 a 1).
+
+  On garde donc cette position sur le critere de l'occupation, parce que c'est
+  une signature de SIGNE qu'aucun reglage ne peut fabriquer, alors que l'ecart
+  en frequence porte sur une amplitude que le modele de raidissement smeared
+  peut surestimer. Mais c'est un choix argumente, pas une preuve : les deux
+  criteres se contredisent, et la contradiction est documentee plutot
+  qu'enterree.
 
 * Le NIVEAU absolu de H_Pe reste non valide : la Fig. 12(a) implique une
-  souplesse statique 6.36 fois celle d'une plaque de Kirchhoff aux dimensions
+  souplesse statique 6.34 fois celle d'une plaque de Kirchhoff aux dimensions
   du Tableau 1, et contredit les propres lobes de stabilite de l'article
   (Fig. 13). Voir VERIFICATION.md, point F9.
 
-||H|| = 0.5541 (x1.87 vs la base v1) : plus d'autorite actionneur.
+||H|| = 0.4924 (x1.85 vs la base v1) : plus d'autorite actionneur.
 Frequences recalibrees identiques (erreur <= 0.67 % vs mesures Du).
 
 --------------------------------------------------------------------------

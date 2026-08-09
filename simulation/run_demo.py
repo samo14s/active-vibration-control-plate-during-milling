@@ -9,18 +9,20 @@ Usage :
 Base : plaque encastree-libre 5 modes calibree sur Du et al. (IJMS 2024),
 avec les DEUX corrections validees contre la Fig. 12 et le Tableau 4 :
 patch piezo inferieur droit horizontal, et amortissements modaux mesures
-(0.31 / 0.17 / 0.27 / 0.56 / 0.35 %).
+(0.31 / 0.17 / 0.27 / 0.56 / 0.35 %). Le patch y est COLLE et non soude
+(shear lag, eta = 0.886) : l'autorite actionneur est 11 % plus faible qu'avec
+l'hypothese de collage parfait utilisee auparavant.
 
 Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
 
                      3000    4200    4900    6000    7200   pire cas
-    boucle ouverte  0.0598  0.0579  0.0462  0.0929  0.2095   0.0462
-    LQG modal       0.5845  0.7109  0.6312  0.5457  0.8974   0.5457
-    ESO propose     0.5632  0.6681  0.6137  0.5457  0.8469   0.5457
+    boucle ouverte  0.0598  0.0598  0.0462  0.0929  0.2114   0.0462
+    LQG modal       0.5612  0.6720  0.6020  0.5262  0.8838   0.5262
+    ESO propose     0.5398  0.6351  0.5845  0.5262  0.8255   0.5262
 
 c.-a-d. performance SATUREE : trois architectures de richesse croissante
 atteignent le meme plafond — les pires cas du LQG et de l'ESO sont ici
-IDENTIQUES (0.5457 mm, tous deux a 6000 tr/min). C'est le resultat central
+IDENTIQUES (0.5262 mm, tous deux a 6000 tr/min). C'est le resultat central
 de l'etude.
 
 Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
@@ -38,6 +40,10 @@ directement comparables a la reference de la base.
     x0.50         0.0462        0.3183 (-42 %)   0.3144 (-42 %)
     x1.00         0.0462        0.5457           0.5457
     x2.00         0.0462        0.4582 (-16 %)   0.4796 (-12 %)
+
+(balayage mesure AVANT la mise en place de la couche de colle ; les ordres de
+grandeur et le caractere non monotone sont inchanges, le gain nominal a
+simplement baisse de 11 %.)
 
 La boucle ouverte ne bouge pas d'un chiffre : H_Pe n'entre pas dans le modele
 sans commande. En boucle fermee le pire cas perd 42 % a gain divise par deux ET

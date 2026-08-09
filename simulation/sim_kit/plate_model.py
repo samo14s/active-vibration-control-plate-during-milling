@@ -17,6 +17,54 @@ from kirchhoff_q4 import (
 )
 
 
+def shear_lag_efficiency(hx: float, hz: float,
+                         E_b: float, nu_b: float, h_b: float,
+                         E_p: float, nu_p: float, h_p: float,
+                         G_adh: float, t_adh: float, alpha: float = 6.0):
+    """
+    Rendement de transfert de deformation d'un patch colle — theorie du
+    shear lag, Crawley & de Luis, AIAA J. 25(10):1373-1385, 1987.
+
+    Le patch n'est pas soude a la plaque : il lui est colle par une couche
+    d'epaisseur t_adh et de module de cisaillement G_adh. Cette couche ne
+    transmet le cisaillement que sur une longueur caracteristique 1/Gamma
+    depuis chaque bord, si bien que la deformation dans le patch vaut
+
+        eps(x) = eps_parfait * [1 - cosh(Gamma x)/cosh(Gamma l)]
+
+    et non eps_parfait partout. Avec
+
+        Gamma^2 = (G_adh/t_adh) * (1/(E_p' h_p) + alpha/(E_b' h_b))
+
+    ou E' = E/(1-nu^2) et alpha = 6 pour la flexion. La moyenne de eps sur le
+    patch, rapportee au cas soude, vaut
+
+        eta(Gamma l) = 1 - tanh(Gamma l)/(Gamma l)
+
+    -> 1 quand Gamma l >> 1 (collage parfait), -> (Gamma l)^2/3 quand la colle
+    devient molle. Pour un patch rectangulaire on prend la forme separable
+    eta_2D = eta(Gamma hx) * eta(Gamma hz) sur les DEMI-dimensions : c'est une
+    approximation (la solution 2D exacte n'est pas separable), acceptable ici
+    car 1/Gamma est petit devant le patch.
+
+    Parameters
+    ----------
+    hx, hz : DEMI-longueurs du patch selon x et z [m]
+    h_b, h_p : epaisseurs plaque et patch [m]
+    G_adh, t_adh : module de cisaillement [Pa] et epaisseur [m] de la colle
+
+    Returns
+    -------
+    (eta, Gamma) : rendement dans [0, 1] et parametre de shear lag [1/m]
+    """
+    Eb = E_b/(1.0 - nu_b**2)
+    Ep = E_p/(1.0 - nu_p**2)
+    Gamma = np.sqrt((G_adh/t_adh)*(1.0/(Ep*h_p) + alpha/(Eb*h_b)))
+    def _eta(x):
+        return 1.0 - np.tanh(x)/x if x > 1e-12 else 0.0
+    return float(_eta(Gamma*hx)*_eta(Gamma*hz)), float(Gamma)
+
+
 class PlateModel:
     """
     Modèle complet de la plaque encastrée pour fraisage périphérique.
@@ -179,7 +227,9 @@ class PlateModel:
                         d31: float, h_Pa: float,
                         E_Pe: float, nu_Pe: float,
                         rho_Pe: float = 7450.0,
-                        structural: bool = True):
+                        structural: bool = True,
+                        G_adh: float = None, t_adh: float = None,
+                        alpha_lag: float = 6.0):
         """
         Ajoute un patch piézoélectrique :
 
@@ -201,14 +251,41 @@ class PlateModel:
               m_piezo = -E_Pe * d31 * (bp + h_Pa) / (2*(1 - nu_Pe))
               H_Pe(x) = m_piezo * grad2 N(x) intégré sur le patch
 
+        3. Couche de colle (G_adh, t_adh). Sans elle, le patch est suppose
+           SOUDE a la plaque : transfert de deformation parfait. Une colle
+           reelle ne transmet le cisaillement que sur ~1/Gamma depuis chaque
+           bord, d'ou un rendement eta < 1 (shear_lag_efficiency, theorie de
+           Crawley & de Luis). Ce MEME eta reduit deux choses a la fois :
+             - la part COMPOSITE du raidissement (le patch ne peut porter sa
+               contrainte axiale decalee que si la colle la transmet) ; sa
+               flexion propre E_p h_p^3/12, elle, ne demande aucun collage et
+               n'est pas reduite ;
+             - le couplage piezoelectrique H_Pe, dans les memes proportions.
+           Un seul parametre physique, deux effets : ce ne sont pas deux
+           coefficients d'ajustement independants.
+           G_adh = None (defaut) restitue le collage parfait.
+
         Si precompute_Dp() / set_observation() ont déjà été appelés, ils
         sont automatiquement relancés avec les nouveaux modes.
         """
+        if G_adh is None or t_adh is None:
+            eta_bond, Gamma_bond = 1.0, np.inf
+        else:
+            eta_bond, Gamma_bond = shear_lag_efficiency(
+                0.5*(xP2 - xP1), 0.5*(zP2 - zP1),
+                self.E, self.nu, self.bp, E_Pe, nu_Pe, h_Pa,
+                G_adh, t_adh, alpha_lag)
+        self.eta_bond = eta_bond
+        self.Gamma_bond = Gamma_bond
+        if self.verbose and np.isfinite(Gamma_bond):
+            print(f"[PlateModel] colle : 1/Gamma = {1e3/Gamma_bond:.3f} mm, "
+                  f"rendement de transfert eta = {eta_bond:.4f}")
+
         if structural:
             self._add_patch_structure(xP1, xP2, zP1, zP2,
-                                      h_Pa, E_Pe, nu_Pe, rho_Pe)
+                                      h_Pa, E_Pe, nu_Pe, rho_Pe, eta_bond)
 
-        m_piezo = -E_Pe * d31 * (self.bp + h_Pa) / (2 * (1 - nu_Pe))
+        m_piezo = -eta_bond * E_Pe * d31 * (self.bp + h_Pa) / (2 * (1 - nu_Pe))
         g_lap = laplace_n_patch(xP1, xP2, zP1, zP2,
                                 self.N1, self.N2,
                                 self.lex, self.ley,
@@ -224,7 +301,7 @@ class PlateModel:
 
     # ---------------------------------------------------------------
     def _add_patch_structure(self, xP1, xP2, zP1, zP2,
-                             h_Pa, E_Pe, nu_Pe, rho_Pe):
+                             h_Pa, E_Pe, nu_Pe, rho_Pe, eta_bond=1.0):
         """Ajoute dK, dM du patch aux matrices globales et refait les modes."""
         from scipy.sparse import csr_matrix
 
@@ -237,7 +314,13 @@ class PlateModel:
         D_plate = E1 * h1**3 / 12
         D_comp = (E1 * (h1**3/12 + h1*(z1 - zbar)**2)
                   + E2 * (h2**3/12 + h2*(z2 - zbar)**2))
-        rK = D_comp / D_plate - 1.0        # surcroît de raideur relatif
+        # Le patch apporte sa flexion propre SANS aucun collage ; l'effet
+        # composite (plan neutre decale) demande, lui, que la colle transmette
+        # la contrainte axiale. Seul ce second terme est reduit par eta_bond.
+        D_free = E2 * h2**3 / 12
+        rK_free = D_free / D_plate
+        rK_perfect = D_comp / D_plate - 1.0
+        rK = rK_free + eta_bond*(rK_perfect - rK_free)
         rM = (rho_Pe * h_Pa) / (self.rho * self.bp)   # surcroît de masse relatif
 
         Ke = stiffness_matrix_K(self.E, self.nu, self.lex, self.ley, self.bp)
@@ -284,7 +367,8 @@ class PlateModel:
             print(f"[PlateModel] patch structurel : {n_cov} éléments touchés, "
                   f"aire couverte {area_cov*1e6:.2f} mm2 "
                   f"(exacte {a_exact*1e6:.2f}, ecart {area_cov/a_exact-1:+.2%}), "
-                  f"dD/D = {rK*100:.1f} %, dm/m = {rM*100:.1f} % (local)")
+                  f"dD/D = {rK*100:.1f} % (collage parfait {rK_perfect*100:.1f} %, "
+                  f"decolle {rK_free*100:.1f} %), dm/m = {rM*100:.1f} % (local)")
 
         # nouvelle base modale
         self._apply_bc()

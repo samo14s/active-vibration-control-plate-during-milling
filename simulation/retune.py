@@ -5,10 +5,19 @@ Pourquoi. Les reglages X_LQG / X_ESO de run_demo.py avaient ete obtenus sur une
 geometrie de patch fausse (horizontale, coin inferieur droit). Depuis, la
 geometrie a ete corrigee (verticale, coin inferieur gauche, confirmee par la
 Fig. 11 de l'article), la couche de colle et le couplage membrane-flexion ont
-ete modelises, et l'autorite actionneur a baisse d'environ 21 % au total. Les
-comparer en l'etat mesure ce que CES reglages-la donnent sur un autre modele,
-pas ce que chaque architecture peut atteindre : la comparaison d'architectures
-n'a de sens qu'apres re-optimisation de chacune sur la meme base.
+ete modelises, et l'autorite actionneur a baisse d'environ 21 % au total.
+
+Puis, plus radicalement, la REPARTITION MODALE du couplage a ete identifiee sur
+la Fig. 12(b) (constante H_IDENT) : elle etait structurellement fausse, le
+modele elements finis ne produisant qu'un seul des quatre creux mesures. Un
+correcteur regle sur l'ancienne repartition n'est plus regle du tout — le
+reglage X_LQG d'origine SATURE meme l'amplificateur a toutes les vitesses sur la
+base corrigee, donc il echoue d'emblee la contrainte ci-dessous.
+
+Les comparer en l'etat mesure ce que CES reglages-la donnent sur un autre
+modele, pas ce que chaque architecture peut atteindre : la comparaison
+d'architectures n'a de sens qu'apres re-optimisation de chacune sur la meme
+base.
 
 Critere. On maximise la LIMITE DE PASSE DU PIRE CAS sur les cinq vitesses,
 exactement la grandeur que run_demo publie :

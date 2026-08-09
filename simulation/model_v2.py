@@ -25,22 +25,37 @@ couche de colle modelisee :
       horizontal (ex-"v2")   : f1 = 567.5 Hz                         (+5.1 %)
 
 --------------------------------------------------------------------------
-CE QUE CELA APPREND SUR LE MODELE DE COUPLAGE
+CE QUE CELA A APPRIS SUR LE MODELE DE COUPLAGE -- ET COMMENT C'EST CORRIGE
 --------------------------------------------------------------------------
-Avec la bonne geometrie, l'occupation calculee est (0, 0, 1, 0) et non
-(1, 1, 0, 1). Ce desaccord ne dit donc RIEN sur la position du patch : il
-mesure un defaut de H_Pe. Il rejoint le creux mesure a 1493 Hz, que le modele
-place a 2827 Hz — meme cause, un couplage dont la REPARTITION MODALE est
-fausse.
+Avec la bonne geometrie, l'occupation calculee par les elements finis est
+(0, 0, 1, 0). Ce desaccord ne disait donc RIEN sur la position du patch : il
+mesurait un defaut de H_Pe, dont la REPARTITION MODALE etait fausse.
 
-    grandeur                     modele        mesure (Fig. 12b)
-    occupation des intervalles   (0, 0, 1, 0)  (1, 1, 0, 1)
-    creux en bande               2827 Hz       788 / 1493 / 3609 Hz
+    grandeur                     EF            mesure (Fig. 12b)
+    occupation des intervalles   (0, 0, 1, 0)  (1, 1, 1, 1)
+    creux en bande               2825 Hz       788 / 1493 / 2913 / 3609 Hz
+    ecart courbe a courbe        14.3 dB RMS   --
 
-Corriger cela demande un terme DEPENDANT DU MODE dans H_Pe. Un facteur
-scalaire — gain actionneur, rendement de collage — ne peut rien y faire : il se
-simplifie dans les rapports de residus qui fixent les zeros. Ce chemin-la est
-ferme, avec preuve (VERIFICATION.md, section 5).
+Corriger cela demandait un terme DEPENDANT DU MODE : un facteur scalaire — gain
+actionneur, rendement de collage — se simplifie dans les rapports de residus
+qui fixent les zeros. C'est desormais fait, non pas en inventant un mecanisme,
+mais en IDENTIFIANT la repartition sur la Fig. 12(b) elle-meme : ses poles sont
+les frequences mesurees, ses zeros les creux mesures, et poles + zeros fixent
+les residus a une constante pres. Voir simulation_base.H_IDENT et
+verification/14_coupling_identification.py. La base rend maintenant
+
+    occupation (1, 1, 1, 1), creux 788 / 1495 / 2894 / 3614 Hz, 5.5 dB RMS.
+
+RECTIFICATION. Ce fichier a longtemps annonce NOTCH_OCCUPANCY = (1, 1, 0, 1),
+d'apres les trois creux PROFONDS de la Fig. 12(b). C'etait une erreur de
+lecture : la numerisation fournie ne compte que 76 points sur 0-5000 Hz, soit
+~66 Hz de pas, et elle rate le fond du 4e creux, qu'elle rend comme un simple
+epaulement a +11.9 dB vers 2913 Hz. Un ajustement libre des cinq residus (16
+motifs de signe x 60 graines) tranche : la lecture a quatre creux tombe dans la
+region de confiance sur ses cinq composantes, celle a trois creux en sort sur
+quatre sur cinq (10.0 dB RMS contre 5.5). La courbe THEORIQUE de l'article,
+tracee sur la meme figure, montre elle aussi quatre creux — elle etait d'accord
+avec sa propre mesure, et c'est notre lecture qui ne l'etait pas.
 
 --------------------------------------------------------------------------
 POURQUOI CE MODULE EXISTE ENCORE
@@ -65,10 +80,11 @@ PATCH_V2 = dict(SB.PATCH)
 # conserve pour compatibilite d'appel.
 ZETA_DU = list(SB.ZETA_MODES)
 
-# Fig. 12(b) numerisee : creux profonds mesures et leur repartition par
-# intervalle inter-mode. LE MODELE NE LA REPRODUIT PAS — voir l'en-tete.
-NOTCH_HZ = (788.0, 1493.0, 3609.0)
-NOTCH_OCCUPANCY = (1, 1, 0, 1)
+# Fig. 12(b) numerisee : creux mesures et leur repartition par intervalle
+# inter-mode. Le 4e (2913 Hz) est un epaulement dans la numerisation fournie,
+# pas un creux franc — voir la RECTIFICATION dans l'en-tete.
+NOTCH_HZ = (788.0, 1493.0, 2913.0, 3609.0)
+NOTCH_OCCUPANCY = (1, 1, 1, 1)
 
 
 def antiresonances(plate):
@@ -109,9 +125,11 @@ def notch_occupancy(plate):
 def report_notch_signature(plate, verbose=True):
     """Compare la signature calculee a la mesure. NE LEVE PAS d'exception.
 
-    Le desaccord est un ecart CONNU du modele de couplage, documente dans
-    l'en-tete ; en faire une assertion reviendrait a le maquiller en contrainte
-    de conception — ce qui avait justement conduit a deplacer le patch a tort.
+    Avec coupling='ident' (defaut) la signature est conforme ; avec
+    coupling='fem' elle ne l'est pas, et c'est justement ce que mesure ce
+    diagnostic. En faire une assertion reviendrait a maquiller un ecart de
+    modele en contrainte de conception — ce qui avait conduit a deplacer le
+    patch a tort.
     """
     occ = notch_occupancy(plate)
     if verbose:
@@ -144,5 +162,7 @@ if __name__ == "__main__":
     print(f"\n||H|| = {np.linalg.norm(H):.4f} N/V")
     print("signes H*D_obs :", np.sign(H * D).astype(int))
     print(f"eta (colle)    : {p.eta_bond:.4f}")
-    print("\nLa repartition modale de H_Pe est fausse : c'est le seul ecart")
-    print("structurel qui subsiste. Voir VERIFICATION.md, sections F4 et 5.")
+    print(f"couplage       : {sim.coupling}")
+    print("\nLa repartition modale de H_Pe est desormais identifiee sur la")
+    print("Fig. 12(b) ; son NIVEAU reste non valide (F9) et se balaie par")
+    print("gain_H. Voir VERIFICATION.md, sections F4 et 10.")

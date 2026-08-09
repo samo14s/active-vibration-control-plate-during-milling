@@ -36,6 +36,15 @@ CE QUI EST VALIDE
         sont les deux plus grandes raies.
     La valeur de 1135 Hz publiee correspond au mode que la theorie lineaire de
     ce modele designe elle aussi : elle n'est pas refutable ici.
+  * la REPARTITION MODALE du couplage piezoelectrique, par les quatre creux de
+    la Fig. 12(b) -- le transfert tension -> capteur :
+      mesures : 788 / 1493 / 2913 / 3609 Hz
+      modele  : 787 / 1495 / 2907 / 3613 Hz   (ecart max 0.19 %)
+    Elle n'est pas PREDITE par les elements finis, elle y est IDENTIFIEE : le
+    H_Pe elements finis ne produit qu'un seul creux, a 2818 Hz, et s'ecarte de
+    14.3 dB RMS de la Fig. 12(b) contre 5.7 dB pour la version identifiee.
+    Voir la constante H_IDENT plus bas et verification/14. SimBase(coupling=
+    'fem') restitue la repartition elements finis pour comparaison.
 
 CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
   Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
@@ -52,8 +61,7 @@ CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
 
   Conclusion : l'echelle en dB de la Fig. 12 n'est pas exploitable. Comme
   H_Pe ne peut se calibrer que par le rapport des deux courbes, LE NIVEAU DE
-  H_Pe RESTE NON VALIDE. Seule sa FORME l'est (repartition des creux, cf.
-  model_v2.check_patch_position). Toute conclusion de performance en boucle
+  H_Pe RESTE NON VALIDE. Toute conclusion de performance en boucle
   fermee -- limite de passe atteinte, tension necessaire -- herite donc de
   cette incertitude, et doit etre accompagnee d'un balayage :
 
@@ -160,6 +168,42 @@ PATCH = dict(x1=0.0, x2=0.020, z1=0.0, z2=0.060,
 SENSOR_XZ = (0.100, 0.080)                            # coin superieur droit
 V_MAX = 150.0                                         # V, borne amplificateur
 
+# ----------------------------------------------------------------------------
+# Repartition modale du couplage piezoelectrique, IDENTIFIEE sur la Fig. 12(b).
+#
+# H_Pe etait la seule grandeur modale encore prise telle quelle des elements
+# finis : les frequences sont recalees sur la mesure (F_MEASURED), les
+# amortissements sont mesures (Tableau 4), et D_obs est valide par la Fig. 12(a)
+# -- une FRF au point d'impact, dont les residus valent D_i^2 -- a 30 % pres sur
+# les cinq modes. H_Pe, lui, n'avait jamais ete confronte a une mesure, et ne la
+# reproduisait pas :
+#
+#     creux de la Fig. 12(b)   mesure : 788 / 1493 / 2913 / 3609 Hz
+#                              EF     : 2825 Hz, et lui seul
+#     ecart courbe a courbe    EF     : 14.3 dB RMS
+#
+# La Fig. 12(b) donne pourtant exactement ce qu'il faut. G_b(w) = somme_i
+# r_i/(w_i^2 - w^2 + ...) avec r_i = D_obs,i * H_Pe,i : ses poles sont les
+# frequences mesurees, ses zeros sont les creux mesures, et poles + zeros
+# determinent les r_i A UNE CONSTANTE PRES. Les valeurs ci-dessous sont ces
+# r_i/r_1, calcules exactement (racines du polynome), pas ajustes :
+#
+#     r_i/r_1 identifie      1   0.959   1.646   3.728   10.111  -> 5.7 dB RMS
+#     r_i/r_1 elements finis 1  -1.538   0.164   3.625   -4.035  -> 14.3 dB
+#
+# Ils tombent dans la region de confiance d'un ajustement LIBRE des cinq residus
+# (16 motifs de signe x 60 graines, toutes les solutions a moins de 0.5 dB du
+# meilleur) sur leurs cinq composantes ; la lecture concurrente, qui ne compte
+# que les trois creux profonds et rejette le 4e hors bande, en sort sur quatre
+# composantes sur cinq. Voir verification/14_coupling_identification.py.
+#
+# Le NIVEAU n'est PAS identifie (defaut F9 : le niveau absolu des figures de
+# l'article n'est pas exploitable) ; set_identified_coupling conserve donc la
+# norme du couplage EF et ne corrige que la repartition. `gain_H` balaie le
+# niveau, comme avant.
+H_IDENT = (1.0, 0.95943, 1.64565, 3.72754, 10.11124)
+COUPLING = 'ident'                                    # 'ident' | 'fem'
+
 N_TEETH, D_TOOL = 3, 0.010                            # fraise 3 dents, 10 mm
 HELIX = np.deg2rad(35.0)
 RAKE = np.deg2rad(15.0)
@@ -223,12 +267,19 @@ class SimBase:
         incertitude. Construire la plaque nominale (gain_H = 1) pour SYNTHETISER
         le correcteur, puis une plaque perturbee pour le SIMULER, donne un vrai
         essai de robustesse a l'erreur de gain actionneur.
+    coupling : 'ident' (defaut) prend la repartition modale de H_Pe identifiee
+        sur la Fig. 12(b) de l'article (constante H_IDENT) ; 'fem' garde celle
+        des elements finis, qui ne reproduit aucun des creux mesures. Dans les
+        deux cas la NORME de H_Pe est la meme, seule sa repartition change.
     """
 
     def __init__(self, verbose=False, patch=None, zeta=None, gain_H=1.0,
-                 force_sign=None):
+                 force_sign=None, coupling=None):
         patch = PATCH if patch is None else patch
         zeta = ZETA_MODES if zeta is None else zeta
+        coupling = COUPLING if coupling is None else coupling
+        if coupling not in ('ident', 'fem'):
+            raise ValueError("coupling doit valoir 'ident' ou 'fem'")
         p = PlateModel(PLATE_L, PLATE_H, PLATE_T, RHO, YOUNG, POISSON,
                        N1=MESH_N1, N2=MESH_N2, n_modes=N_MODES,
                        zeta_modes=zeta, verbose=False)
@@ -237,11 +288,22 @@ class SimBase:
         p.add_piezo_patch(patch['x1'], patch['x2'], patch['z1'], patch['z2'],
                           patch['d31'], patch['thickness'], patch['E'], patch['nu'],
                           G_adh=patch.get('G_adh'), t_adh=patch.get('t_adh'))
+        if coupling == 'ident':
+            if p.n_modes > len(H_IDENT):
+                raise ValueError(
+                    f"H_IDENT n'est identifie que sur {len(H_IDENT)} modes "
+                    f"(les cinq de la Fig. 12) ; construire une base a "
+                    f"{p.n_modes} modes impose coupling='fem'")
+            # Troncature : sur un modele reduit a n < 5 modes, on garde les n
+            # premiers residus identifies. C'est la meme troncature que celle
+            # deja subie par les frequences et les amortissements.
+            p.set_identified_coupling(H_IDENT[:p.n_modes])
         if gain_H != 1.0:
             p.H_Pe_modal = np.asarray(p.H_Pe_modal, float)*gain_H
         p.calibrate_frequencies(F_MEASURED)
         self.plate = p
         self.patch_cfg = patch
+        self.coupling = coupling
         self.gain_H = gain_H
         self.force_sign = FORCE_SIGN if force_sign is None else float(force_sign)
         self.k1c, self.k2c = cutting_coefficients(KN, MU_C, HELIX, RAKE)
@@ -435,10 +497,14 @@ class SimBase:
 # ============================================================================
 # VERIFICATION DU MODELE
 # ============================================================================
-def check_model(verbose=True):
+def check_model(verbose=True, sim=None):
     """Refait les controles de validation. Leve AssertionError si un ecart
-    depasse la tolerance. A lancer une fois au debut d'une session."""
-    sim = SimBase()
+    depasse la tolerance. A lancer une fois au debut d'une session.
+
+    sim : base a controler. Par defaut SimBase(), c.-a-d. la base nominale ;
+        passer SimBase(coupling='fem') montre ce que le controle 4 attrape."""
+    if sim is None:
+        sim = SimBase()
     ok = True
 
     f = sim.freqs
@@ -512,9 +578,42 @@ def check_model(verbose=True):
     assert 1.0 < C_exact/C_beam < 3.0, \
         "souplesse statique hors des bornes physiques d'une plaque encastree"
 
+    # Repartition modale du couplage. Les checks 2 et 3 ne portent que sur
+    # D_obs (leurs residus valent D_i^2) : ils passeraient tels quels avec un
+    # H_Pe entierement faux, ce qui a longtemps ete le cas. Ce test-ci ferme
+    # cette porte. Les zeros de la fonction de transfert tension -> capteur
+    # sont une signature de SIGNE, insensible a toute mise a l'echelle de H_Pe
+    # -- donc au niveau non valide de la section 1.
+    r_c = np.asarray(sim.plate.H_Pe_modal).ravel()*np.asarray(sim.plate.D_obs)
+    s2 = np.asarray(sim.plate.omega_n).ravel()**2
+    P = sum(r_c[i]*np.poly(np.delete(s2, i)) for i in range(len(r_c)))
+    zr = np.roots(P)
+    zr = zr[np.abs(zr.imag) <= 1e-6*max(np.abs(zr.real).max(), 1e-30)].real
+    zc = np.sort(np.sqrt(zr[zr > 0]))/(2*np.pi)
+    NOTCH_MEAS = np.array([787.5, 1493.4, 2912.8, 3608.9])   # Fig. 12(b)
+    if verbose:
+        print("4. creux de la Fig. 12(b) (tension -> capteur) : "
+              "repartition modale de H_Pe")
+        print(f"   mesures : {np.round(NOTCH_MEAS, 0)}")
+        print(f"   modele  : {np.round(zc, 0)}")
+    if len(zc) != len(NOTCH_MEAS):
+        ok = False
+        if verbose:
+            print(f"   ATTENTION : {len(zc)} creux calcules contre "
+                  f"{len(NOTCH_MEAS)} mesures — la repartition modale de H_Pe "
+                  f"est fausse (coupling='fem' ?)")
+    else:
+        e = np.abs(zc - NOTCH_MEAS)/NOTCH_MEAS*100
+        if verbose:
+            print(f"   ecarts  : {np.round(e, 2)} %  (max {e.max():.2f} %)")
+        if e.max() > 3.0:
+            ok = False
+            if verbose:
+                print("   ATTENTION : creux mal reproduits")
+
     lim = sim.stability_limit(None, rpm=4900)
     if verbose:
-        print(f"4. limite de stabilite en boucle ouverte a 4900 tr/min : "
+        print(f"5. limite de stabilite en boucle ouverte a 4900 tr/min : "
               f"{lim*1e3:.4f} mm  (reference de cette base : 0.0605 mm)")
         print("   cette valeur depend de l'horizon T et de la fenetre de mesure ;")
         print("   c'est la reference de CETTE base, a ne pas comparer a une valeur")

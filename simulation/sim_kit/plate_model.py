@@ -239,6 +239,52 @@ class PlateModel:
         self.D_obs = N_obs[self.DOFf] @ self.V       # (n_modes,)
         self.x_obs = x_obs
         self.z_obs = z_obs
+        if getattr(self, '_ident_ratio', None) is not None:
+            # H_Pe identifie est defini PAR RAPPORT a D_obs : deplacer le
+            # capteur sans le reappliquer laisserait les deux incoherents.
+            self.set_identified_coupling(self._ident_ratio)
+
+    # ---------------------------------------------------------------
+    def set_identified_coupling(self, ratio):
+        """Impose la REPARTITION MODALE de H_Pe identifiee sur la Fig. 12(b).
+
+        La fonction de transfert tension -> capteur vaut
+
+            G_b(w) = somme_i  r_i / (w_i^2 - w^2 + 2 j z_i w_i w),
+            r_i = D_obs,i * H_Pe,i
+
+        Ses POLES sont les frequences mesurees (deja calees) et ses ZEROS sont
+        les creux de la Fig. 12(b). Poles et zeros determinent les r_i a une
+        constante multiplicative pres — c'est exactement ce que `ratio` porte.
+        On en deduit H_Pe = r / D_obs : la fonction de transfert modelisee
+        devient celle qui a ete mesuree.
+
+        La CONSTANTE, elle, n'est pas identifiee : le niveau absolu des figures
+        de l'article n'est pas fiable (defaut F9 — la Fig. 12(a) demande +12 dB
+        et la Fig. 12(b) +6.8 dB pour se superposer au meme modele, ce qu'aucun
+        modele ne peut satisfaire a la fois). On conserve donc la NORME du
+        couplage elements finis et on ne corrige que sa repartition ; le niveau
+        reste balaye par `gain_H` (facteurs 0.5 et 2 dans run_demo --full).
+
+        Le signe global est lui aussi conventionnel (il depend de la face sur
+        laquelle le patch est colle) : on le choisit pour que H reste du meme
+        cote que le couplage elements finis, ce qui evite un saut de signe sans
+        contenu physique entre les deux modes de fonctionnement.
+        """
+        r = np.asarray(ratio, float).ravel()
+        if r.shape != (self.n_modes,):
+            raise ValueError(f"ratio doit avoir {self.n_modes} composantes")
+        if not hasattr(self, 'D_obs'):
+            raise RuntimeError("set_observation() doit preceder "
+                               "set_identified_coupling()")
+        H_fem = np.asarray(getattr(self, 'H_Pe_fem', self.H_Pe_modal), float)
+        H = r/np.asarray(self.D_obs, float).ravel()
+        H *= np.linalg.norm(H_fem)/np.linalg.norm(H)
+        if H @ H_fem < 0:
+            H = -H
+        self.H_Pe_fem = H_fem
+        self.H_Pe_modal = H
+        self._ident_ratio = r
 
     # ---------------------------------------------------------------
     def add_piezo_patch(self,

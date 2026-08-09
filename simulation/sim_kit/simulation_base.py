@@ -25,8 +25,17 @@ CE QUI EST VALIDE
      c'est la grandeur mesuree en Fig. 12a, marteau et capteur au meme coin.
      Un modele a TROIS modes ne donne que deux antiresonances -- 742 / 2408 Hz,
      dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
-  * frequence de broutement simulee 532 Hz contre 580 Hz mesuree ; la simulation
-    publiee de reference donnait 1135 Hz, soit le mauvais mode.
+  * les deux premiers modes sont QUASI A EGALITE pour la criticite : par la
+    theorie moyennee d'ordre 0 sur ce meme modele, mode 1 seul -> 0.0495 mm,
+    mode 2 seul -> 0.0463 mm (7.1 % d'ecart), contre 0.94 a 1.61 mm pour les
+    modes 3 a 5. Selon l'analyse menee, c'est donc l'un ou l'autre qui sort :
+      - lobes moyennes d'ordre 0        : mode 2, broutement a 1070 Hz ;
+      - simulation temporelle non lineaire (4900 tr/min, ap = 0.30 mm, FFT sur
+        la seconde moitie du signal, fenetre de Hann) : mode 1, a 524.6 Hz ;
+      - experience de Du (Fig. 20)      : LES DEUX, fc1 = 580 et fc2 = 1123 Hz
+        sont les deux plus grandes raies.
+    La valeur de 1135 Hz publiee correspond au mode que la theorie lineaire de
+    ce modele designe elle aussi : elle n'est pas refutable ici.
 
 CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
   Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
@@ -157,6 +166,31 @@ GROWTH_MAX = 1.15                                     # garde de croissance
 T_RUN = 0.20        # essai unique et cout multi-vitesses
 T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
 
+# Convention de signe des efforts de coupe. L'article de Du et al. se contredit :
+#   * son Eq. (13) s'ecrit  M q" + C q' + (K + a4 DtD) q(t) - a4 DtD q(t-tau)
+#                            = ft a3 Dt + H u   ;
+#   * mais en enchainant ses propres Eqs. (1), (2), (5), (10) et (A.4) -- avec
+#     f_y = -F_y et y_r = -y_P(t) + y_P(t-tau) -- on obtient les memes termes
+#     TOUS DE SIGNE INVERSE, ce qui revient a a3 -> -a3, a4 -> -a4.
+#
+# Ce n'est PAS un detail : les deux conventions donnent des diagrammes de lobes
+# quasiment complementaires (limite libre en mm, horizon T_LIMIT) :
+#
+#     tr/min      3000   3600   4200   4900   5500   6000   7200
+#     Eq. (13)   0.0785 0.2650 0.0771 0.0597 0.3705 0.1031 0.2621
+#     derivee    0.5237 0.0959 0.4211 0.6003 0.1118 0.0655 0.0684
+#
+# L'Eq. (13) telle que publiee est celle qui reproduit les donnees de l'article :
+# les pics de sa Fig. 13(b) a ~3600 et ~5500 tr/min, le fait que le point S
+# (4900 tr/min, ap = 0.30 mm) diverge en Fig. 14(a), et sa Fig. 18 ou la limite
+# experimentale sans controle est sous 0.1 mm partout SAUF a 5500 tr/min. La
+# convention derivee inverse ce motif et rendrait le point S stable. L'erreur de
+# signe est donc dans les equations intermediaires de l'article, pas dans son
+# Eq. (13) : la base suit l'Eq. (13), et c'est le bon choix.
+#
+# SimBase(force_sign=-1.0) reproduit le tableau ci-dessus.
+FORCE_SIGN = +1.0
+
 
 class SimBase:
     """Plaque + patch + capteur + coupe. Le correcteur est fourni a l'appel.
@@ -165,6 +199,11 @@ class SimBase:
         seulement. Passer par ces arguments plutot que de reaffecter les
         constantes du module : une reaffectation reste active pour toutes les
         instances construites ensuite dans le meme processus.
+    force_sign : +1 pour l'Eq. (13) telle que publiee (defaut), -1 pour la
+        convention obtenue en enchainant les Eqs. (1), (2), (5), (10), (A.4) du
+        meme article. Voir le commentaire de FORCE_SIGN : l'article se
+        contredit, la base suit la forme publiee, et ce parametre existe pour
+        verifier qu'un resultat ne depend pas de ce choix.
     gain_H : facteur multiplicatif sur H_Pe_modal. Le NIVEAU du couplage
         piezoelectrique n'est PAS valide experimentalement (voir la section 1
         du docstring de module) : ce facteur existe pour balayer cette
@@ -173,7 +212,8 @@ class SimBase:
         essai de robustesse a l'erreur de gain actionneur.
     """
 
-    def __init__(self, verbose=False, patch=None, zeta=None, gain_H=1.0):
+    def __init__(self, verbose=False, patch=None, zeta=None, gain_H=1.0,
+                 force_sign=None):
         patch = PATCH if patch is None else patch
         zeta = ZETA_MODES if zeta is None else zeta
         p = PlateModel(PLATE_L, PLATE_H, PLATE_T, RHO, YOUNG, POISSON,
@@ -189,6 +229,7 @@ class SimBase:
         self.plate = p
         self.patch_cfg = patch
         self.gain_H = gain_H
+        self.force_sign = FORCE_SIGN if force_sign is None else float(force_sign)
         self.k1c, self.k2c = cutting_coefficients(KN, MU_C, HELIX, RAKE)
         self._cache = {}
         if verbose:
@@ -232,6 +273,8 @@ class SimBase:
             a3, a4 = precompute_alpha_periodic(
                 dt, STEPS_PER_TOOTH, s.nstep, 2*np.pi*rpm/60, N_TEETH, D_TOOL/2,
                 HELIX, phi, np.pi, PLATE_H - ap, PLATE_H, self.k1c, self.k2c, KT)
+            a3 = self.force_sign*a3
+            a4 = self.force_sign*a4
             self._cache[key] = (s, a3, a4, dt, tau)
         return self._cache[key]
 

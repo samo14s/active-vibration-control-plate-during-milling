@@ -56,6 +56,12 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
   trois modes n'en reproduit que deux.
 * **Patch au coin inferieur gauche, capteur au coin oppose.** Deplacer l'un ou
   l'autre change le classement modal et invalide toute comparaison anterieure.
+* **Convention de signe des efforts = Eq. (13) de l'article.** L'article se
+  contredit entre son Eq. (13) et l'enchainement de ses Eqs. (1)(2)(5)(10)(A.4).
+  Les deux conventions donnent des diagrammes de lobes quasiment
+  complementaires, et seule l'Eq. (13) reproduit les Fig. 13(b), 14(a) et 18 de
+  l'article. Voir `FORCE_SIGN` dans `simulation_base.py` ;
+  `SimBase(force_sign=-1.0)` permet de le verifier.
 
 ## Reperes a ne pas depasser sans explication
 
@@ -65,13 +71,29 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
 | RMS a 0.05 mm, 4900 tr/min | 0.2216 um |
 | cout multi-vitesses a 0.25 mm | 11.144 |
 | receptance au pic 536 Hz | 480.7 um/N |
-| frequence de broutement simulee | 532 Hz (mesuree 580 Hz) |
+| frequence de broutement simulee | 524.6 Hz (voir la note ci-dessous) |
 
 Un cout de 12.000 signifie instable aux cinq vitesses. Un correcteur utile doit
 descendre nettement sous 11.14 ; les valeurs de l'ordre de 1 sont atteignables.
 
 Un correcteur qui affiche mieux que ces reperes **sans avoir rien change au
 modele** doit etre suspecte avant d'etre publie.
+
+### Sur la frequence de broutement : les deux premiers modes sont a egalite
+
+Ne pas conclure d'un seul chiffre. Par la theorie moyennee d'ordre 0 sur ce
+modele, mode 1 seul donne 0.0495 mm et mode 2 seul 0.0463 mm : 7 % d'ecart,
+contre 0.94 a 1.61 mm pour les modes 3 a 5. Selon l'analyse menee, l'un ou
+l'autre l'emporte :
+
+| analyse | mode critique | frequence |
+|---|---|---|
+| lobes moyennes d'ordre 0 | 2 | 1070 Hz |
+| simulation temporelle (4900 tr/min, ap = 0.30 mm) | 1 | 524.6 Hz |
+| experience de Du, Fig. 20 | les deux | 580 et 1123 Hz |
+
+Les 1135 Hz de la simulation publiee correspondent au mode que la theorie
+lineaire de ce modele designe elle aussi : ce n'est pas une erreur de mode.
 
 ## Ce que les courbes experimentales ne valident PAS
 

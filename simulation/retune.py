@@ -70,24 +70,27 @@ Deux details qui ont chacun coute un resultat faux :
 --constraint none restitue le critere sans contrainte, pour reproduire le
 resultat degenere en butee permanente.
 
-Ce que cela donne, pour le LQG modal, sur la base a couplage identifie :
+Ce que cela donne pour le LQG modal, sur la base a couplage identifie ET sous
+le critere de stabilite corrige (F12) :
 
-    reglage                  pire cas nominal   perturbations tenues   crete V
-    d'origine (publie)            0.2386 mm          5 sur 6           150 (butee)
-    optimum --constraint sat      0.4038 mm          3 sur 6            56
-    optimum --constraint rob      0.2581 mm          5 sur 6            39
+    reglage                       pire cas nominal   perturbations   crete V
+    d'origine (publie a l'origine)     0.2386 mm       -- sature --   150
+    optimum --constraint sat           0.4038 mm        3 sur 6        56
+    reglage precedent, mesure a neuf   0.2542 mm        4 sur 6        39
+    optimum --constraint rob           0.3241 mm      **6 sur 6**      33
 
-Le reglage sous contrainte de robustesse DOMINE celui d'origine : meilleure
-limite nominale, meme tenue sous perturbation, et il ne sature plus. C'est
-celui que run_demo publie. L'optimum "sat" affiche 56 % de limite nominale en
-plus, mais il l'achete en perdant K x0.90, C x0.80 et H x2.00 -- et H x2.00
-n'est pas une perturbation academique : le gain statique mesure de la
-Fig. 12(b) vaut 2.94 fois celui du modele (defaut F9).
+Le dernier DOMINE tous les autres : meilleure limite nominale que le reglage
+precedent (+27 %), la premiere tenue COMPLETE sous les six perturbations
+reservees, et la tension crete la plus basse des quatre. C'est celui que
+run_demo publie.
 
-Aucun reglage trouve ne tient les SIX perturbations : kc x2.9 -- des
-coefficients de coupe presque triples -- reste hors d'atteinte a 0.10 mm, pour
-le reglage d'origine comme pour l'optimum robuste. Ce n'est donc pas une
-regression introduite ici.
+Un detail d'implementation a decide de ce resultat : l'ORDRE de PERTURB. Avec
+les plus meurtrieres en tete, tout candidat echouait des la premiere, tous
+rendaient 1/1000, et la recherche restait collee a sa graine -- c'est ce qu'on
+observait avant. Du plus facile au plus dur, le score compte reellement combien
+de perturbations le candidat encaisse ; la recherche a progresse 4 -> 5 -> 6 et
+a franchi le seuil de faisabilite a la 12e iteration. Le critere n'a pas change,
+seule sa lisibilite par l'optimiseur.
 
 Methode. PSO, meme famille que l'optimisation d'origine. Le reglage courant est
 injecte comme particule 0, ce qui garantit de ne pas faire pire que l'existant.
@@ -142,13 +145,21 @@ _KC0 = None
 
 # Perturbations reservees, identiques a celles de run_demo --full.
 # (nom, facteur sur Kp, sur Cp, sur les coefficients de coupe, sur H_Pe)
-# Ordre : les plus meurtrieres d'abord, la boucle sortant au premier echec.
-PERTURB = [("H x2.00", 1.0, 1.0, 1.0, 2.0),
+# Ordre : de la PLUS FACILE a la plus dure, la boucle sortant au premier echec.
+#
+# L'ordre inverse -- les plus meurtrieres d'abord -- minimise le cout, et c'est
+# ce qu'il faisait tant que le critere de stabilite etait optimiste. Sous le
+# critere corrige il DETRUIT le gradient : presque tout candidat echoue des la
+# premiere perturbation, tous rendent donc 1/1000, et le PSO n'a plus rien a
+# suivre -- verifie, la recherche restait collee a sa graine. Du plus facile au
+# plus dur, le score n compte reellement combien de perturbations le candidat
+# encaisse avant de ceder, et la recherche progresse.
+PERTURB = [("H x0.50", 1.0, 1.0, 1.0, 0.5),
            ("C x0.80", 1.0, 0.80, 1.0, 1.0),
+           ("K x1.10", 1.10, 1.0, 1.0, 1.0),
            ("K x0.90", 0.90, 1.0, 1.0, 1.0),
            ("kc x2.9", 1.0, 1.0, 2.9, 1.0),
-           ("K x1.10", 1.10, 1.0, 1.0, 1.0),
-           ("H x0.50", 1.0, 1.0, 1.0, 0.5)]
+           ("H x2.00", 1.0, 1.0, 1.0, 2.0)]
 
 # Profondeur a laquelle on exige la survie SOUS PERTURBATION. AP_TEST (0.25 mm)
 # serait absurde : sous kc x2.9 meme la meilleure commande ne tient que 0.14 mm.

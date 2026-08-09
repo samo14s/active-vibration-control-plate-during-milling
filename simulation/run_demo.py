@@ -14,6 +14,12 @@ l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), et patch
 COLLE et non soude (shear lag, eta = 0.886), avec le couplage
 membrane-flexion du patch colle d'un seul cote (-11.6 % sur H_Pe).
 
+>>> ETAT TRANSITOIRE — LES DEUX TABLEAUX CI-DESSOUS SONT PERIMES. <<<
+X_LQG vient d'etre remplace par le resultat de la re-optimisation sur le critere
+corrige (pire cas 0.3241 mm, six perturbations sur six). X_ESO est encore
+l'ancien : sa recherche tourne. Les tableaux datent des DEUX anciens reglages et
+seront regeneres d'un seul bloc quand elle aura fini. Ne pas les citer en l'etat.
+
 Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT = 0.60 s :
 
                      3000    4200    4900    6000    7200   pire cas
@@ -106,7 +112,7 @@ SPEEDS = [3000, 4200, 4900, 6000, 7200]
 # critere de limite nominale seul est mal pose dans les deux sens, voir
 # retune.py. Les reglages ci-dessous dominent ceux d'origine.
 X_ESO = [-8.3861, 3.2814, 1.0339, -9.9052, 0.7112, 273969.8996, 2.1823]
-X_LQG = [-8.3646, 2.7796, -9.6188]
+X_LQG = [-8.6678, -1.1613, -4.5628]
 
 
 def factory_eso(plate, x):

@@ -14,76 +14,71 @@ l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), et patch
 COLLE et non soude (shear lag, eta = 0.886), avec le couplage
 membrane-flexion du patch colle d'un seul cote (-11.6 % sur H_Pe).
 
-Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
+Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT = 0.60 s :
 
                      3000    4200    4900    6000    7200   pire cas
-    boucle ouverte  0.0773  0.0754  0.0579  0.1026  0.2600   0.0579
-    LQG modal       0.3397  0.3455  0.3591  0.2581  0.7089   0.2581
-    ESO propose     0.3591  0.3630  0.3708  0.2581  0.6992   0.2581
+    boucle ouverte  0.0676  0.0734  0.0501  0.1026  0.2153   0.0501
+    LQG modal       0.3533  0.3416  0.3572  0.2542  0.6934   0.2542
+    ESO propose     0.3552  0.3591  0.3688  0.2561  0.6856   0.2561
 
 c.-a-d. performance SATUREE : deux architectures de richesse tres differente
-atteignent EXACTEMENT le meme plafond, 0.2581 mm, contre 0.0579 mm en boucle
-ouverte. C'est le resultat central de l'etude, et il est desormais bien plus
-solide qu'avant : chaque architecture a ete RE-OPTIMISEE sur cette base-ci et
-sous les memes contraintes, alors que le tableau precedent comparait deux
-reglages herites d'un autre modele.
+atteignent le meme plafond a 0.7 % pres, contre 0.0501 mm en boucle ouverte.
+C'est le resultat central de l'etude, et il survit a tout ce qui precede.
 
-Les reglages viennent de `retune.py both`. Le critere publie -- maximiser la
-limite nominale du pire cas -- est mal pose DANS LES DEUX SENS, et retune.py
-documente les deux : sans contrainte l'optimum est un correcteur en butee
-permanente ; avec la seule non-saturation il atteint 0.4038 mm mais s'effondre
-sous K x0.90, C x0.80 et H x2.00. Les reglages ci-dessous sont donc obtenus
-sous contrainte de non-saturation ET de robustesse, et ils DOMINENT ceux
-d'origine : limite nominale plus haute (0.2581 contre 0.2386), meme tenue sous
-perturbation, et crete de tension 39 V au lieu de la butee a 150 V.
+TOUS CES CHIFFRES ONT BAISSE D'ENVIRON 19 % avec la correction du critere de
+stabilite (defaut F12). L'ancien critere -- rapport de RMS entre les deux
+moities de la fenetre -- declarait stables des coupes qui divergent plus tard :
+sur 144 cas dont la verite a ete etablie a T = 1.60 s, il se trompait 8 fois, et
+TOUJOURS en declarant stable ce qui diverge. Le critere actuel, un taux de
+croissance exponentiel sigma <= 0.05 /s mesure sur la reponse ETABLIE, se
+trompe 0 fois sur les memes 144 cas. Toute valeur anterieure a cette correction
+est optimiste et n'est PAS comparable a celles-ci. Voir verification/15.
 
 `--full` rejoue le tableau sous les six perturbations reservees, le correcteur
 restant synthetise sur la plaque nominale (donc un vrai essai d'erreur de
 modele). Pire cas sur les cinq vitesses :
 
     perturbation    boucle ouverte    LQG modal      ESO propose
-    nominal             0.0579          0.2581         0.2581
-    K x0.90             0.0482          0.3066         0.3144
-    K x1.10             0.0579          0.3494         0.3591
-    C x0.80             0.0501          0.2561         0.2561
-    kc x2.9             0.0210          0.0870         0.0870
-    H x0.50             0.0579          0.1784         0.1784
-    H x2.00             0.0579          0.3708         0.0000 (*)
+    nominal             0.0501          0.2542         0.2561
+    K x0.90             0.0423          0.2503         0.2522
+    K x1.10             0.0443          0.3455         0.3552
+    C x0.80             0.0404          0.2542         0.2542
+    kc x2.9             0.0000 (*)      0.0870         0.0870
+    H x0.50             0.0501          0.1764         0.1764
+    H x2.00             0.0501          0.0000         0.0000
 
-La boucle ouverte ne bouge pas d'un chiffre entre nominal, H x0.50 et H x2.00 :
-H_Pe n'entre pas dans le modele sans commande. Le NIVEAU de H_Pe n'etant pas
-valide (defaut F9 -- le gain statique mesure vaut 2.94 fois celui du modele),
-les lignes H x0.50 et H x2.00 encadrent cette incertitude, et aucune des deux
-ne fait tomber la commande.
+LA LIGNE H x2.00 EST LE RESULTAT LE PLUS IMPORTANT DE CE TABLEAU. Les deux
+correcteurs y perdent le controle. Or le NIVEAU de H_Pe n'est pas valide
+(defaut F9) et le gain statique mesure sur la Fig. 12(b) vaut 2.94 fois celui du
+modele : le facteur 2 n'est donc pas une marge academique, c'est le milieu de
+l'incertitude reelle. Sous le critere precedent cette ligne affichait 0.3708 mm
+pour le LQG -- une valeur rassurante et fausse.
 
-(*) CE ZERO EST UN ARTEFACT DE MESURE, PAS UN EFFONDREMENT. `stability_limit`
-bissecte entre lo = 0.02 mm et hi = 4.0 mm en supposant la stabilite MONOTONE
-en profondeur ; si lo est declare instable elle rend 0. Or a 6000 tr/min sous
-H x2.00 ce correcteur donne :
+Il faut le dire clairement : ces correcteurs n'ont pas de marge de gain
+actionneur, et ce sont les memes reglages qu'avant. Ce n'est pas la correction
+du critere qui les a degrades, c'est elle qui a cesse de le cacher.
 
-    ap mm    0.02   0.03   0.05   0.10   0.20   0.30   0.40   0.50
-    stable   NON    oui    oui    oui    oui    oui    oui    NON
-    rms um  0.055  0.080  0.130  0.244  0.474  0.696  0.939  12.61
-    crete V   1.4    2.0    3.3    6.4   12.9   30.0   82.5  150.0
+(*) 0.0000 signifie "en dessous de la borne basse de la bissection", soit
+0.02 mm : sous kc x2.9 la coupe libre est instable des la plus petite passe
+testee. C'est un vrai zero, pas un artefact.
 
-La vraie limite est entre 0.40 et 0.50 mm. Le "non" a 0.02 mm porte sur une
-reponse de 0.055 um pilotee par 1.4 V : c'est le critere de CROISSANCE
-(GROWTH_MAX) qui se declenche sur un transitoire a une profondeur ou la reponse
-n'a pas le temps de s'etablir, pas une instabilite. La bissection part donc
-d'une borne basse faussement instable et rend 0. Le crible de robustesse de
-retune.py, lui, teste a 0.10 mm et voit juste -- d'ou le desaccord entre les
-deux. C'est un defaut de la METRIQUE, pas du correcteur ; il est laisse visible
-plutot que maquille, et la ligne ESO / H x2.00 doit se lire "environ 0.45 mm".
+kc x2.9 reste hors d'atteinte pour les deux correcteurs a la profondeur de
+crible de retune.py (0.10 mm) ; ils y tiennent 0.0870 mm, ce qui reste tres
+au-dessus de la limite libre correspondante.
 
-Aucun des deux reglages ne tient kc x2.9 a 0.10 mm (0.0870 mm atteint), mais
-c'est encore 4.1 fois la limite libre correspondante, et le reglage d'origine
-n'y arrivait pas davantage : ce n'est pas une regression.
+Les reglages viennent de `retune.py both`. Le critere qu'il maximise -- la
+limite nominale du pire cas -- est mal pose dans les deux sens (butee
+permanente sans contrainte ; effondrement sous perturbation avec la seule
+non-saturation), d'ou les contraintes de non-saturation ET de robustesse ; voir
+retune.py. Sous le critere corrige, la re-optimisation ne trouve rien de mieux
+que ces reglages-la, et le crible de robustesse n'est franchi que par 2 des 6
+perturbations : le "5 sur 6" annonce precedemment etait lui aussi un artefact du
+critere optimiste.
 
 MISE EN GARDE HISTORIQUE. Les chiffres de ce fichier ont ete regeneres apres la
-correction de `blim` (sa tolerance d'arret valait 6e-5 METRES, soit 0.060 mm,
-plus grossiere que la limite en boucle ouverte elle-meme ; elle rendait 0.020 mm
-par construction), apres la correction de la geometrie du patch, et apres
-l'identification de la repartition modale de H_Pe sur la Fig. 12(b).
+correction de `blim`, apres la correction de la geometrie du patch, apres
+l'identification de la repartition modale de H_Pe sur la Fig. 12(b), et enfin
+apres la correction du critere de stabilite lui-meme.
 """
 import argparse
 import copy

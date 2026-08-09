@@ -73,14 +73,21 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
 
 | grandeur | valeur sans controle |
 |---|---|
-| limite de stabilite a 4900 tr/min | 0.0605 mm |
-| RMS a 0.05 mm, 4900 tr/min | 0.2252 um |
-| cout multi-vitesses a 0.25 mm | 11.148 |
+| limite de stabilite a 4900 tr/min | 0.0489 mm |
+| RMS a 0.05 mm, 4900 tr/min | 0.2250 um |
+| cout multi-vitesses a 0.25 mm | 12.000 (instable partout) |
 | receptance au pic 536 Hz | 487.5 um/N |
 | frequence de broutement simulee | 524.6 Hz (voir la note ci-dessous) |
 
-Un cout de 12.000 signifie instable aux cinq vitesses. Un correcteur utile doit
-descendre nettement sous 11.14 ; les valeurs de l'ordre de 1 sont atteignables.
+Un cout de 12.000 signifie instable aux cinq vitesses -- et c'est bien le cas
+sans controle a 0.25 mm, la limite libre valant 0.049 mm. Un correcteur utile
+doit donc descendre nettement sous 12 ; les valeurs de l'ordre de 1 sont
+atteignables.
+
+Ces reperes ont BAISSE d'environ 19 % avec la correction du critere de
+stabilite (defaut F12) : l'ancien critere, un rapport de deux demi-fenetres,
+declarait stables des coupes qui divergent plus tard. Toute valeur anterieure a
+cette correction est optimiste et n'est pas comparable a celles-ci.
 
 Un correcteur qui affiche mieux que ces reperes **sans avoir rien change au
 modele** doit etre suspecte avant d'etre publie.

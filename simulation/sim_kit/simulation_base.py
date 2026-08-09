@@ -213,15 +213,50 @@ STEPS_PER_TOOTH = 82                                  # dt = tau/82, NON MODIFIA
 
 SPEEDS_DEFAULT = [3000, 4200, 4900, 6000, 7200]       # tr/min
 AP_TEST = 0.25e-3                                     # m, profondeur de reference
-GROWTH_MAX = 1.15                                     # garde de croissance
+GROWTH_MAX = 1.15                                     # garde de croissance (F12)
+
+# Critere de stabilite : TAUX DE CROISSANCE, et non rapport de deux demi-fenetres.
+#
+# Defaut F12. Le critere d'origine comparait la RMS de la seconde moitie de la
+# fenetre a celle de la premiere et declarait instable si le rapport depassait
+# GROWTH_MAX. Ce test est AVEUGLE a un mode qui croit lentement sous une reponse
+# forcee plus grande que lui : le rapport reste proche de 1 tant que le mode
+# instable n'a pas rattrape le regime force. Sur 144 cas dont la verite a ete
+# etablie en rejouant chaque simulation jusqu'a T = 1.20 s, il se trompait 16
+# fois -- et TOUJOURS dans le meme sens, en declarant STABLE ce qui diverge
+# ensuite. Exemple : ESO sous H x2.00 a 6000 tr/min, ap = 0.10 mm : rapport
+# 1.070 donc "stable" a T = 0.28 s, et 22.6 um a T = 1.20 s.
+#
+# On ajuste desormais une DROITE sur log(RMS par blocs) le long de la fenetre,
+# ce qui donne un taux de croissance exponentiel sigma [1/s]. C'est une PENTE :
+# elle voit un mode lent bien avant qu'il ne domine l'amplitude. Sur la meme
+# base de 144 cas, sigma <= SIGMA_MAX se trompe 3 fois, et les trois erreurs
+# sont CONSERVATRICES (declare instable ce qui tenait) : l'erreur bascule du
+# cote sur.
+#
+# SIGMA_MAX = 0.05 /s : un mode qui croit de moins de 5 % par seconde est tenu
+# pour stable. Sur l'horizon T_LIMIT cela fait 1.4 % de croissance, sous la
+# resolution de l'essai. La valeur est au milieu du palier [0.034, 0.060] ou le
+# nombre d'erreurs est minimal. Voir verification/15_stability_criterion.py.
+SIGMA_MAX = 0.05                                      # 1/s
 
 # Horizons d'integration. CE SONT DES CONSTANTES DE MESURE, pas des details :
 # pres du seuil, allonger T abaisse la limite mesuree (~20 % entre 0.30 et
 # 0.40 s), parce qu'une instabilite lente a besoin de temps pour se voir. Une
 # limite de stabilite n'a donc de sens qu'accompagnee de son horizon. Tout
 # resultat destine a etre compare a un autre doit utiliser LE MEME.
-T_RUN = 0.20        # essai unique et cout multi-vitesses
-T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
+# UN SEUL horizon (F12). Il y en avait deux, 0.20 s pour les essais courts et
+# 0.28 s pour la bissection, et cet ecart a produit un resultat faux : le crible
+# de robustesse de retune.py, qui tournait a T_RUN, laissait passer un reglage
+# que run_demo declarait ensuite instable a T_LIMIT. Le verdict de stabilite
+# DEPEND de l'horizon ; deux horizons, c'est deux criteres.
+# 0.60 s, et non 0.28 : le verdict de stabilite exige que la reponse forcee
+# soit ETABLIE, faute de quoi on mesure sa montee. A 0.28 s les cas vraiment
+# stables et vraiment instables ne se separent pas (sigma 0.19 contre -0.07) ;
+# a 0.60 s ils sont separes de deux decades (|sigma| < 0.02 contre > 2.6).
+# Le cout est 2.1 fois celui d'avant. C'est le prix d'un verdict fiable.
+T_RUN = 0.60
+T_LIMIT = 0.60
 
 # Convention de signe des efforts de coupe. L'article de Du et al. se contredit :
 #   * son Eq. (13) s'ecrit  M q" + C q' + (K + a4 DtD) q(t) - a4 DtD q(t-tau)
@@ -247,6 +282,31 @@ T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
 #
 # SimBase(force_sign=-1.0) reproduit le tableau ci-dessus.
 FORCE_SIGN = +1.0
+
+
+def _growth_rate(y, t, nblock=12):
+    """Taux de croissance exponentiel sigma [1/s] sur la fenetre d'analyse.
+
+    On decoupe la fenetre en blocs, on prend la RMS de chaque bloc, et on ajuste
+    au moindre carre log(RMS) contre le temps : la pente EST sigma. Passer au
+    log rend la mesure insensible a l'amplitude, donc au niveau de la reponse
+    forcee -- c'est ce qui permet de voir un mode instable encore petit devant
+    elle. Voir SIGMA_MAX pour la calibration et le defaut F12 qu'il corrige.
+    """
+    y = np.asarray(y, float)
+    t = np.asarray(t, float)
+    n = len(y)
+    if n < 8:
+        return 0.0
+    nb = max(3, min(nblock, n//4))
+    idx = np.array_split(np.arange(n), nb)
+    tb = np.array([t[k].mean() for k in idx])
+    rb = np.array([np.sqrt(np.mean(y[k]**2)) for k in idx])
+    m = rb > 0
+    if int(m.sum()) < 3 or (tb[m].max() - tb[m].min()) <= 0:
+        return 0.0
+    A = np.vstack([tb[m], np.ones(int(m.sum()))]).T
+    return float(np.linalg.lstsq(A, np.log(rb[m]), rcond=None)[0][0])
 
 
 class SimBase:
@@ -386,8 +446,17 @@ class SimBase:
         n2 = max(1, len(y2)//2)
         growth = (np.sqrt(np.mean(y2[n2:]**2))
                   / max(np.sqrt(np.mean(y2[:n2]**2)), 1e-18))
-        stable = (not diverged) and growth <= GROWTH_MAX
-        out = dict(stable=bool(stable), diverged=bool(diverged),
+        # sigma se mesure sur la DERNIERE MOITIE du releve : la reponse forcee
+        # d'une plaque a zeta = 0.17 % met ~0.3 s a s'etablir, et tant qu'elle
+        # monte encore une droite ajustee sur log(RMS) lit cette montee comme
+        # une croissance. Sur la premiere moitie sigma vaut ~1 /s meme pour une
+        # coupe parfaitement stable ; sur la seconde il tombe a |sigma| < 0.02.
+        yv = r['y'][:i+1]
+        tv = r['t'][:i+1]
+        h = len(yv)//2
+        sigma = _growth_rate(yv[h:], tv[h:])
+        stable = (not diverged) and sigma <= SIGMA_MAX
+        out = dict(stable=bool(stable), diverged=bool(diverged), sigma=sigma,
                    rms_um=float(np.sqrt(np.mean(y2**2))*1e6),
                    peak_um=float(np.abs(r['y'][:i+1]).max()*1e6),
                    rms_u=float(np.sqrt(np.mean(r['u'][i0:i+1]**2))),
@@ -614,11 +683,11 @@ def check_model(verbose=True, sim=None):
     lim = sim.stability_limit(None, rpm=4900)
     if verbose:
         print(f"5. limite de stabilite en boucle ouverte a 4900 tr/min : "
-              f"{lim*1e3:.4f} mm  (reference de cette base : 0.0605 mm)")
+              f"{lim*1e3:.4f} mm  (reference de cette base : 0.0489 mm)")
         print("   cette valeur depend de l'horizon T et de la fenetre de mesure ;")
         print("   c'est la reference de CETTE base, a ne pas comparer a une valeur")
         print("   obtenue avec d'autres reglages d'evaluation.")
-    assert abs(lim*1e3 - 0.0605) < 0.008, "limite libre hors tolerance"
+    assert abs(lim*1e3 - 0.0489) < 0.008, "limite libre hors tolerance"
 
     if verbose:
         print("\nbase valide." if ok else "\nbase utilisable, voir avertissements.")

@@ -160,10 +160,11 @@ def check_patch_position(plate, verbose=False):
 
 
 def make_sim(verbose=False, zeta_du=True):
-    SB.PATCH = PATCH_V2
-    if zeta_du:
-        SB.ZETA_MODES = list(ZETA_DU)
-    sim = SB.SimBase(verbose=verbose)
+    """Construit la base v2. N'ecrit PAS dans les constantes de module de
+    `simulation_base` : la configuration est passee par arguments, donc un
+    `SimBase()` construit ensuite dans le meme processus reste la base v1."""
+    sim = SB.SimBase(verbose=verbose, patch=PATCH_V2,
+                     zeta=list(ZETA_DU) if zeta_du else None)
     check_patch_position(sim.plate, verbose=verbose)
     return sim
 

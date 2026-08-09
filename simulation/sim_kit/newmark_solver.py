@@ -12,6 +12,8 @@ appliquée à la plaque ET avant d'être renvoyée au correcteur au pas suivant
 (u_prev), de sorte que l'observateur d'un correcteur voit toujours la tension
 réellement appliquée.
 """
+import inspect
+
 import numpy as np
 
 
@@ -94,6 +96,19 @@ class NewmarkSimulator:
         u_real_prev = 0.0
         diverged_at = 0
 
+        # Arguments optionnels acceptes par step() : on interroge la signature
+        # une fois, plutot que de tester le NOM DE CLASSE du correcteur contre
+        # une liste en dur. Un correcteur declare ce dont il a besoin en
+        # nommant le parametre ; ceux qui ne le nomment pas ne le recoivent pas.
+        opt_kw = set()
+        if controller is not None:
+            try:
+                params = inspect.signature(controller.step).parameters
+                opt_kw = {name for name in ('x_p_now', 'k_step')
+                          if name in params}
+            except (TypeError, ValueError):
+                opt_kw = set()
+
         if piezo is not None:
             piezo.reset()
         if rng is None:
@@ -115,32 +130,15 @@ class NewmarkSimulator:
                 y_obs_now = y_true
             y_meas[k] = y_obs_now
 
-            # Observateur + commande LQR
+            # Observateur + commande
             if controller is not None:
-                # APP-LQG accepte position outil pour gain scheduling
-                if hasattr(controller, 'enable_gs'):
-                    x_p_now_phys = self.plate.xp_array[kp]
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                x_p_now=x_p_now_phys)
-                # CALOR-FF nécessite k_step pour le feedforward périodique
-                elif controller.__class__.__name__ == 'CALOR_FF_Controller':
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                # NRACC nécessite aussi k_step
-                elif controller.__class__.__name__ in ('NRACC_Controller', 'NRACC_v2_Controller', 'NRACC_v3_Controller', 'NRACC_Enhanced_Controller', 'DARC_MPC_Controller', 'DARC_MPC_v2_Controller', 'DARC_MPC_v3_Controller'):
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                # NRACC-RU nécessite aussi k_step
-                elif controller.__class__.__name__ == 'NRACC_RU_Controller':
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now,
-                                                k_step=k)
-                else:
-                    step_out = controller.step(x_hat[:, k-1],
-                                                u_real_prev, y_obs_now)
+                kw = {}
+                if 'x_p_now' in opt_kw:          # position outil (gain scheduling)
+                    kw['x_p_now'] = self.plate.xp_array[kp]
+                if 'k_step' in opt_kw:           # indice de pas (feedforward periodique)
+                    kw['k_step'] = k
+                step_out = controller.step(x_hat[:, k-1],
+                                            u_real_prev, y_obs_now, **kw)
                 # SMCController retourne (x_hat, u, s) ; LQG retourne (x_hat, u)
                 if len(step_out) == 3:
                     x_hat[:, k], u, _ = step_out

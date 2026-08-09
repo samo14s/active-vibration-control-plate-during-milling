@@ -118,20 +118,37 @@ SPEEDS_DEFAULT = [3000, 4200, 4900, 6000, 7200]       # tr/min
 AP_TEST = 0.25e-3                                     # m, profondeur de reference
 GROWTH_MAX = 1.15                                     # garde de croissance
 
+# Horizons d'integration. CE SONT DES CONSTANTES DE MESURE, pas des details :
+# pres du seuil, allonger T abaisse la limite mesuree (~20 % entre 0.30 et
+# 0.40 s), parce qu'une instabilite lente a besoin de temps pour se voir. Une
+# limite de stabilite n'a donc de sens qu'accompagnee de son horizon. Tout
+# resultat destine a etre compare a un autre doit utiliser LE MEME.
+T_RUN = 0.20        # essai unique et cout multi-vitesses
+T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
+
 
 class SimBase:
-    """Plaque + patch + capteur + coupe. Le correcteur est fourni a l'appel."""
+    """Plaque + patch + capteur + coupe. Le correcteur est fourni a l'appel.
 
-    def __init__(self, verbose=False):
+    patch / zeta : surchargent PATCH et ZETA_MODES pour cette instance
+        seulement. Passer par ces arguments plutot que de reaffecter les
+        constantes du module : une reaffectation reste active pour toutes les
+        instances construites ensuite dans le meme processus.
+    """
+
+    def __init__(self, verbose=False, patch=None, zeta=None):
+        patch = PATCH if patch is None else patch
+        zeta = ZETA_MODES if zeta is None else zeta
         p = PlateModel(PLATE_L, PLATE_H, PLATE_T, RHO, YOUNG, POISSON,
                        N1=MESH_N1, N2=MESH_N2, n_modes=N_MODES,
-                       zeta_modes=ZETA_MODES, verbose=False)
+                       zeta_modes=zeta, verbose=False)
         p.precompute_Dp(zp_pos=PLATE_H - 0.15e-3, n_pos=2001)
         p.set_observation(*SENSOR_XZ)
-        p.add_piezo_patch(PATCH['x1'], PATCH['x2'], PATCH['z1'], PATCH['z2'],
-                          PATCH['d31'], PATCH['thickness'], PATCH['E'], PATCH['nu'])
+        p.add_piezo_patch(patch['x1'], patch['x2'], patch['z1'], patch['z2'],
+                          patch['d31'], patch['thickness'], patch['E'], patch['nu'])
         p.calibrate_frequencies(F_MEASURED)
         self.plate = p
+        self.patch_cfg = patch
         self.k1c, self.k2c = cutting_coefficients(KN, MU_C, HELIX, RAKE)
         self._cache = {}
         if verbose:
@@ -149,7 +166,7 @@ class SimBase:
         return dict(H=np.asarray(self.plate.H_Pe_modal).ravel(),
                     D_obs=np.asarray(self.plate.D_obs).ravel(),
                     D_tool=np.asarray(self.plate.Dp_array[:, 0]).ravel(),
-                    zeta=np.asarray(ZETA_MODES),
+                    zeta=np.asarray(self.plate.zeta_modes).ravel(),
                     omega=np.asarray(self.plate.omega_n).ravel())
 
     def describe(self):
@@ -179,7 +196,7 @@ class SimBase:
         return self._cache[key]
 
     # -- simulation elementaire ---------------------------------------------
-    def run(self, controller, rpm=4900, ap=AP_TEST, T=0.20, ae=AE_NOM,
+    def run(self, controller, rpm=4900, ap=AP_TEST, T=T_RUN, ae=AE_NOM,
             fz=FZ_NOM, tool_pos=0, full_pass=False, keep_signals=False):
         """Simule une coupe. controller = objet step/reset, ou None.
 
@@ -224,7 +241,7 @@ class SimBase:
         return out
 
     # -- cout multi-vitesses, identique pour tous les correcteurs -----------
-    def multi_speed_cost(self, make_ctrl, speeds=None, ap=AP_TEST, T=0.20,
+    def multi_speed_cost(self, make_ctrl, speeds=None, ap=AP_TEST, T=T_RUN,
                          penalty=12.0, w_worst=0.5):
         """make_ctrl(dt, tau) -> correcteur. Retourne un scalaire a minimiser.
 
@@ -252,7 +269,7 @@ class SimBase:
 
     # -- limite de stabilite par bissection ---------------------------------
     def stability_limit(self, make_ctrl, rpm=4900, lo=0.02e-3, hi=1.5e-3,
-                        T=0.28, tol=2e-5):
+                        T=T_LIMIT, tol=2e-5):
         """Plus grande profondeur de passe stable. make_ctrl=None -> boucle ouverte."""
         def ok(ap):
             tau = 60.0/(N_TEETH*rpm)

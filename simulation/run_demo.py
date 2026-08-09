@@ -11,12 +11,23 @@ avec les DEUX corrections validees contre la Fig. 12 et le Tableau 4 :
 patch piezo inferieur droit horizontal, et amortissements modaux mesures
 (0.31 / 0.17 / 0.27 / 0.56 / 0.35 %).
 
-Resultat attendu (b_lim pire cas sur les 5 vitesses) :
-    boucle ouverte  ~ 0.049 mm
-    LQG modal       ~ 0.515 mm
-    ESO propose     ~ 0.515 mm
+Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
+
+                     3000    4200    4900    6000    7200   pire cas
+    boucle ouverte  0.0598  0.0579  0.0443  0.0929  0.2075   0.0443
+    LQG modal       0.5826  0.7089  0.6292  0.5437  0.8955   0.5437
+    ESO propose     0.5612  0.6662  0.6118  0.5418  0.8450   0.5418
+
 c.-a-d. performance SATUREE : trois architectures de richesse croissante
-atteignent le meme plafond. C'est le resultat central de l'etude.
+atteignent le meme plafond — l'ESO est meme marginalement en dessous du LQG
+(0.5418 contre 0.5437, soit 0.4 %). C'est le resultat central de l'etude.
+
+Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
+6e-5 METRES, soit 0.060 mm, plus grossiere que la limite en boucle ouverte
+elle-meme ; elle rendait 0.020 mm par construction, et les valeurs annoncees
+auparavant (0.049 / 0.515 / 0.515) n'etaient pas celles que le code produisait.
+`blim` delegue desormais a SimBase.stability_limit, donc ces limites sont
+directement comparables a la reference de la base.
 """
 import argparse
 import copy
@@ -27,6 +38,7 @@ import numpy as np
 
 sys.path.insert(0, "sim_kit")
 sys.path.insert(0, ".")
+import simulation_base as SB                                 # noqa: E402
 from model_v2 import make_sim                                # noqa: E402
 from modal_adrc import ModalADRCFOPID                        # noqa: E402
 from competitors import ModalLQG                             # noqa: E402
@@ -72,21 +84,23 @@ def factory_lqg(plate, x):
     return mk
 
 
-def blim(sim, mk, rpm, T=0.45):
-    lo, hi = 0.02e-3, 2.0e-3
+def blim(sim, mk, rpm, T=SB.T_LIMIT):
+    """Limite de passe stable, en mm.
 
-    def ok(ap):
-        tau = 60.0 / (3 * rpm)
-        return sim.run(None if mk is None else mk(tau / 82, tau),
-                       rpm=rpm, ap=ap, T=T)["stable"]
-    if not ok(lo):
-        return 0.0
-    while ok(hi) and hi < 4e-3:
-        hi *= 1.4
-    while hi - lo > 6e-5:
-        m = 0.5 * (lo + hi)
-        lo, hi = (m, hi) if ok(m) else (lo, m)
-    return lo * 1e3
+    Delegue a SimBase.stability_limit : meme bissection, meme horizon T_LIMIT
+    et meme critere de stabilite que la reference de la base, donc les deux
+    valeurs sont directement comparables.
+
+    L'implementation locale precedente etait fausse sur deux points :
+      * sa tolerance d'arret, 6e-5, est en METRES, soit 0.060 mm — plus
+        grossiere que la limite en boucle ouverte elle-meme (~0.04 mm). La
+        bissection s'arretait avec lo encore a sa valeur initiale et rendait
+        0.020 mm quel que soit le resultat reel ;
+      * sa boucle d'expansion pouvait sortir avec ok(hi) encore vrai, puis
+        bissecter en supposant l'inverse.
+    """
+    return sim.stability_limit(mk, rpm=rpm, lo=0.02e-3, hi=4.0e-3,
+                               T=T, tol=2e-6) * 1e3
 
 
 def table(sim, plate, label):

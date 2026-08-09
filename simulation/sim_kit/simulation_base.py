@@ -17,9 +17,12 @@ et transfert tension -> deplacement, coin superieur droit).
   * cinq resonances mesurees   : 536.4 / 1071.8 / 2778.6 / 3358.7 / 4122.6 Hz
     predites par le modele EF  : +0.7 / +1.8 / -1.4 / +1.4 / +1.8 %
   * quatre antiresonances mesurees : 734 / 2161 / 3001 / 3805 Hz
-    modele a cinq modes calibre    : 795 / 2101 / 3001 / 3787 Hz
-    (la troisieme coincide exactement ; un modele a TROIS modes n'en reproduit
-     que deux, c'est pourquoi cinq modes sont retenus)
+    modele a cinq modes calibre    : 731 / 2118 / 3008 / 3943 Hz
+    ecarts                         : +0.4 / -2.0 / +0.2 / +3.6 %
+    (comparaison faite sur la reception AU POINT DE FRAPPE, residus D_obs^2 :
+     c'est la grandeur mesuree en Fig. 12a, marteau et capteur au meme coin.
+     Un modele a TROIS modes ne donne que deux antiresonances -- 741 / 2404 Hz,
+     dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
   * frequence de broutement simulee 532 Hz contre 580 Hz mesuree ; la simulation
     publiee de reference donnait 1135 Hz, soit le mauvais mode.
 
@@ -53,9 +56,12 @@ Un correcteur est un objet exposant :
     reset()
         remet les etats internes a zero. Appele avant chaque simulation.
 
-Le simulateur sature lui-meme la commande a +/- V_MAX. Un correcteur qui sature
-en interne doit utiliser la MEME borne, sinon son observateur voit une commande
-differente de celle appliquee.
+Le simulateur ecrete lui-meme la commande a +/- V_MAX avant de l'appliquer
+(newmark_solver.NewmarkSimulator, parametre v_max). La tension renvoyee au
+correcteur au pas suivant (u_prev) est la tension SATUREE, donc un observateur
+voit toujours ce qui a reellement ete applique. Un correcteur qui sature en
+interne doit utiliser la MEME borne, faute de quoi il calculera sa commande
+suivante a partir d'une valeur qu'il croit appliquee et qui ne l'est pas.
 
 --------------------------------------------------------------------------------
 4. UTILISATION
@@ -164,7 +170,7 @@ class SimBase:
             tau = 60.0/(N_TEETH*rpm)
             dt = tau/STEPS_PER_TOOTH
             s = NewmarkSimulator(self.plate, dt=dt, T_end=T, ft=fz, tau=tau,
-                                 verbose=False)
+                                 verbose=False, v_max=V_MAX)
             phi = np.pi - np.arccos(1 - ae/(D_TOOL/2))
             a3, a4 = precompute_alpha_periodic(
                 dt, STEPS_PER_TOOTH, s.nstep, 2*np.pi*rpm/60, N_TEETH, D_TOOL/2,
@@ -283,7 +289,7 @@ class SimBase:
         dt = tau/STEPS_PER_TOOTH
         NP = 5022
         s = NewmarkSimulator(self.plate, dt=dt, T_end=(NP*n_period + 2)*dt,
-                             ft=1.0, tau=tau, verbose=False)
+                             ft=1.0, tau=tau, verbose=False, v_max=V_MAX)
         n = s.nstep
         NP = n//n_period
         df = 1.0/(NP*dt)
@@ -330,22 +336,32 @@ def check_model(verbose=True):
                   f"ecart {100*err[i]:+.3f} %)")
     assert err.max() < 1e-3, "calibration des frequences incorrecte"
 
+    # Les antiresonances de reference proviennent de la Fig. 12(a) de Du et al.,
+    # ou le marteau ET le capteur sont au MEME point (coin superieur droit) :
+    # c'est une reception AU POINT DE FRAPPE. Les residus sont donc D_obs*D_obs,
+    # tous positifs, et les zeros s'intercalent strictement entre les poles --
+    # ce que la mesure confirme (734 < 1072, 2161 < 2779, 3001 < 3359, 3805 <
+    # 4123). Utiliser D_obs*D_tool comparerait une reception de TRANSFERT
+    # (outil en x=0 -> capteur) a une mesure au point de frappe : residus de
+    # signes mixtes, motif de zeros sans rapport.
     ff = np.linspace(60, 4600, 60000)
     w = 2*np.pi*ff
     m = sim.modal
     den = ((m['omega'][:, None]**2 - w[None, :]**2)
            + 2j*m['zeta'][:, None]*m['omega'][:, None]*w[None, :])
-    G = np.abs(np.sum((m['D_obs']*m['D_tool'])[:, None]/den, axis=0))
+    G = np.abs(np.sum((m['D_obs']**2)[:, None]/den, axis=0))
     lg = np.log(G)
     anti = [ff[i] for i in range(1, len(G)-1) if lg[i] < lg[i-1] and lg[i] < lg[i+1]]
     target = [734, 2161, 3001, 3805]
     if verbose:
-        print("2. antiresonances")
+        print("2. antiresonances (reception au point de frappe, Fig. 12a)")
         print(f"   mesurees : {target}")
         print(f"   modele   : {[round(a) for a in anti]}")
     assert len(anti) >= 4, "le modele ne produit pas quatre antiresonances"
-    for t in (3001, 3805):
+    for t in target:
         d = min(abs(a - t) for a in anti)
+        if verbose:
+            print(f"   {t:5d} Hz -> ecart {d:5.0f} Hz ({100*d/t:+.1f} %)")
         if d/t > 0.05:
             ok = False
             print(f"   ATTENTION : antiresonance {t} Hz mal reproduite (ecart {d:.0f} Hz)")

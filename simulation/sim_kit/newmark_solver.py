@@ -6,6 +6,11 @@ Intégration temporelle du modèle de fraisage avec retard régénératif :
 
 Schéma de Newmark implicite (gamma=1/2, beta=1/4).
 Le terme régénératif utilise les états retardés stockés dans l'historique.
+
+La commande est saturée par le simulateur lui-même à +/- v_max avant d'être
+appliquée à la plaque ET avant d'être renvoyée au correcteur au pas suivant
+(u_prev), de sorte que l'observateur d'un correcteur voit toujours la tension
+réellement appliquée.
 """
 import numpy as np
 
@@ -13,16 +18,27 @@ import numpy as np
 class NewmarkSimulator:
     """
     Simulateur Newmark adapté au fraisage avec retard et outil mobile.
+
+    Parameters
+    ----------
+    v_max : borne de l'amplificateur, en volts. La commande rendue par le
+        correcteur y est écrêtée avant application. `SimBase` passe
+        `simulation_base.V_MAX` ; la valeur par défaut n'est qu'un garde-fou
+        pour un usage direct de cette classe. `None` désactive la saturation
+        (à n'utiliser que pour un diagnostic, jamais pour comparer des lois
+        de commande).
     """
 
     def __init__(self, plate, dt: float, T_end: float,
                  ft: float, tau: float,
-                 verbose: bool = True):
+                 verbose: bool = True,
+                 v_max: float = 150.0):
         self.plate = plate
         self.dt = dt
         self.T_end = T_end
         self.ft = ft
         self.tau = tau
+        self.v_max = v_max
         self.t_vec = np.arange(0, T_end + dt/2, dt)
         self.nstep = len(self.t_vec)
         self.n_tau = int(np.round(tau / dt))
@@ -133,6 +149,12 @@ class NewmarkSimulator:
             else:
                 u = 0.0
             u_cmd[k] = u
+
+            # Saturation amplificateur : la borne du banc s'applique a TOUT
+            # correcteur, qu'il sature en interne ou non. u_cmd garde la
+            # commande brute, u_real la tension effectivement appliquee.
+            if self.v_max is not None:
+                u = float(np.clip(u, -self.v_max, self.v_max))
 
             # Application au piezo (saturation, slew, ampli, hystérésis)
             if piezo is not None and controller is not None:

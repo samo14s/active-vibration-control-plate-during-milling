@@ -76,8 +76,18 @@ CE QUE CETTE IMPLEMENTATION DONNE, ET CE QU'ELLE NE DONNE PAS ENCORE
        a 4900 tr/min :  libre 0.0501 mm  ->  retard actif 0.3241 mm
                         pour 18.9 V de crete seulement.
 
-   C'est la MEME limite que le meilleur LQG de ce depot, obtenue avec SIX FOIS
-   MOINS de tension (18.9 V contre 33 V de crete, et 5.3 V a 0.10 mm).
+   RECTIFICATION. J'ai d'abord ecrit que c'etait "la MEME limite que le
+   meilleur LQG" parce que les deux affichaient 0.3241. C'etait un ARTEFACT DE
+   QUANTIFICATION : la bissection par defaut a un pas de 0.001943 mm, et deux
+   limites plus proches que cela tombent sur la meme valeur imprimee. En
+   resserrant la tolerance d'un facteur 30 :
+
+       LQG modal        0.324789 mm
+       Eq. (30)         0.324363 mm
+
+   soit 0.13 % d'ecart -- ni identiques, ni distinguables au reglage publie, et
+   AUCUNE des deux n'est egale au 0.3241 affiche. Ce qui reste vrai et n'est pas
+   affecte est la TENSION : 18.9 V de crete contre 33 V, et 5.3 V a 0.10 mm.
 
 2. MAIS UN SEUL COUPLE (Kp, Kd) NE TIENT PAS SUR LA PLAGE DE VITESSES :
 

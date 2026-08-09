@@ -498,7 +498,22 @@ class SimBase:
     # -- limite de stabilite par bissection ---------------------------------
     def stability_limit(self, make_ctrl, rpm=4900, lo=0.02e-3, hi=1.5e-3,
                         T=T_LIMIT, tol=2e-5):
-        """Plus grande profondeur de passe stable. make_ctrl=None -> boucle ouverte."""
+        """Plus grande profondeur de passe stable. make_ctrl=None -> boucle ouverte.
+
+        RESOLUTION -- a lire avant de comparer deux valeurs. La bissection
+        s'arrete quand hi - lo <= tol et rend 0.5*(lo+hi) : la valeur rendue vit
+        donc sur une GRILLE de pas tol/2, et deux correcteurs dont les limites
+        vraies different de moins de tol/2 rendent EXACTEMENT le meme nombre.
+        Avec les reglages employes par run_demo (lo = 0.02 mm, hi = 4.0 mm,
+        tol = 2e-6 m) le pas vaut 0.00194 mm.
+
+        Consequence pratique : les valeurs publiees a quatre decimales n'ont de
+        sens qu'a +/- 0.001 mm pres, et un ecart inferieur a 0.002 mm entre deux
+        colonnes N'EST PAS un ecart. Cela a deja produit une affirmation fausse
+        dans ce depot -- deux correcteurs affichant tous deux 0.3241 alors que
+        leurs limites valent 0.32479 et 0.32436 mm, et qu'aucune des deux n'est
+        0.3241. Pour departager, resserrer tol.
+        """
         def ok(ap):
             tau = 60.0/(N_TEETH*rpm)
             dt = tau/STEPS_PER_TOOTH

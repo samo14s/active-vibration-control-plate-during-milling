@@ -12,8 +12,10 @@ branche par l'interface decrite plus bas.
 1. CE QUI EST VALIDE, ET COMMENT
 --------------------------------------------------------------------------------
 Le modele est cale sur deux courbes experimentales numerisees (reception au choc
-et transfert tension -> deplacement, coin superieur droit).
+et transfert tension -> deplacement, coin superieur droit). Ces courbes valident
+la FORME de la reponse, PAS son niveau : voir la mise en garde plus bas.
 
+CE QUI EST VALIDE
   * cinq resonances mesurees   : 536.4 / 1071.8 / 2778.6 / 3358.7 / 4122.6 Hz
     predites par le modele EF  : +0.7 / +1.8 / -1.4 / +1.4 / +1.8 %
   * quatre antiresonances mesurees : 734 / 2161 / 3001 / 3805 Hz
@@ -25,6 +27,31 @@ et transfert tension -> deplacement, coin superieur droit).
      dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
   * frequence de broutement simulee 532 Hz contre 580 Hz mesuree ; la simulation
     publiee de reference donnait 1135 Hz, soit le mauvais mode.
+
+CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
+  Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
+  (1 um/N), vaut 43.8 um/N. Une plaque de Kirchhoff aux dimensions du Tableau 1
+  donne 6.90 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.35.
+  Ce n'est pas une erreur du modele. Les memes matrices K et M reproduisent les
+  CINQ frequences mesurees a 2 % pres ; or la souplesse est K^-1. Une raideur
+  6.35 fois trop faible donnerait f1 = 540/sqrt(6.35) = 214 Hz, pas 540 Hz. En
+  termes modaux, 43.8 um/N exigerait D_obs[0]^2 = 504 alors que la normalisation
+  en masse du premier mode plafonne ce carre vers 45 : un facteur 11 sur une
+  quantite qui n'a aucune liberte. De plus les propres lobes de stabilite de
+  l'article (Fig. 13, 0.03-0.05 mm) s'accordent avec la valeur RAIDE ; une
+  plaque 6.35 fois plus souple donnerait ~0.008 mm.
+
+  Conclusion : l'echelle en dB de la Fig. 12 n'est pas exploitable. Comme
+  H_Pe ne peut se calibrer que par le rapport des deux courbes, LE NIVEAU DE
+  H_Pe RESTE NON VALIDE. Seule sa FORME l'est (repartition des creux, cf.
+  model_v2.check_patch_position). Toute conclusion de performance en boucle
+  fermee -- limite de passe atteinte, tension necessaire -- herite donc de
+  cette incertitude, et doit etre accompagnee d'un balayage :
+
+      SimBase(gain_H=0.5) ... SimBase(gain_H=2.0)
+
+  en synthetisant le correcteur sur la plaque nominale et en le simulant sur la
+  plaque perturbee (voir `run_demo.py --full`, lignes H x0.5 et H x2.0).
 
 Verification a l'execution : appeler check_model() ; il refait ces controles et
 leve une exception si un ecart depasse la tolerance.
@@ -134,9 +161,15 @@ class SimBase:
         seulement. Passer par ces arguments plutot que de reaffecter les
         constantes du module : une reaffectation reste active pour toutes les
         instances construites ensuite dans le meme processus.
+    gain_H : facteur multiplicatif sur H_Pe_modal. Le NIVEAU du couplage
+        piezoelectrique n'est PAS valide experimentalement (voir la section 1
+        du docstring de module) : ce facteur existe pour balayer cette
+        incertitude. Construire la plaque nominale (gain_H = 1) pour SYNTHETISER
+        le correcteur, puis une plaque perturbee pour le SIMULER, donne un vrai
+        essai de robustesse a l'erreur de gain actionneur.
     """
 
-    def __init__(self, verbose=False, patch=None, zeta=None):
+    def __init__(self, verbose=False, patch=None, zeta=None, gain_H=1.0):
         patch = PATCH if patch is None else patch
         zeta = ZETA_MODES if zeta is None else zeta
         p = PlateModel(PLATE_L, PLATE_H, PLATE_T, RHO, YOUNG, POISSON,
@@ -146,9 +179,12 @@ class SimBase:
         p.set_observation(*SENSOR_XZ)
         p.add_piezo_patch(patch['x1'], patch['x2'], patch['z1'], patch['z2'],
                           patch['d31'], patch['thickness'], patch['E'], patch['nu'])
+        if gain_H != 1.0:
+            p.H_Pe_modal = np.asarray(p.H_Pe_modal, float)*gain_H
         p.calibrate_frequencies(F_MEASURED)
         self.plate = p
         self.patch_cfg = patch
+        self.gain_H = gain_H
         self.k1c, self.k2c = cutting_coefficients(KN, MU_C, HELIX, RAKE)
         self._cache = {}
         if verbose:
@@ -383,9 +419,41 @@ def check_model(verbose=True):
             ok = False
             print(f"   ATTENTION : antiresonance {t} Hz mal reproduite (ecart {d:.0f} Hz)")
 
+    # Niveau absolu. On ne peut PAS le confronter a la Fig. 12 (son echelle en
+    # dB est inexploitable, cf. section 1) ; on verifie donc la coherence
+    # INTERNE du modele, ce qui attrape une erreur de normalisation modale ou de
+    # D_obs sans rien emprunter a l'article :
+    #   - la souplesse statique du modele modal tronque doit approcher la
+    #     resolution statique EF exacte (memes K, tous les ddl) ;
+    #   - cette souplesse doit depasser celle d'une poutre encastree de pleine
+    #     largeur, qui est une borne inferieure stricte pour une charge au coin.
+    from scipy.sparse.linalg import spsolve
+    from kirchhoff_q4 import shape_at_point
+    pl = sim.plate
+    N_obs = shape_at_point(*SENSOR_XZ, MESH_N1, MESH_N2,
+                           pl.lex, pl.ley, pl.n1)[pl.DOFf]
+    C_exact = float(N_obs @ spsolve(pl.K_free.tocsc(), N_obs))
+    C_modal = float(np.sum(np.asarray(pl.D_obs)**2 / np.asarray(pl.omega_n)**2))
+    D_flex = YOUNG*PLATE_T**3/(12*(1 - POISSON**2))
+    C_beam = PLATE_H**3/(3*D_flex*PLATE_L)
+    if verbose:
+        print("3. niveau absolu (coherence interne, sans recours a la Fig. 12)")
+        print(f"   souplesse statique EF exacte      : {C_exact*1e6:7.3f} um/N")
+        print(f"   modele modal a {N_MODES} modes           : {C_modal*1e6:7.3f} um/N"
+              f"  ({100*C_modal/C_exact:.1f} % de l'exacte)")
+        print(f"   borne inf. poutre pleine largeur  : {C_beam*1e6:7.3f} um/N"
+              f"  (rapport {C_exact/C_beam:.2f})")
+        print(f"   Fig. 12(a) lue a 1 um/N           :   43.83 um/N"
+              f"  -> facteur {43.83e-6/C_exact:.2f}, ECHELLE INEXPLOITABLE")
+        print("   => le NIVEAU de H_Pe n'est pas valide ; balayer gain_H.")
+    assert 0.80 < C_modal/C_exact < 1.05, \
+        "troncature modale incoherente avec la statique exacte"
+    assert 1.0 < C_exact/C_beam < 3.0, \
+        "souplesse statique hors des bornes physiques d'une plaque encastree"
+
     lim = sim.stability_limit(None, rpm=4900)
     if verbose:
-        print(f"3. limite de stabilite en boucle ouverte a 4900 tr/min : "
+        print(f"4. limite de stabilite en boucle ouverte a 4900 tr/min : "
               f"{lim*1e3:.4f} mm  (reference de cette base : 0.0605 mm)")
         print("   cette valeur depend de l'horizon T et de la fenetre de mesure ;")
         print("   c'est la reference de CETTE base, a ne pas comparer a une valeur")

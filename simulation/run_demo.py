@@ -28,6 +28,15 @@ elle-meme ; elle rendait 0.020 mm par construction, et les valeurs annoncees
 auparavant (0.049 / 0.515 / 0.515) n'etaient pas celles que le code produisait.
 `blim` delegue desormais a SimBase.stability_limit, donc ces limites sont
 directement comparables a la reference de la base.
+
+`--full` ajoute, aux perturbations K / C / kc, un balayage du gain actionneur
+`H x0.50` et `H x2.00` : le NIVEAU de H_Pe n'est pas valide experimentalement
+(cf. section 1 du docstring de simulation_base). Sur ce balayage le pire cas
+passe de 0.5437 a 0.3183 mm (-41 %) en gain divise par deux, et redescend a
+0.4679 mm (-14 %) en gain double -- le comportement n'est pas monotone, car un
+gain double double aussi le gain de boucle d'un correcteur synthetise sur le
+gain nominal. Les valeurs ci-dessus sont donc celles d'UN point d'un parametre
+non calibre. L'egalite LQG / ESO, elle, tient aux trois gains (ecart < 2 %).
 """
 import argparse
 import copy
@@ -131,13 +140,22 @@ def main():
     if args.full:
         K0 = np.array(sim.plate.Kp, float).copy()
         C0 = np.array(sim.plate.Cp, float).copy()
+        H0 = np.array(sim.plate.H_Pe_modal, float).copy()
         k1, k2 = float(sim.k1c), float(sim.k2c)
-        for name, ks, cs, kcs in [("K x0.90", .90, 1, 1),
-                                  ("K x1.10", 1.10, 1, 1),
-                                  ("C x0.80", 1, .80, 1),
-                                  ("kc x2.9", 1, 1, 2.9)]:
+        # Les correcteurs sont synthetises sur `plate` (copie nominale) ; seule
+        # la plaque SIMULEE est perturbee, donc c'est bien un essai de
+        # robustesse a l'erreur de modele. H x0.5 / H x2.0 balaient le gain
+        # actionneur, dont le NIVEAU n'est pas valide experimentalement
+        # (cf. section 1 du docstring de simulation_base).
+        for name, ks, cs, kcs, hs in [("K x0.90", .90, 1, 1, 1),
+                                      ("K x1.10", 1.10, 1, 1, 1),
+                                      ("C x0.80", 1, .80, 1, 1),
+                                      ("kc x2.9", 1, 1, 2.9, 1),
+                                      ("H x0.50", 1, 1, 1, 0.5),
+                                      ("H x2.00", 1, 1, 1, 2.0)]:
             sim.plate.Kp = K0 * ks
             sim.plate.Cp = C0 * cs
+            sim.plate.H_Pe_modal = H0 * hs
             sim.k1c, sim.k2c = k1 * kcs, k2 * kcs
             sim._cache.clear()
             print(f"\n=== {name} (perturbation reservee) ===")

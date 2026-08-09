@@ -73,6 +73,36 @@ descendre nettement sous 11.14 ; les valeurs de l'ordre de 1 sont atteignables.
 Un correcteur qui affiche mieux que ces reperes **sans avoir rien change au
 modele** doit etre suspecte avant d'etre publie.
 
+## Ce que les courbes experimentales ne valident PAS
+
+Les deux courbes numerisees valident la **forme** de la reponse : cinq
+resonances, quatre antiresonances, repartition des creux du transfert en
+tension. Elles ne valident **pas son niveau**.
+
+Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
+(1 um/N), vaut 43.8 um/N ; une plaque de Kirchhoff aux dimensions du Tableau 1
+donne 6.90 um/N par resolution statique EF exacte. Le facteur 6.35 ne vient pas
+du modele : les memes matrices reproduisent les cinq frequences a 2 % pres, et
+la souplesse est leur inverse — une raideur 6.35 fois trop faible donnerait
+f1 = 214 Hz au lieu de 540 Hz. Les lobes de stabilite de l'article (Fig. 13)
+s'accordent d'ailleurs avec la valeur raide. L'echelle en dB de la Fig. 12 est
+donc inexploitable.
+
+Consequence directe : **le niveau de `H_Pe` n'est pas calibre**, puisqu'il ne
+pourrait l'etre que par le rapport des deux courbes. Les 482.4 um/N du tableau
+ci-dessus sont une sortie de modele, pas une mesure. Toute performance en
+boucle fermee herite de cette incertitude ; annoncez-la en balayant le gain :
+
+```python
+sim_nom = SimBase()                  # synthese du correcteur
+sim_lo  = SimBase(gain_H=0.5)        # simulation, gain sous-estime
+sim_hi  = SimBase(gain_H=2.0)        # simulation, gain surestime
+```
+
+`check_model()` verifie la coherence interne du niveau (statique modale contre
+statique EF exacte, et contre la borne poutre) sans rien emprunter a la Fig. 12.
+`run_demo.py --full` inclut les lignes `H x0.50` et `H x2.00`.
+
 ## Pieges rencontres, a ne pas refaire
 
 1. **L'extraction lineaire de la fonction de sensibilite est invalide** pour les

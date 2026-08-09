@@ -11,25 +11,26 @@ patch piezo VERTICAL 20 x 60 mm au coin inferieur gauche — la configuration qu
 montre la photo de la Fig. 11 de l'article. Une version precedente de ce fichier
 utilisait un patch horizontal au coin inferieur droit : c'etait une erreur, voir
 l'en-tete de model_v2.py. Amortissements modaux mesures (Tableau 4), et patch
-COLLE et non soude (shear lag, eta = 0.886).
+COLLE et non soude (shear lag, eta = 0.886), avec le couplage
+membrane-flexion du patch colle d'un seul cote (-11.6 % sur H_Pe).
 
 Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
 
                      3000    4200    4900    6000    7200   pire cas
     boucle ouverte  0.0773  0.0754  0.0579  0.1026  0.2600   0.0579
-    LQG modal       0.6953  0.7186  0.6040  0.4194  0.9674   0.4194
-    ESO propose     0.7011  0.7206  0.5904  0.4038  0.9246   0.4038
+    LQG modal       0.6720  0.7050  0.5748  0.3960  0.9285   0.3960
+    ESO propose     0.6701  0.6681  0.5612  0.3824  0.8897   0.3824
 
 c.-a-d. performance SATUREE : deux architectures de richesse tres differente
-atteignent le meme plafond (0.42 et 0.40 mm, soit 3.7 % d'ecart, contre 0.058
-mm en boucle ouverte). C'est le resultat central de l'etude, et il survit a la
+atteignent le meme plafond (0.396 et 0.382 mm, soit 3.4 % d'ecart, contre
+0.058 mm en boucle ouverte). C'est le resultat central de l'etude, et il survit a la
 correction de geometrie.
 
 MISE EN GARDE. Les reglages X_LQG et X_ESO ci-dessous ont ete optimises sur la
 geometrie de patch PRECEDENTE, qui etait fausse. Le tableau mesure donc ce que
 CES reglages-la donnent sur le modele corrige, pas ce que chaque architecture
 peut atteindre au mieux. Une comparaison d'architectures equitable demande de
-refaire l'optimisation sur la base corrigee ; en l'etat, l'ecart de 3.7 % entre
+refaire l'optimisation sur la base corrigee ; en l'etat, l'ecart de 3.4 % entre
 LQG et ESO n'est pas interpretable comme un avantage de l'un sur l'autre.
 
 Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
@@ -48,9 +49,9 @@ directement comparables a la reference de la base.
     x1.00         0.0462        0.5457           0.5457
     x2.00         0.0462        0.4582 (-16 %)   0.4796 (-12 %)
 
-(balayage mesure AVANT la mise en place de la couche de colle ; les ordres de
-grandeur et le caractere non monotone sont inchanges, le gain nominal a
-simplement baisse de 11 %.)
+(balayage mesure AVANT la couche de colle et le couplage membrane-flexion ;
+les ordres de grandeur et le caractere non monotone sont inchanges, seul le
+gain nominal a baisse -- de 11 % puis de 12 %.)
 
 La boucle ouverte ne bouge pas d'un chiffre : H_Pe n'entre pas dans le modele
 sans commande. En boucle fermee le pire cas perd 42 % a gain divise par deux ET

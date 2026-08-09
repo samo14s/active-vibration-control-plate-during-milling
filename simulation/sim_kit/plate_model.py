@@ -13,7 +13,7 @@ from scipy.sparse import csr_matrix, lil_matrix
 from scipy.sparse.linalg import eigsh
 from kirchhoff_q4 import (
     stiffness_matrix_K, mass_matrix_K,
-    shape_at_point, laplace_n_patch
+    shape_at_point, laplace_n_patch, matrix_der_K
 )
 
 
@@ -63,6 +63,26 @@ def shear_lag_efficiency(hx: float, hz: float,
     def _eta(x):
         return 1.0 - np.tanh(x)/x if x > 1e-12 else 0.0
     return float(_eta(Gamma*hx)*_eta(Gamma*hz)), float(Gamma)
+
+
+def _bilinear_B(xi, eta, lex, ley):
+    """Matrice B membranaire (3x8) d'un Q4 bilineaire, ordre de noeuds
+    identique a l'element de flexion : (-1,-1), (+1,-1), (+1,+1), (-1,+1)."""
+    dNx = np.array([-(1-eta), (1-eta), (1+eta), -(1+eta)])/4*(2/lex)
+    dNy = np.array([-(1-xi), -(1+xi), (1+xi), (1-xi)])/4*(2/ley)
+    B = np.zeros((3, 8))
+    B[0, 0::2] = dNx
+    B[1, 1::2] = dNy
+    B[2, 0::2] = dNy
+    B[2, 1::2] = dNx
+    return B
+
+
+def _Qbar(E, nu):
+    """Matrice de rigidite reduite en contraintes planes (3x3)."""
+    return E/(1 - nu**2)*np.array([[1.0, nu, 0.0],
+                                   [nu, 1.0, 0.0],
+                                   [0.0, 0.0, (1 - nu)/2]])
 
 
 class PlateModel:
@@ -229,7 +249,8 @@ class PlateModel:
                         rho_Pe: float = 7450.0,
                         structural: bool = True,
                         G_adh: float = None, t_adh: float = None,
-                        alpha_lag: float = 6.0):
+                        alpha_lag: float = 6.0,
+                        membrane: bool = True):
         """
         Ajoute un patch piézoélectrique :
 
@@ -265,6 +286,15 @@ class PlateModel:
            coefficients d'ajustement independants.
            G_adh = None (defaut) restitue le collage parfait.
 
+        4. Couplage MEMBRANE-FLEXION (membrane=True, defaut). Un patch colle
+           d'un seul cote applique aussi une resultante membranaire, qui se
+           rabat en flexion parce que le stratifie plaque+patch est non
+           symetrique. Voir _membrane_load_correction. Effet mesure : -11 %
+           sur H_Pe pour les modes 1, 2, 4, 5 et -29 % sur le mode 3. NE change
+           PAS la signature des creux de la Fig. 12(b) : l'effet est quasi
+           scalaire, et un scalaire se simplifie dans les rapports de residus
+           qui fixent les zeros.
+
         Si precompute_Dp() / set_observation() ont déjà été appelés, ils
         sont automatiquement relancés avec les nouveaux modes.
         """
@@ -292,6 +322,24 @@ class PlateModel:
                                 self.n1, self.ndof)
 
         H_Pe_phys = m_piezo * g_lap
+
+        # Couplage membrane-flexion du patch colle d'un seul cote : sous
+        # tension il applique aussi une resultante membranaire, qui se rabat en
+        # flexion parce que le stratifie est non symetrique.
+        self.membrane_coupling = bool(membrane)
+        if membrane:
+            # M_E = N_E (bp + h_Pa)/2, donc N_E porte le signe OPPOSE de
+            # m_piezo : ce dernier est deja -M_E (convention de B_b).
+            n_E = eta_bond * E_Pe * d31 / (1 - nu_Pe)
+            N_E = np.array([n_E, n_E, 0.0])
+            corr, _ = self._membrane_load_correction(xP1, xP2, zP1, zP2,
+                                                     h_Pa, E_Pe, nu_Pe, N_E)
+            if self.verbose:
+                r = (np.linalg.norm(corr[self.DOFf])
+                     / max(np.linalg.norm(H_Pe_phys[self.DOFf]), 1e-30))
+                print(f"[PlateModel] couplage membrane-flexion : "
+                      f"|correction|/|flexion| = {r:.3f} en ddl bruts")
+            H_Pe_phys = H_Pe_phys + corr
         self.H_Pe_modal = self.V.T @ H_Pe_phys[self.DOFf]    # (n_modes,)
         self.patch = dict(xP1=xP1, xP2=xP2, zP1=zP1, zP2=zP2,
                           m_piezo=m_piezo, structural=structural)
@@ -379,6 +427,112 @@ class PlateModel:
             self.precompute_Dp(self.zp_pos, self.Dp_array.shape[1])
         if hasattr(self, 'x_obs'):
             self.set_observation(self.x_obs, self.z_obs)
+
+    # ---------------------------------------------------------------
+    def _membrane_load_correction(self, xP1, xP2, zP1, zP2,
+                                  h_Pa, E_Pe, nu_Pe, N_E):
+        """
+        Correction du vecteur de charge piezo due au couplage MEMBRANE-FLEXION.
+
+        Un patch colle d'UN SEUL COTE n'applique pas qu'un moment : sous
+        tension il applique aussi une resultante membranaire N_E dans son plan.
+        Le stratifie plaque+patch etant NON SYMETRIQUE, sa matrice de couplage
+        B = Qbar_p * h_p (h_plaque + h_p) / 2 est non nulle sur la zone du
+        patch, et cette resultante se rabat en flexion. Une formulation de
+        Kirchhoff en flexion pure ne peut pas le representer : elle n'a pas de
+        ddl membranaires.
+
+        Les modes membranaires de cette plaque sont vers 33 kHz, tres au-dessus
+        des 4.1 kHz utiles ; on condense donc les ddl (u, v) en STATIQUE :
+
+            [K_mm  K_mb][u]   [f_m]
+            [K_mb^T K_bb][w] = [f_b]
+            =>  (K_bb - K_mb^T K_mm^-1 K_mb) w = f_b - K_mb^T K_mm^-1 f_m
+
+        Cette methode ne renvoie que la correction de CHARGE, second terme du
+        membre de droite. La correction de RAIDEUR, elle, est deja prise en
+        compte : _add_patch_structure utilise la rigidite de section
+        transformee, qui est exactement le resultat de la meme condensation
+        (verifie a 0.002 % pres, cf. VERIFICATION.md section 7).
+
+        Returns
+        -------
+        (correction, info) : vecteur (ndof,) a AJOUTER a la charge de flexion,
+        et un dict de diagnostic.
+        """
+        from scipy.sparse.linalg import splu
+
+        n1 = self.n1
+        nnod = n1*self.n2
+        Q_pl = _Qbar(self.E, self.nu)
+        Q_pa = _Qbar(E_Pe, nu_Pe)
+        A_bare = Q_pl*self.bp
+        A_pat = Q_pl*self.bp + Q_pa*h_Pa
+        B_pat = Q_pa*(h_Pa*(self.bp + h_Pa)/2)
+
+        gp = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
+        rm, cm, vm = [], [], []
+        rc, cc, vc = [], [], []
+        f_m = np.zeros(2*nnod)
+        for J in range(1, self.N2 + 1):
+            for I in range(1, self.N1 + 1):
+                xl, xh = (I-1)*self.lex, I*self.lex
+                zl, zh = (J-1)*self.ley, J*self.ley
+                ox = min(xh, xP2) - max(xl, xP1)
+                oz = min(zh, zP2) - max(zl, zP1)
+                cov = ox > 1e-12 and oz > 1e-12
+                nodes = [(J-1)*n1 + (I-1), (J-1)*n1 + I, J*n1 + I, J*n1 + (I-1)]
+                mdof = np.array([[2*n, 2*n+1] for n in nodes]).ravel()
+                bdof = np.array([[3*n, 3*n+1, 3*n+2] for n in nodes]).ravel()
+
+                # rigidite membranaire : integrale sur TOUT l'element, avec la
+                # part du patch ponderee par le recouvrement
+                frac = (ox*oz)/(self.lex*self.ley) if cov else 0.0
+                Am = A_bare + frac*(A_pat - A_bare)
+                Ke_mm = np.zeros((8, 8))
+                for i in range(2):
+                    for j in range(2):
+                        Bm = _bilinear_B(gp[i], gp[j], self.lex, self.ley)
+                        Ke_mm += (self.lex/2)*(self.ley/2)*Bm.T @ Am @ Bm
+                for a in range(8):
+                    for b in range(8):
+                        rm.append(mdof[a]); cm.append(mdof[b])
+                        vm.append(Ke_mm[a, b])
+                if not cov:
+                    continue
+
+                # couplage et charge membranaire : integres EXACTEMENT sur
+                # l'intersection patch/element, comme laplace_n_patch
+                a_, b_ = max(xl, xP1), min(xh, xP2)
+                c_, d_ = max(zl, zP1), min(zh, zP2)
+                xm, xr = (a_+b_)/2, (b_-a_)/2
+                zm, zr = (c_+d_)/2, (d_-c_)/2
+                Ke_mb = np.zeros((8, 12))
+                fe_m = np.zeros(8)
+                for i in range(2):
+                    for j in range(2):
+                        xg = xm + xr*gp[i]
+                        zg = zm + zr*gp[j]
+                        xi = 2*(xg - xl)/self.lex - 1
+                        et = 2*(zg - zl)/self.ley - 1
+                        Bm = _bilinear_B(xi, et, self.lex, self.ley)
+                        Bb = matrix_der_K(xi, et, self.lex, self.ley)
+                        w = xr*zr
+                        Ke_mb += w*Bm.T @ B_pat @ Bb
+                        fe_m += w*Bm.T @ N_E
+                for a in range(8):
+                    for b in range(12):
+                        rc.append(mdof[a]); cc.append(bdof[b])
+                        vc.append(Ke_mb[a, b])
+                f_m[mdof] += fe_m
+
+        K_mm = csr_matrix((vm, (rm, cm)), shape=(2*nnod, 2*nnod))
+        K_mb = csr_matrix((vc, (rc, cc)), shape=(2*nnod, self.ndof))
+        # encastrement : u = v = 0 sur le bord inferieur
+        mfree = np.setdiff1d(np.arange(2*nnod), np.arange(2*n1))
+        y = splu(K_mm[mfree, :][:, mfree].tocsc()).solve(f_m[mfree])
+        corr = -(K_mb[mfree, :].T @ y)
+        return np.asarray(corr).ravel(), dict(n_mfree=len(mfree))
 
     # ---------------------------------------------------------------
     def calibrate_frequencies(self, f_targets_hz):

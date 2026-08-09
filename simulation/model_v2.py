@@ -46,36 +46,36 @@ CE QUE CETTE CONFIGURATION NE REPRODUIT PAS — a savoir avant de s'en servir
 * Les FREQUENCES des creux sont fausses au milieu de la bande :
 
       mesure : 788    1493    3609 Hz
-      modele : 817    2654    3754 Hz
-      ecart  : +3.7 %  +77.8 %  +4.0 %
+      modele : 818    2655    3750 Hz
+      ecart  : +3.8 %  +77.8 %  +3.9 %
 
   Le premier et le dernier sont bons a 4 % pres, le deuxieme est hors de
   portee : aucune des quatre configurations, ni aucun decalage de patch ou de
   capteur teste, ne descend ce zero jusqu'a 1493 Hz. Il faudrait un rapport
-  de residus |r2/r1| ~ 0.95 alors que le modele donne 1.53. C'est une limite
+  de residus |r2/r1| ~ 0.95 alors que le modele donne 1.52. C'est une limite
   du modele de couplage, pas du choix de position.
 
-* Le premier mode monte a 575.4 Hz contre 540 Hz mesures (+6.5 %). Ce n'est
+* Le premier mode monte a 572.3 Hz contre 540 Hz mesures (+6.0 %). Ce n'est
   PAS un argument contre cette position : `_add_patch_structure` suppose un
   collage PARFAIT, alors que la couche de colle ne transmet le cisaillement
   que partiellement. Les deux bornes physiques encadrent la mesure dans les
   deux orientations :
 
       sans raidissement            : 521.1 Hz
-      horizontal, collage parfait  : 575.4 Hz     mesure : 540.0 Hz
-      vertical,   collage parfait  : 540.0 Hz
+      horizontal, collage parfait  : 572.3 Hz     mesure : 540.0 Hz
+      vertical,   collage parfait  : 541.1 Hz
 
   Le premier mode ne discrimine donc pas l'orientation ; il ne fait que fixer
-  une raideur de collage inconnue. Que la configuration verticale tombe
-  exactement sur 540 Hz est une coincidence : elle compense un modele de
-  plaque nue deja 3.5 % trop souple.
+  une raideur de collage inconnue. Que la configuration verticale tombe tout
+  pres de 540 Hz est une coincidence : elle compense un modele de plaque nue
+  deja 3.5 % trop souple.
 
 * Le NIVEAU absolu de H_Pe reste non valide : la Fig. 12(a) implique une
-  souplesse statique 6.35 fois celle d'une plaque de Kirchhoff aux dimensions
+  souplesse statique 6.36 fois celle d'une plaque de Kirchhoff aux dimensions
   du Tableau 1, et contredit les propres lobes de stabilite de l'article
   (Fig. 13). Voir VERIFICATION.md, point F9.
 
-||H|| = 0.5546 (x1.86 vs la base v1) : plus d'autorite actionneur.
+||H|| = 0.5541 (x1.87 vs la base v1) : plus d'autorite actionneur.
 Frequences recalibrees identiques (erreur <= 0.67 % vs mesures Du).
 
 --------------------------------------------------------------------------

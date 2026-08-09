@@ -14,13 +14,14 @@ patch piezo inferieur droit horizontal, et amortissements modaux mesures
 Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
 
                      3000    4200    4900    6000    7200   pire cas
-    boucle ouverte  0.0598  0.0579  0.0443  0.0929  0.2075   0.0443
-    LQG modal       0.5826  0.7089  0.6292  0.5437  0.8955   0.5437
-    ESO propose     0.5612  0.6662  0.6118  0.5418  0.8450   0.5418
+    boucle ouverte  0.0598  0.0579  0.0462  0.0929  0.2095   0.0462
+    LQG modal       0.5845  0.7109  0.6312  0.5457  0.8974   0.5457
+    ESO propose     0.5632  0.6681  0.6137  0.5457  0.8469   0.5457
 
 c.-a-d. performance SATUREE : trois architectures de richesse croissante
-atteignent le meme plafond — l'ESO est meme marginalement en dessous du LQG
-(0.5418 contre 0.5437, soit 0.4 %). C'est le resultat central de l'etude.
+atteignent le meme plafond — les pires cas du LQG et de l'ESO sont ici
+IDENTIQUES (0.5457 mm, tous deux a 6000 tr/min). C'est le resultat central
+de l'etude.
 
 Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
 6e-5 METRES, soit 0.060 mm, plus grossiere que la limite en boucle ouverte
@@ -31,12 +32,19 @@ directement comparables a la reference de la base.
 
 `--full` ajoute, aux perturbations K / C / kc, un balayage du gain actionneur
 `H x0.50` et `H x2.00` : le NIVEAU de H_Pe n'est pas valide experimentalement
-(cf. section 1 du docstring de simulation_base). Sur ce balayage le pire cas
-passe de 0.5437 a 0.3183 mm (-41 %) en gain divise par deux, et redescend a
-0.4679 mm (-14 %) en gain double -- le comportement n'est pas monotone, car un
-gain double double aussi le gain de boucle d'un correcteur synthetise sur le
-gain nominal. Les valeurs ci-dessus sont donc celles d'UN point d'un parametre
-non calibre. L'egalite LQG / ESO, elle, tient aux trois gains (ecart < 2 %).
+(cf. section 1 du docstring de simulation_base). Pire cas sur les cinq vitesses :
+
+    gain H    boucle ouverte    LQG modal        ESO propose
+    x0.50         0.0462        0.3183 (-42 %)   0.3144 (-42 %)
+    x1.00         0.0462        0.5457           0.5457
+    x2.00         0.0462        0.4582 (-16 %)   0.4796 (-12 %)
+
+La boucle ouverte ne bouge pas d'un chiffre : H_Pe n'entre pas dans le modele
+sans commande. En boucle fermee le pire cas perd 42 % a gain divise par deux ET
+16 % a gain double -- le comportement n'est pas monotone, car doubler le gain
+double aussi le gain de boucle d'un correcteur synthetise sur le gain nominal.
+Les valeurs du tableau du haut sont donc celles d'UN point d'un parametre non
+calibre. L'egalite LQG / ESO, elle, tient aux trois gains (ecart <= 4 %).
 """
 import argparse
 import copy

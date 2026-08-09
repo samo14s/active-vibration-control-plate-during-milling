@@ -243,17 +243,26 @@ class PlateModel:
         Ke = stiffness_matrix_K(self.E, self.nu, self.lex, self.ley, self.bp)
         Me = mass_matrix_K(self.rho, self.lex, self.ley, self.bp)
 
+        # Chaque élément est pondéré par sa FRACTION DE RECOUVREMENT avec le
+        # rectangle du patch, et non retenu ou rejeté selon la position de son
+        # centre. Le test au centre quantifiait l'empreinte sur la grille
+        # (19.44 x 61.33 mm au lieu de 20 x 60), alors que laplace_n_patch, lui,
+        # intègre exactement sur le rectangle : raideur/masse ajoutées et
+        # couplage piézoélectrique ne portaient pas sur la même aire.
         rows, cols, Kd, Md = [], [], [], []
         n1 = self.n1
         n_cov = 0
+        area_cov = 0.0
+        a_elem = self.lex * self.ley
         for J in range(1, self.N2 + 1):
             for I in range(1, self.N1 + 1):
-                xc = (I - 0.5) * self.lex
-                zc = (J - 0.5) * self.ley
-                if not (xP1 - 1e-9 <= xc <= xP2 + 1e-9
-                        and zP1 - 1e-9 <= zc <= zP2 + 1e-9):
+                ox = min(I*self.lex, xP2) - max((I-1)*self.lex, xP1)
+                oz = min(J*self.ley, zP2) - max((J-1)*self.ley, zP1)
+                if ox <= 1e-12 or oz <= 1e-12:
                     continue
+                frac = (ox * oz) / a_elem
                 n_cov += 1
+                area_cov += ox * oz
                 DofE = np.r_[
                     3*(J-1)*n1 + 3*(I-1) + np.arange(6),
                     3*J*n1     + 3*(I-1) + np.arange(3, 6),
@@ -262,8 +271,8 @@ class PlateModel:
                 for a in range(12):
                     for b in range(12):
                         rows.append(DofE[a]); cols.append(DofE[b])
-                        Kd.append(rK * Ke[a, b])
-                        Md.append(rM * Me[a, b])
+                        Kd.append(frac * rK * Ke[a, b])
+                        Md.append(frac * rM * Me[a, b])
 
         dK = csr_matrix((Kd, (rows, cols)), shape=(self.ndof, self.ndof))
         dM = csr_matrix((Md, (rows, cols)), shape=(self.ndof, self.ndof))
@@ -271,7 +280,10 @@ class PlateModel:
         self.Mg = self.Mg + dM
 
         if self.verbose:
-            print(f"[PlateModel] patch structurel : {n_cov} éléments couverts, "
+            a_exact = (xP2 - xP1)*(zP2 - zP1)
+            print(f"[PlateModel] patch structurel : {n_cov} éléments touchés, "
+                  f"aire couverte {area_cov*1e6:.2f} mm2 "
+                  f"(exacte {a_exact*1e6:.2f}, ecart {area_cov/a_exact-1:+.2%}), "
                   f"dD/D = {rK*100:.1f} %, dm/m = {rM*100:.1f} % (local)")
 
         # nouvelle base modale

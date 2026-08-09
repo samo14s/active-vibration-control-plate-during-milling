@@ -62,9 +62,9 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
 | grandeur | valeur sans controle |
 |---|---|
 | limite de stabilite a 4900 tr/min | 0.0605 mm |
-| RMS a 0.05 mm, 4900 tr/min | 0.2218 um |
-| cout multi-vitesses a 0.25 mm | 11.137 |
-| receptance au pic 536 Hz | 482.4 um/N |
+| RMS a 0.05 mm, 4900 tr/min | 0.2216 um |
+| cout multi-vitesses a 0.25 mm | 11.144 |
+| receptance au pic 536 Hz | 480.7 um/N |
 | frequence de broutement simulee | 532 Hz (mesuree 580 Hz) |
 
 Un cout de 12.000 signifie instable aux cinq vitesses. Un correcteur utile doit
@@ -81,15 +81,15 @@ tension. Elles ne valident **pas son niveau**.
 
 Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
 (1 um/N), vaut 43.8 um/N ; une plaque de Kirchhoff aux dimensions du Tableau 1
-donne 6.90 um/N par resolution statique EF exacte. Le facteur 6.35 ne vient pas
+donne 6.90 um/N par resolution statique EF exacte. Le facteur 6.36 ne vient pas
 du modele : les memes matrices reproduisent les cinq frequences a 2 % pres, et
-la souplesse est leur inverse — une raideur 6.35 fois trop faible donnerait
+la souplesse est leur inverse — une raideur 6.36 fois trop faible donnerait
 f1 = 214 Hz au lieu de 540 Hz. Les lobes de stabilite de l'article (Fig. 13)
 s'accordent d'ailleurs avec la valeur raide. L'echelle en dB de la Fig. 12 est
 donc inexploitable.
 
 Consequence directe : **le niveau de `H_Pe` n'est pas calibre**, puisqu'il ne
-pourrait l'etre que par le rapport des deux courbes. Les 482.4 um/N du tableau
+pourrait l'etre que par le rapport des deux courbes. Les 480.7 um/N du tableau
 ci-dessus sont une sortie de modele, pas une mesure. Toute performance en
 boucle fermee herite de cette incertitude ; annoncez-la en balayant le gain :
 

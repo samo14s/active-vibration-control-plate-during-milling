@@ -17,13 +17,13 @@ la FORME de la reponse, PAS son niveau : voir la mise en garde plus bas.
 
 CE QUI EST VALIDE
   * cinq resonances mesurees   : 536.4 / 1071.8 / 2778.6 / 3358.7 / 4122.6 Hz
-    predites par le modele EF  : +0.7 / +1.8 / -1.4 / +1.4 / +1.8 %
+    predites par le modele EF  : +0.9 / +2.0 / -1.5 / +1.2 / +1.4 %
   * quatre antiresonances mesurees : 734 / 2161 / 3001 / 3805 Hz
-    modele a cinq modes calibre    : 731 / 2118 / 3008 / 3943 Hz
-    ecarts                         : +0.4 / -2.0 / +0.2 / +3.6 %
+    modele a cinq modes calibre    : 732 / 2122 / 3006 / 3943 Hz
+    ecarts                         : +0.3 / -1.8 / +0.2 / +3.6 %
     (comparaison faite sur la reception AU POINT DE FRAPPE, residus D_obs^2 :
      c'est la grandeur mesuree en Fig. 12a, marteau et capteur au meme coin.
-     Un modele a TROIS modes ne donne que deux antiresonances -- 741 / 2404 Hz,
+     Un modele a TROIS modes ne donne que deux antiresonances -- 742 / 2408 Hz,
      dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
   * frequence de broutement simulee 532 Hz contre 580 Hz mesuree ; la simulation
     publiee de reference donnait 1135 Hz, soit le mauvais mode.
@@ -31,15 +31,15 @@ CE QUI EST VALIDE
 CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
   Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
   (1 um/N), vaut 43.8 um/N. Une plaque de Kirchhoff aux dimensions du Tableau 1
-  donne 6.90 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.35.
+  donne 6.90 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.36.
   Ce n'est pas une erreur du modele. Les memes matrices K et M reproduisent les
   CINQ frequences mesurees a 2 % pres ; or la souplesse est K^-1. Une raideur
-  6.35 fois trop faible donnerait f1 = 540/sqrt(6.35) = 214 Hz, pas 540 Hz. En
+  6.36 fois trop faible donnerait f1 = 540/sqrt(6.36) = 214 Hz, pas 540 Hz. En
   termes modaux, 43.8 um/N exigerait D_obs[0]^2 = 504 alors que la normalisation
   en masse du premier mode plafonne ce carre vers 45 : un facteur 11 sur une
   quantite qui n'a aucune liberte. De plus les propres lobes de stabilite de
   l'article (Fig. 13, 0.03-0.05 mm) s'accordent avec la valeur RAIDE ; une
-  plaque 6.35 fois plus souple donnerait ~0.008 mm.
+  plaque 6.36 fois plus souple donnerait ~0.008 mm.
 
   Conclusion : l'echelle en dB de la Fig. 12 n'est pas exploitable. Comme
   H_Pe ne peut se calibrer que par le rapport des deux courbes, LE NIVEAU DE
@@ -67,7 +67,7 @@ leve une exception si un ecart depasse la tolerance.
     et 5 sont fortement couples au patch mais quasiment pas excites par la
     coupe) : le nombre de modes ne change donc pas la frontiere libre, mais il
     change ce que l'observateur peut voir.
-  * amortissements modaux : 0.31 / 0.17 / 0.27 / 0.30 / 0.30 %.
+  * amortissements modaux mesures (Tableau 4) : 0.31 / 0.17 / 0.27 / 0.56 / 0.35 %.
   * patch QDA60-20-0.7 dans le coin inferieur gauche, capteur au coin superieur
     droit oppose.
 
@@ -127,7 +127,11 @@ RHO, YOUNG, POISSON = 2830.0, 69e9, 0.33             # AL6061
 MESH_N1, MESH_N2 = 36, 30
 N_MODES = 5
 F_MEASURED = [536.4, 1071.8, 2778.6, 3358.7, 4122.6]   # Hz, numerisees
-ZETA_MODES = [0.0031, 0.0017, 0.0027, 0.0030, 0.0030]
+# Amortissements MESURES, Tableau 4 de l'article. Les modes 4 et 5 valaient
+# 0.30 % / 0.30 % dans la version precedente, contre 0.56 % / 0.35 % publies :
+# le mode 4 etait sous-amorti d'un facteur 1.87, ce qui exagerait le spillover
+# de commande a 3359 Hz.
+ZETA_MODES = [0.0031, 0.0017, 0.0027, 0.0056, 0.0035]
 
 PATCH = dict(x1=0.0, x2=0.020, z1=0.0, z2=0.060,
              d31=175e-12, thickness=0.7e-3, E=63e9, nu=0.35)

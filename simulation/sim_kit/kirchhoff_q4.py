@@ -169,19 +169,40 @@ def stiffness_matrix_K(E: float, nu: float, lex: float, ley: float, h: float):
     return K
 
 
-def mass_matrix_K(rho: float, lex: float, ley: float, h: float):
-    """Matrice de masse élémentaire 12x12 — Gauss 5x5."""
-    xi  = np.array([-0.906, -0.538, 0.0, 0.538, 0.906])
-    eta = xi.copy()
-    w   = np.array([0.237, 0.479, 0.569, 0.479, 0.237])
+def mass_matrix_K(rho: float, lex: float, ley: float, h: float,
+                  rotary: bool = True):
+    """
+    Matrice de masse élémentaire 12x12 — Gauss 5x5 exacte.
+
+        M = I0 ∫ N Nᵀ dA + I2 ∫ (N,x N,xᵀ + N,y N,yᵀ) dA
+        I0 = rho*h ,  I2 = rho*h³/12
+
+    Le second terme est l'inertie de rotation : ce sont les termes I2 de
+    l'Eq. (A.1) de l'article, que la version précédente omettait. Son effet est
+    de -0.8 % environ sur le cinquième mode.
+
+    Les abscisses et poids de Gauss étaient auparavant arrondis à trois
+    décimales (somme des poids = 2.001), ce qui surestimait la masse de
+    exactement +0.100 %. Ils viennent maintenant de numpy.
+
+    rotary=False restitue le modèle de Kirchhoff pur (sans inertie de rotation).
+    """
+    xi, w = np.polynomial.legendre.leggauss(5)
+    I0 = rho * h
+    I2 = rho * h**3 / 12.0 if rotary else 0.0
 
     M = np.zeros((12, 12))
     for i in range(5):
         for j in range(5):
-            N, _ = shape_function_K(xi[i], eta[j], lex, ley)
-            Ja = jacobian_K(xi[i], eta[j], lex, ley)
-            M += w[i] * w[j] * np.outer(N, N) * np.linalg.det(Ja)
-    return rho * h * M
+            N, derN = shape_function_K(xi[i], xi[j], lex, ley)
+            Ja = jacobian_K(xi[i], xi[j], lex, ley)
+            dJ = np.linalg.det(Ja)
+            M += w[i] * w[j] * dJ * I0 * np.outer(N, N)
+            if I2:
+                Nx = derN[0, :] * (2.0/lex)
+                Ny = derN[1, :] * (2.0/ley)
+                M += w[i] * w[j] * dJ * I2 * (np.outer(Nx, Nx) + np.outer(Ny, Ny))
+    return M
 
 
 def shape_at_point(x_g: float, y_g: float,

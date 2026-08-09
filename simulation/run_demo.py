@@ -41,31 +41,46 @@ modele). Pire cas sur les cinq vitesses :
     K x1.10             0.0443          0.1590       **0.3552**
     C x0.80             0.0404          0.3222         0.2542
     kc x2.9             0.0000 (*)      0.1104         0.0870
-    H x0.50             0.0501          0.1784         0.1764
-    H x2.00             0.0501        **0.3436**       0.0000
+    H x0.44             0.0501          0.1628         0.1667
+    H x2.92             0.0501        **0.3669**       0.0000
+
+LES DEUX BORNES DE GAIN ACTIONNEUR NE SONT PAS RONDES PARCE QU'ELLES NE SONT
+PAS CHOISIES. 0.44 et 2.92 sont les deux bouts de l'encadrement MESURE du
+niveau de H_Pe (defaut F9, voir verification/17_hpe_level.py) : les deux
+figures de l'article laissent ce niveau indetermine sur exactement cet
+intervalle, et rien de plus etroit n'est justifiable. Ce fichier balayait
+0.50 / 2.00, ce qui sous-estimait l'incertitude de 46 % du cote qui fait mal.
 
 TROIS LECTURES, DONT DEUX CONTREDISENT CE QUE CE FICHIER DISAIT AVANT.
 
-1. La ligne H x2.00 ne tue plus le LQG — elle le FAVORISE : 0.3436 mm contre
-   0.3241 en nominal. Ce fichier annoncait "les deux correcteurs y perdent le
-   controle" et en faisait son resultat le plus important. C'etait vrai des
-   reglages d'alors, pas de la commande : doubler le gain actionneur double
-   l'autorite, et si la boucle reste stable la limite MONTE. Il fallait
-   contraindre la recherche sur cette perturbation pour trouver un reglage qui
-   le fasse ; c'est fait, et ca marche. Le point compte parce que le NIVEAU de
-   H_Pe n'est pas valide (defaut F9) et que le gain statique mesure sur la
-   Fig. 12(b) vaut 2.94 fois celui du modele : le facteur 2 n'est pas une marge
-   academique, c'est le milieu de l'incertitude reelle.
+1. La ligne de fort gain actionneur ne tue plus le LQG — elle le FAVORISE :
+   0.3669 mm contre 0.3241 en nominal, et c'est sa MEILLEURE ligne du tableau.
+   Ce fichier annoncait "les deux correcteurs y perdent le controle" et en
+   faisait son resultat le plus important. C'etait vrai des reglages d'alors,
+   pas de la commande : plus de gain actionneur, c'est plus d'autorite, et si
+   la boucle reste stable la limite MONTE. Il a fallu contraindre la recherche
+   sur cette perturbation pour trouver un reglage qui le fasse.
+   Elargir 2.00 -> 2.92 n'a pas entame cette marge, elle l'a AUGMENTEE
+   (0.3436 -> 0.3669) : la tenue du LQG n'etait donc pas un effet de bord d'un
+   balayage commodement etroit.
 
 2. Le LQG ne domine PAS partout. Sous K x1.10 le classement s'inverse
    franchement : 0.1590 contre 0.3552 pour l'ESO, soit un facteur 2.2 dans
    l'autre sens. "6 sur 6" veut dire qu'il passe le crible a 0.10 mm sous les
-   six perturbations, pas qu'il est meilleur sous chacune.
+   six perturbations, pas qu'il est meilleur sous chacune. Sa marge la plus
+   faible est 0.1104 mm, sous kc x2.9.
 
-3. L'ESO s'effondre sous H x2.00 : zero a quatre vitesses sur cinq. Ce sont de
-   VRAIS zeros et non des artefacts de bissection — verifie en allongeant
-   l'horizon, tout diverge (voir verification/15). Il echoue aussi le crible
-   sous kc x2.9 (0.0870 < 0.10 mm). D'ou son 4 sur 6.
+3. L'ESO s'effondre sous fort gain actionneur, et l'elargissement rend cet
+   effondrement TOTAL : a H x2.00 il rendait zero a quatre vitesses sur cinq,
+   a H x2.92 il rend zero AUX CINQ. Ce sont de VRAIS zeros et non des
+   artefacts de bissection — verifie en allongeant l'horizon, tout diverge
+   (voir verification/15). Il echoue aussi le crible sous kc x2.9
+   (0.0870 < 0.10 mm). D'ou son 4 sur 6.
+
+   Du cote faible gain, en revanche, les deux architectures se tiennent :
+   0.1628 contre 0.1667, et H x0.44 passe le crible pour les deux. Ce n'est
+   pas l'amplitude de l'incertitude sur H_Pe qui separe les correcteurs, c'est
+   son SENS.
 
 (*) 0.0000 en boucle ouverte signifie "sous la borne basse de la bissection",
 soit 0.02 mm : avec des coefficients de coupe presque triples, la coupe libre
@@ -80,6 +95,12 @@ non-saturation ET de robustesse ; voir retune.py.
 X_LQG est NOUVEAU : +27 % sur le reglage precedent mesure au meme etalon,
 premiere tenue complete des six perturbations, et la plus basse tension crete
 des candidats (33 V pour 150 V disponibles).
+
+RESERVE. Les deux vecteurs ont ete TROUVES avec le crible d'avant
+l'elargissement (H x0.50 / H x2.00). Le tableau ci-dessus est refait sur le
+crible elargi et les deux verdicts tiennent -- 6 sur 6 et 4 sur 6 -- mais la
+RECHERCHE n'a pas ete relancee dessus. Ces reglages sont donc valides sur le
+crible elargi ; leur OPTIMALITE se rapporte a l'ancien.
 
 X_ESO est INCHANGE, et ce n'est pas un oubli : sur 20 particules x 20
 iterations, la recherche n'a jamais fait mieux que sa graine -- le score n'a pas
@@ -225,8 +246,8 @@ def main():
                                       ("K x1.10", 1.10, 1, 1, 1),
                                       ("C x0.80", 1, .80, 1, 1),
                                       ("kc x2.9", 1, 1, 2.9, 1),
-                                      ("H x0.50", 1, 1, 1, 0.5),
-                                      ("H x2.00", 1, 1, 1, 2.0)]:
+                                      ("H x0.44", 1, 1, 1, 0.44),
+                                      ("H x2.92", 1, 1, 1, 2.92)]:
             sim.plate.Kp = K0 * ks
             sim.plate.Cp = C0 * cs
             sim.plate.H_Pe_modal = H0 * hs

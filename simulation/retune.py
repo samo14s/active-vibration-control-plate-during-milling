@@ -50,8 +50,13 @@ robustesse -- exactement le travers que run_demo --full est cense debusquer.
 
 On ajoute donc une contrainte de ROBUSTESSE : le correcteur doit rester stable
 a AP_GATE = 0.10 mm sous les SIX perturbations reservees de run_demo --full
-(K x0.90, K x1.10, C x0.80, kc x2.9, H x0.50, H x2.00), le correcteur restant
+(K x0.90, K x1.10, C x0.80, kc x2.9, H x0.44, H x2.92), le correcteur restant
 synthetise sur la plaque NOMINALE. C'est un vrai essai d'erreur de modele.
+
+Les deux bornes de gain actionneur ne sont pas rondes parce qu'elles ne sont
+pas choisies : ce sont les deux bouts de l'encadrement MESURE de F9, voir
+verification/17_hpe_level.py. Elles valaient 0.50 et 2.00, ce qui etait plus
+etroit que l'incertitude reelle du cote qui fait mal.
 
 Deux details qui ont chacun coute un resultat faux :
 
@@ -94,12 +99,20 @@ seule sa lisibilite par l'optimiseur.
 
 ET L'ESO, LUI, N'A RIEN TROUVE. Meme recherche, memes contraintes, meme ordre
 de PERTURB, 20 particules x 20 iterations : le meilleur reste la GRAINE, c.-a-d.
-le reglage deja publie, a 4 sur 6 (echecs kc x2.9 et H x2.00). Le score n'a pas
+le reglage deja publie, a 4 sur 6 (echecs kc x2.9 et H x2.92). Le score n'a pas
 bouge d'un millieme du premier au vingtieme tour.
 
     architecture   reglage retenu        pire cas nominal   perturbations
     LQG modal      nouveau (iteration 12)    0.3241 mm         6 sur 6
     ESO propose    la graine, inchangee      0.2561 mm         4 sur 6
+
+RESERVE SUR CES DEUX LIGNES. Elles ont ete obtenues avec le crible d'AVANT
+l'elargissement, c.-a-d. H x0.50 / H x2.00 au lieu de H x0.44 / H x2.92. Le
+tableau de run_demo --full a ete refait sur le crible elargi et les deux
+verdicts TIENNENT -- LQG 6 sur 6 (marge la plus faible 0.1104 mm sous kc x2.9),
+ESO 4 sur 6 -- mais la RECHERCHE, elle, n'a pas ete relancee sur le crible
+elargi. Les vecteurs publies restent donc valides ; leur OPTIMALITE, elle, se
+rapporte a l'ancien crible.
 
 Ce n'est pas un echec de la recherche, c'est un RESULTAT, et il contredit
 l'attente naturelle : la memoire de l'article donnerait l'avantage a
@@ -172,12 +185,33 @@ _KC0 = None
 # suivre -- verifie, la recherche restait collee a sa graine. Du plus facile au
 # plus dur, le score n compte reellement combien de perturbations le candidat
 # encaisse avant de ceder, et la recherche progresse.
-PERTURB = [("H x0.50", 1.0, 1.0, 1.0, 0.5),
-           ("C x0.80", 1.0, 0.80, 1.0, 1.0),
-           ("K x1.10", 1.10, 1.0, 1.0, 1.0),
+#
+# L'ordre n'est PAS choisi a vue : il suit la marge mesuree par
+# run_demo --full, prise au pire des deux architectures (limite du pire cas,
+# mm) -- c'est la difficulte reelle, pas une intuition.
+#
+#     C x0.80  0.2542     K x0.90  0.2522     H x0.44  0.1628
+#     K x1.10  0.1590     kc x2.9  0.0870     H x2.92  0.0000
+#
+# Il a fallu le refaire en elargissant le balayage de gain actionneur a
+# [0.44, 2.92] : H x0.50 etait la perturbation la plus DOUCE et ouvrait la
+# liste, H x0.44 est la troisieme plus dure. La laisser en tete aurait
+# reintroduit exactement la pathologie decrite ci-dessus.
+#
+# RESERVE, et elle est reelle : la difficulte DEPEND DE L'ARCHITECTURE. H x2.92
+# est la perturbation la plus douce pour le LQG (0.3669 mm, mieux qu'au
+# nominal) et elle est LETALE pour l'ESO (zero aux cinq vitesses). Aucun ordre
+# unique ne peut donc etre optimal pour les deux, et celui-ci -- fonde sur le
+# pire des deux -- protege le gradient de l'architecture la plus fragile.
+# Le remede de fond serait d'evaluer les six conditions au lieu de sortir a la
+# premiere, rendant le score independant de l'ordre ; il coute ~30 simulations
+# courtes par candidat au lieu de ~10, contre 200 a 275 pour une bissection.
+PERTURB = [("C x0.80", 1.0, 0.80, 1.0, 1.0),
            ("K x0.90", 0.90, 1.0, 1.0, 1.0),
+           ("H x0.44", 1.0, 1.0, 1.0, 0.44),
+           ("K x1.10", 1.10, 1.0, 1.0, 1.0),
            ("kc x2.9", 1.0, 1.0, 2.9, 1.0),
-           ("H x2.00", 1.0, 1.0, 1.0, 2.0)]
+           ("H x2.92", 1.0, 1.0, 1.0, 2.92)]
 
 # Profondeur a laquelle on exige la survie SOUS PERTURBATION. AP_TEST (0.25 mm)
 # serait absurde : sous kc x2.9 meme la meilleure commande ne tient que 0.14 mm.
@@ -214,7 +248,7 @@ def _survives(mk, ks, cs, kcs, hs, ap, check_sat, T=None):
     l'horizon (une instabilite lente a besoin de temps pour se voir). Une
     version precedente de ce fichier utilisait T_RUN ici : le crible etait donc
     plus indulgent que la grandeur publiee, et il laissait passer un reglage
-    ESO qui rendait 0.0000 mm sous H x2.00 dans run_demo --full.
+    ESO qui rendait 0.0000 mm sous forte perturbation dans run_demo --full.
     """
     _set_plant(ks, cs, kcs, hs)
     T = SB.T_RUN if T is None else T

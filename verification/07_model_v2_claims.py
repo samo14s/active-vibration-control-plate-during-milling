@@ -10,7 +10,19 @@ Le critere correct est exact et insensible a l'amortissement : pour
 G = somme r_i/(w_i^2 - w^2) avec r_i = D_obs,i * H_Pe,i, l'intervalle k
 contient un nombre IMPAIR de zeros si sign(r_k) == sign(r_{k+1}), PAIR sinon.
 On calcule donc les zeros exacts comme racines d'un polynome, et on compare
-leur repartition a celle des creux profonds mesures.
+leur repartition a celle des creux mesures.
+
+MISE A JOUR (voir 14_coupling_identification.py). La reference de mesure
+utilisee ici a elle aussi ete corrigee : la Fig. 12(b) porte QUATRE creux, pas
+trois. Le 4e apparait comme un simple epaulement dans la numerisation fournie
+(76 points, ~48 Hz de pas) mais la courbe THEORIQUE de l'article, tracee sur la
+meme figure, le montre franchement. L'occupation mesuree est donc (1, 1, 1, 1)
+et non (1, 1, 0, 1).
+
+Consequence pour F4 : la configuration bas-droit 60x20 de model_v2 ne reproduit
+plus rien du tout, ce qui retire son dernier argument. Aucune configuration ne
+reproduit les creux MESURES ; ce n'est pas une question de geometrie, et c'est
+ce que la section 4 etablit.
 """
 import os
 import sys
@@ -28,8 +40,8 @@ from model_v2 import antiresonances, notch_occupancy            # noqa: E402
 
 L, Hh = SB.PLATE_L, SB.PLATE_H
 MEAS_F = np.array([540., 1068., 2787., 3351., 4122.])           # Table 4
-Z_VOLT = np.array([788., 1493., 3609.])                         # Fig. 12(b)
-OCC = (1, 1, 0, 1)
+Z_VOLT = np.array([788., 1493., 2913., 3609.])                  # Fig. 12(b)
+OCC = (1, 1, 1, 1)
 Z_DRIVE = np.array([734., 2161., 3001., 3805.])                 # Fig. 12(a)
 
 CFG = {
@@ -75,8 +87,15 @@ for nm, P in CFG.items():
 print('-' * 126)
 print(f'{"MESURE":24s} {MEAS_F[0]:8.1f} {str(OCC):12s} {"":7s} '
       f'{str(np.round(R_MEAS / R_MEAS[0], 2)):32s} {Z_VOLT}')
-print('\n=> une seule configuration reproduit (1, 1, 0, 1) : bas-droit 60x20,')
-print('   celle de model_v2. Les FREQUENCES, elles, ne suivent qu aux extremites.')
+print('\n=> avec la lecture CORRIGEE de la Fig. 12(b) — quatre creux — la')
+print('   configuration bas-droit 60x20 de model_v2 ne reproduit plus rien :')
+print('   son dernier argument tombe. La seule qui retrouve le motif de SIGNE')
+print('   est bas-droit 20x60, le patch du MEME cote que le capteur ; mais elle')
+print('   place le 2e creux a ~1950 Hz contre 1493 mesures (+30 %), et surtout')
+print('   la photo de la Fig. 11 la refute : elle montre l actionneur en bas a')
+print('   GAUCHE sur la face avant et la sonde en haut a DROITE.')
+print('   Aucune geometrie ne reproduit les creux mesures — le defaut n est pas')
+print('   geometrique. Voir 14_coupling_identification.py.')
 
 print('\n--- 2. le premier mode ne discrimine pas l orientation ---')
 print('    _add_patch_structure suppose un collage PARFAIT ; la colle reelle ne')

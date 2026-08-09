@@ -188,6 +188,40 @@ print('      courbe THEORIQUE de l\'article, tracee sur la meme figure.')
 
 print()
 print('=' * 78)
+print('3bis. RECOUPEMENT INDEPENDANT PAR LES HAUTEURS DE PIC')
+print('=' * 78)
+print('   A la resonance i, |G_b(w_i)| ~ |r_i| / (2 z_i w_i^2). Les hauteurs de')
+print('   pic donnent donc |r_i| directement, sans passer par les zeros : c\'est')
+print('   une extraction ENTIEREMENT DIFFERENTE des memes donnees.')
+PEAK = np.array([Ab[np.argmin(np.abs(fb - f))] for f in FM])
+r_pk = 10**(PEAK/20)*0.01e-6*2*ZM*OM**2
+r_pk = r_pk/r_pk[0]
+p_id = SB.SimBase().plate
+p_fem = SB.SimBase(coupling='fem').plate
+r_id = np.abs(np.asarray(p_id.H_Pe_modal)*np.asarray(p_id.D_obs))
+r_fem = np.abs(np.asarray(p_fem.H_Pe_modal)*np.asarray(p_fem.D_obs))
+print(f'\n   {"":28s}' + ''.join(f'{"m"+str(i+1):>9}' for i in range(5)))
+print(f'   {"|r|/|r_1| par les pics":28s}'
+      + ''.join(f'{v:>9.2f}' for v in r_pk))
+print(f'   {"|r|/|r_1| par les zeros":28s}'
+      + ''.join(f'{v:>9.2f}' for v in np.abs(r4[0])))
+print(f'   {"|r|/|r_1| elements finis":28s}'
+      + ''.join(f'{v:>9.2f}' for v in r_fem/r_fem[0]))
+d_id = np.abs(r_pk/np.abs(r4[0]))
+d_fem = np.abs(r_pk/(r_fem/r_fem[0]))
+print(f'\n   {"ecart pics / zeros":28s}'
+      + ''.join(f'{v:>9.2f}' for v in d_id) + f'   max {max(d_id.max(), 1/d_id.min()):.1f}x')
+print(f'   {"ecart pics / elements finis":28s}'
+      + ''.join(f'{v:>9.2f}' for v in d_fem)
+      + f'   max {max(d_fem.max(), 1/d_fem.min()):.1f}x')
+assert max(d_id.max(), 1/d_id.min()) < max(d_fem.max(), 1/d_fem.min()), \
+    'les deux extractions de la mesure doivent s\'accorder mieux entre elles ' \
+    'qu\'avec les elements finis'
+print('\n   Les deux lectures independantes de la Fig. 12(b) se rejoignent ; les')
+print('   elements finis s\'ecartent des DEUX, et bien davantage.')
+
+print()
+print('=' * 78)
 print('4. EFFET SUR LA BASE')
 print('=' * 78)
 print(f'   H_IDENT publie dans simulation_base : {np.array(SB.H_IDENT)}')

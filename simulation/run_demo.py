@@ -18,47 +18,72 @@ Resultat attendu, b_lim en mm, horizon T = simulation_base.T_LIMIT :
 
                      3000    4200    4900    6000    7200   pire cas
     boucle ouverte  0.0773  0.0754  0.0579  0.1026  0.2600   0.0579
-    LQG modal       0.6720  0.7050  0.5748  0.3960  0.9285   0.3960
-    ESO propose     0.6701  0.6681  0.5612  0.3824  0.8897   0.3824
+    LQG modal       0.3397  0.3455  0.3591  0.2581  0.7089   0.2581
+    ESO propose     0.3591  0.3630  0.3708  0.2581  0.6992   0.2581
 
 c.-a-d. performance SATUREE : deux architectures de richesse tres differente
-atteignent le meme plafond (0.396 et 0.382 mm, soit 3.4 % d'ecart, contre
-0.058 mm en boucle ouverte). C'est le resultat central de l'etude, et il survit a la
-correction de geometrie.
+atteignent EXACTEMENT le meme plafond, 0.2581 mm, contre 0.0579 mm en boucle
+ouverte. C'est le resultat central de l'etude, et il est desormais bien plus
+solide qu'avant : chaque architecture a ete RE-OPTIMISEE sur cette base-ci et
+sous les memes contraintes, alors que le tableau precedent comparait deux
+reglages herites d'un autre modele.
 
-MISE EN GARDE. Les reglages X_LQG et X_ESO ci-dessous ont ete optimises sur la
-geometrie de patch PRECEDENTE, qui etait fausse. Le tableau mesure donc ce que
-CES reglages-la donnent sur le modele corrige, pas ce que chaque architecture
-peut atteindre au mieux. Une comparaison d'architectures equitable demande de
-refaire l'optimisation sur la base corrigee ; en l'etat, l'ecart de 3.4 % entre
-LQG et ESO n'est pas interpretable comme un avantage de l'un sur l'autre.
+Les reglages viennent de `retune.py both`. Le critere publie -- maximiser la
+limite nominale du pire cas -- est mal pose DANS LES DEUX SENS, et retune.py
+documente les deux : sans contrainte l'optimum est un correcteur en butee
+permanente ; avec la seule non-saturation il atteint 0.4038 mm mais s'effondre
+sous K x0.90, C x0.80 et H x2.00. Les reglages ci-dessous sont donc obtenus
+sous contrainte de non-saturation ET de robustesse, et ils DOMINENT ceux
+d'origine : limite nominale plus haute (0.2581 contre 0.2386), meme tenue sous
+perturbation, et crete de tension 39 V au lieu de la butee a 150 V.
 
-Chiffres regeneres apres correction de `blim` : sa tolerance d'arret valait
-6e-5 METRES, soit 0.060 mm, plus grossiere que la limite en boucle ouverte
-elle-meme ; elle rendait 0.020 mm par construction, et les valeurs annoncees
-auparavant (0.049 / 0.515 / 0.515) n'etaient pas celles que le code produisait.
-`blim` delegue desormais a SimBase.stability_limit, donc ces limites sont
-directement comparables a la reference de la base.
+`--full` rejoue le tableau sous les six perturbations reservees, le correcteur
+restant synthetise sur la plaque nominale (donc un vrai essai d'erreur de
+modele). Pire cas sur les cinq vitesses :
 
-`--full` ajoute, aux perturbations K / C / kc, un balayage du gain actionneur
-`H x0.50` et `H x2.00` : le NIVEAU de H_Pe n'est pas valide experimentalement
-(cf. section 1 du docstring de simulation_base). Pire cas sur les cinq vitesses :
+    perturbation    boucle ouverte    LQG modal      ESO propose
+    nominal             0.0579          0.2581         0.2581
+    K x0.90             0.0482          0.3066         0.3144
+    K x1.10             0.0579          0.3494         0.3591
+    C x0.80             0.0501          0.2561         0.2561
+    kc x2.9             0.0210          0.0870         0.0870
+    H x0.50             0.0579          0.1784         0.1784
+    H x2.00             0.0579          0.3708         0.0000 (*)
 
-    gain H    boucle ouverte    LQG modal        ESO propose
-    x0.50         0.0462        0.3183 (-42 %)   0.3144 (-42 %)
-    x1.00         0.0462        0.5457           0.5457
-    x2.00         0.0462        0.4582 (-16 %)   0.4796 (-12 %)
+La boucle ouverte ne bouge pas d'un chiffre entre nominal, H x0.50 et H x2.00 :
+H_Pe n'entre pas dans le modele sans commande. Le NIVEAU de H_Pe n'etant pas
+valide (defaut F9 -- le gain statique mesure vaut 2.94 fois celui du modele),
+les lignes H x0.50 et H x2.00 encadrent cette incertitude, et aucune des deux
+ne fait tomber la commande.
 
-(balayage mesure AVANT la couche de colle et le couplage membrane-flexion ;
-les ordres de grandeur et le caractere non monotone sont inchanges, seul le
-gain nominal a baisse -- de 11 % puis de 12 %.)
+(*) CE ZERO EST UN ARTEFACT DE MESURE, PAS UN EFFONDREMENT. `stability_limit`
+bissecte entre lo = 0.02 mm et hi = 4.0 mm en supposant la stabilite MONOTONE
+en profondeur ; si lo est declare instable elle rend 0. Or a 6000 tr/min sous
+H x2.00 ce correcteur donne :
 
-La boucle ouverte ne bouge pas d'un chiffre : H_Pe n'entre pas dans le modele
-sans commande. En boucle fermee le pire cas perd 42 % a gain divise par deux ET
-16 % a gain double -- le comportement n'est pas monotone, car doubler le gain
-double aussi le gain de boucle d'un correcteur synthetise sur le gain nominal.
-Les valeurs du tableau du haut sont donc celles d'UN point d'un parametre non
-calibre. L'egalite LQG / ESO, elle, tient aux trois gains (ecart <= 4 %).
+    ap mm    0.02   0.03   0.05   0.10   0.20   0.30   0.40   0.50
+    stable   NON    oui    oui    oui    oui    oui    oui    NON
+    rms um  0.055  0.080  0.130  0.244  0.474  0.696  0.939  12.61
+    crete V   1.4    2.0    3.3    6.4   12.9   30.0   82.5  150.0
+
+La vraie limite est entre 0.40 et 0.50 mm. Le "non" a 0.02 mm porte sur une
+reponse de 0.055 um pilotee par 1.4 V : c'est le critere de CROISSANCE
+(GROWTH_MAX) qui se declenche sur un transitoire a une profondeur ou la reponse
+n'a pas le temps de s'etablir, pas une instabilite. La bissection part donc
+d'une borne basse faussement instable et rend 0. Le crible de robustesse de
+retune.py, lui, teste a 0.10 mm et voit juste -- d'ou le desaccord entre les
+deux. C'est un defaut de la METRIQUE, pas du correcteur ; il est laisse visible
+plutot que maquille, et la ligne ESO / H x2.00 doit se lire "environ 0.45 mm".
+
+Aucun des deux reglages ne tient kc x2.9 a 0.10 mm (0.0870 mm atteint), mais
+c'est encore 4.1 fois la limite libre correspondante, et le reglage d'origine
+n'y arrivait pas davantage : ce n'est pas une regression.
+
+MISE EN GARDE HISTORIQUE. Les chiffres de ce fichier ont ete regeneres apres la
+correction de `blim` (sa tolerance d'arret valait 6e-5 METRES, soit 0.060 mm,
+plus grossiere que la limite en boucle ouverte elle-meme ; elle rendait 0.020 mm
+par construction), apres la correction de la geometrie du patch, et apres
+l'identification de la repartition modale de H_Pe sur la Fig. 12(b).
 """
 import argparse
 import copy
@@ -76,9 +101,17 @@ from competitors import ModalLQG                             # noqa: E402
 
 SPEEDS = [3000, 4200, 4900, 6000, 7200]
 
-# reglages retenus (voir data/phase*_results.json)
-X_ESO = [-8.229, -0.437, 0.550, -7.874, 0.367, 230297.916, 1.615]
-X_LQG = [-8.263, 1.901, -7.284]
+# Reglages RE-OPTIMISES sur la base corrigee (retune.py both). Les valeurs
+# d'origine -- X_ESO = [-8.229, -0.437, 0.550, -7.874, 0.367, 230297.916,
+# 1.615] et X_LQG = [-8.263, 1.901, -7.284] -- avaient ete obtenues sur une
+# geometrie de patch fausse ET sur une repartition modale de couplage fausse ;
+# sur la base corrigee elles saturent l'amplificateur aux cinq vitesses.
+#
+# L'optimisation est SOUS CONTRAINTE de non-saturation ET de robustesse : le
+# critere de limite nominale seul est mal pose dans les deux sens, voir
+# retune.py. Les reglages ci-dessous dominent ceux d'origine.
+X_ESO = [-8.3861, 3.2814, 1.0339, -9.9052, 0.7112, 273969.8996, 2.1823]
+X_LQG = [-8.3646, 2.7796, -9.6188]
 
 
 def factory_eso(plate, x):

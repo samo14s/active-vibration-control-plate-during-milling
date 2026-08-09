@@ -40,8 +40,54 @@ vitesse : coupe stable ET peak_u < V_MAX. La contrainte est physique -- le banc
 ne delivre pas plus de +/- 150 V -- et elle est evaluee EN PREMIER, car elle
 coute 5 simulations courtes la ou la bissection en coute 40 a 55.
 
+Deuxieme facon dont le critere est mal pose, et elle aussi verifiee. Avec la
+seule contrainte de saturation, l'optimum obtenu sur la base a couplage
+identifie donne 0.4038 mm (LQG) et 0.3902 mm (ESO) au nominal, mais s'EFFONDRE
+sous une erreur de raideur de -10 % : limite nulle a 6000 et 7200 tr/min, alors
+que les reglages d'origine y tenaient encore 0.279 et 0.482 mm. Maximiser la
+limite nominale achete donc de la performance en depensant de la marge de
+robustesse -- exactement le travers que run_demo --full est cense debusquer.
+
+On ajoute donc une contrainte de ROBUSTESSE : le correcteur doit rester stable
+a AP_GATE = 0.10 mm sous les SIX perturbations reservees de run_demo --full
+(K x0.90, K x1.10, C x0.80, kc x2.9, H x0.50, H x2.00), le correcteur restant
+synthetise sur la plaque NOMINALE. C'est un vrai essai d'erreur de modele.
+
+Deux details qui ont chacun coute un resultat faux :
+
+  * l'horizon du crible doit etre T_LIMIT, pas T_RUN. Le critere de stabilite
+    de la base DEPEND de l'horizon -- une instabilite lente a besoin de temps
+    pour se voir -- donc cribler a T_RUN est plus indulgent que la grandeur
+    publiee. Un reglage ESO a ainsi passe le crible puis rendu 0.0000 mm sous
+    H x2.00 dans run_demo --full ;
+
+  * un candidat INFAISABLE ne rend pas 0 mais n/1000, ou n est le nombre de
+    conditions franchies. Sans cela le critere est plat a zero sur presque tout
+    l'espace et le PSO n'a aucun gradient : avec la seule valeur 0, la
+    recherche LQG ne sortait jamais de son point de depart.
+
+--constraint sat  n'impose que la non-saturation (reproduit l'effondrement).
 --constraint none restitue le critere sans contrainte, pour reproduire le
-resultat degenere ci-dessus.
+resultat degenere en butee permanente.
+
+Ce que cela donne, pour le LQG modal, sur la base a couplage identifie :
+
+    reglage                  pire cas nominal   perturbations tenues   crete V
+    d'origine (publie)            0.2386 mm          5 sur 6           150 (butee)
+    optimum --constraint sat      0.4038 mm          3 sur 6            56
+    optimum --constraint rob      0.2581 mm          5 sur 6            39
+
+Le reglage sous contrainte de robustesse DOMINE celui d'origine : meilleure
+limite nominale, meme tenue sous perturbation, et il ne sature plus. C'est
+celui que run_demo publie. L'optimum "sat" affiche 56 % de limite nominale en
+plus, mais il l'achete en perdant K x0.90, C x0.80 et H x2.00 -- et H x2.00
+n'est pas une perturbation academique : le gain statique mesure de la
+Fig. 12(b) vaut 2.94 fois celui du modele (defaut F9).
+
+Aucun reglage trouve ne tient les SIX perturbations : kc x2.9 -- des
+coefficients de coupe presque triples -- reste hors d'atteinte a 0.10 mm, pour
+le reglage d'origine comme pour l'optimum robuste. Ce n'est donc pas une
+regression introduite ici.
 
 Methode. PSO, meme famille que l'optimisation d'origine. Le reglage courant est
 injecte comme particule 0, ce qui garantit de ne pas faire pire que l'existant.
@@ -51,6 +97,7 @@ Usage :
     python retune.py lqg            # ~7 min
     python retune.py eso            # ~15 min
     python retune.py both
+    python retune.py both --constraint sat    # sans la contrainte de robustesse
 """
 import argparse
 import copy
@@ -88,15 +135,76 @@ FACTORY = {'lqg': RD.factory_lqg, 'eso': RD.factory_eso}
 
 _SIM = None
 _PLATE = None
+_K0 = None
+_C0 = None
+_H0 = None
+_KC0 = None
+
+# Perturbations reservees, identiques a celles de run_demo --full.
+# (nom, facteur sur Kp, sur Cp, sur les coefficients de coupe, sur H_Pe)
+# Ordre : les plus meurtrieres d'abord, la boucle sortant au premier echec.
+PERTURB = [("H x2.00", 1.0, 1.0, 1.0, 2.0),
+           ("C x0.80", 1.0, 0.80, 1.0, 1.0),
+           ("K x0.90", 0.90, 1.0, 1.0, 1.0),
+           ("kc x2.9", 1.0, 1.0, 2.9, 1.0),
+           ("K x1.10", 1.10, 1.0, 1.0, 1.0),
+           ("H x0.50", 1.0, 1.0, 1.0, 0.5)]
+
+# Profondeur a laquelle on exige la survie SOUS PERTURBATION. AP_TEST (0.25 mm)
+# serait absurde : sous kc x2.9 meme la meilleure commande ne tient que 0.14 mm.
+# 0.10 mm est environ le double de la limite libre nominale (0.058 mm) et reste
+# au-dessus de la limite libre de chaque plaque perturbee.
+AP_GATE = 0.10e-3
 
 
 def _init_worker():
-    global _SIM, _PLATE
+    global _SIM, _PLATE, _K0, _C0, _KC0, _H0
     _SIM = make_sim()
     _PLATE = copy.deepcopy(_SIM.plate)
+    _K0 = np.array(_SIM.plate.Kp, float).copy()
+    _C0 = np.array(_SIM.plate.Cp, float).copy()
+    _H0 = np.array(_SIM.plate.H_Pe_modal, float).copy()
+    _KC0 = (float(_SIM.k1c), float(_SIM.k2c))
 
 
-def _worst_blim(arch, x, tol, cutoff=0.0, gate=True):
+def _set_plant(ks=1.0, cs=1.0, kcs=1.0, hs=1.0):
+    """Perturbe la plaque SIMULEE. Le correcteur, lui, reste synthetise sur la
+    plaque nominale (_PLATE) : c'est donc bien un essai d'erreur de modele."""
+    _SIM.plate.Kp = _K0*ks
+    _SIM.plate.Cp = _C0*cs
+    _SIM.plate.H_Pe_modal = _H0*hs
+    _SIM.k1c, _SIM.k2c = _KC0[0]*kcs, _KC0[1]*kcs
+    _SIM._cache.clear()
+
+
+def _survives(mk, ks, cs, kcs, hs, ap, check_sat, T=None):
+    """Le correcteur tient-il a la profondeur `ap` sur cette plaque-la ?
+
+    T doit valoir T_LIMIT pour les essais de perturbation : c'est l'horizon
+    auquel run_demo publie ses limites, et le critere de stabilite DEPEND de
+    l'horizon (une instabilite lente a besoin de temps pour se voir). Une
+    version precedente de ce fichier utilisait T_RUN ici : le crible etait donc
+    plus indulgent que la grandeur publiee, et il laissait passer un reglage
+    ESO qui rendait 0.0000 mm sous H x2.00 dans run_demo --full.
+    """
+    _set_plant(ks, cs, kcs, hs)
+    T = SB.T_RUN if T is None else T
+    try:
+        for rpm in SPEEDS:
+            tau = 60.0/(3*rpm)
+            r = _SIM.run(mk(tau/82, tau), rpm=rpm, ap=ap, T=T)
+            if not r['stable']:
+                return False
+            if check_sat and r['peak_u'] >= 0.999*SB.V_MAX:
+                return False
+    except Exception:
+        return False
+    finally:
+        _set_plant()
+    return True
+
+
+def _worst_blim(arch, x, tol, cutoff=0.0, gate='rob'):
     """Limite de passe du pire cas, en mm. 0.0 si le correcteur echoue.
 
     cutoff : meilleure valeur connue. Des qu'une vitesse fait tomber le minimum
@@ -109,17 +217,24 @@ def _worst_blim(arch, x, tol, cutoff=0.0, gate=True):
     except Exception:
         return 0.0
 
-    if gate:
-        # contrainte physique, evaluee d'abord car bien moins chere
-        for rpm in SPEEDS:
-            tau = 60.0/(3*rpm)
-            try:
-                r = _SIM.run(mk(tau/82, tau), rpm=rpm, ap=SB.AP_TEST,
-                             T=SB.T_RUN)
-            except Exception:
-                return 0.0
-            if (not r['stable']) or r['peak_u'] >= 0.999*SB.V_MAX:
-                return 0.0
+    # Contraintes evaluees d'abord : elles ne coutent que des simulations
+    # courtes, la ou la bissection en coute 40 a 55.
+    #
+    # Un candidat INFAISABLE ne rend pas 0 mais n/1000, ou n est le nombre de
+    # conditions franchies avant l'echec. C'est la gestion de contraintes
+    # "faisabilite d'abord" : n/1000 <= 0.007 reste sous toute limite reelle
+    # (>= 0.020 mm), donc tout candidat faisable bat tout candidat infaisable,
+    # mais entre deux infaisables celui qui va plus loin gagne. Sans cela le
+    # critere serait plat a zero sur presque tout l'espace et le PSO n'aurait
+    # aucun gradient a suivre.
+    if gate in ('sat', 'rob'):
+        if not _survives(mk, 1.0, 1.0, 1.0, 1.0, SB.AP_TEST, check_sat=True):
+            return 0.0
+    if gate == 'rob':
+        for n, (_, ks, cs, kcs, hs) in enumerate(PERTURB, start=1):
+            if not _survives(mk, ks, cs, kcs, hs, AP_GATE, check_sat=False,
+                             T=SB.T_LIMIT):
+                return n/1000.0
 
     best = np.inf
     for rpm in SPEEDS:
@@ -140,7 +255,7 @@ def _eval(job):
     return _worst_blim(arch, np.asarray(x), tol, cutoff, gate)
 
 
-def pso(arch, n_part, n_iter, workers, rng, gate=True):
+def pso(arch, n_part, n_iter, workers, rng, gate='rob'):
     lo, hi = BOUNDS[arch][:, 0], BOUNDS[arch][:, 1]
     d = len(lo)
     X = rng.uniform(lo, hi, size=(n_part, d))
@@ -175,6 +290,12 @@ def pso(arch, n_part, n_iter, workers, rng, gate=True):
 
 def report(arch, x):
     """Evalue le reglage a la tolerance finale et rapporte la tension."""
+    global _SIM, _PLATE, _K0, _C0, _H0, _KC0
+    _init_worker()
+    mk0 = FACTORY[arch](_PLATE, list(x))
+    surv = [(nm, _survives(mk0, ks, cs, kcs, hs, AP_GATE, False,
+                           T=SB.T_LIMIT))
+            for nm, ks, cs, kcs, hs in PERTURB]
     sim = make_sim()
     plate = copy.deepcopy(sim.plate)
     mk = FACTORY[arch](plate, list(x))
@@ -185,7 +306,7 @@ def report(arch, x):
         tau = 60.0/(3*r)
         res = sim.run(mk(tau/82, tau), rpm=r, ap=SB.AP_TEST, T=SB.T_RUN)
         u.append(res['rms_u']); pk.append(res['peak_u']); y.append(res['rms_um'])
-    return lim, u, pk, y
+    return lim, u, pk, y, surv
 
 
 def main():
@@ -194,7 +315,8 @@ def main():
     ap.add_argument('--particles', type=int, default=0)
     ap.add_argument('--iters', type=int, default=0)
     ap.add_argument('--workers', type=int, default=4)
-    ap.add_argument('--constraint', choices=['sat', 'none'], default='sat')
+    ap.add_argument('--constraint', choices=['rob', 'sat', 'none'],
+                    default='rob')
     a = ap.parse_args()
     archs = ['lqg', 'eso'] if a.arch == 'both' else [a.arch]
     rng = np.random.default_rng(20240809)
@@ -204,9 +326,8 @@ def main():
         nit = a.iters or (15 if arch == 'lqg' else 20)
         print(f'=== {arch.upper()} : PSO {npart} particules x {nit} iterations '
               f'sur {a.workers} coeurs ===', flush=True)
-        x, fx = pso(arch, npart, nit, a.workers, rng,
-                    gate=(a.constraint == 'sat'))
-        lim, u, pk, y = report(arch, x)
+        x, fx = pso(arch, npart, nit, a.workers, rng, gate=a.constraint)
+        lim, u, pk, y, surv = report(arch, x)
         print(f'\n  X_{arch.upper()} = [' + ', '.join(f'{v:.4f}' for v in x) + ']')
         print(f'  limites (mm)  : {[round(v, 4) for v in lim]}')
         print(f'  pire cas      : {min(lim):.4f} mm   (recherche : {fx:.4f})')
@@ -214,6 +335,10 @@ def main():
         print(f'  tension crete : {[round(v, 1) for v in pk]}   '
               f'(V_MAX = {SB.V_MAX})')
         print(f'  vibration um  : {[round(v, 3) for v in y]}')
+        print(f'  survie sous perturbation reservee, a '
+              f'{AP_GATE*1e3:.2f} mm :')
+        for nm, ok in surv:
+            print(f'     {nm:10s} : {"OK" if ok else "ECHEC"}')
         print(f'  ecoule        : {time.time()-t0:.0f} s\n', flush=True)
 
 

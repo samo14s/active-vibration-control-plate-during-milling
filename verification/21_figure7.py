@@ -51,6 +51,8 @@ x = np.asarray(p.xp_array)*1e3                    # mm
 D = np.asarray(p.Dp_array)[:2, :]                 # deux premiers modes
 E = np.einsum('ik,jk->ijk', D, D)                 # (2, 2, n_pos)
 
+NOTE = "\n  C'EST LA PREMIERE LIGNE QU'IL FAUT LIRE, ET J'AI D'ABORD CITE LA SECONDE.\n  Le rapport 194 du relatif ne vient PAS d'une variation exceptionnelle\n  de (1,2) : sa demi-amplitude, 61.98, ne vaut que 1.27 fois celle de\n  (2,2). Il vient du DENOMINATEUR -- le nominal de (1,2) vaut -3.91,\n  parce que la courbe balaie +58 a -66 en traversant zero, si bien que\n  sa moyenne est presque nulle. Diviser par presque zero gonfle le\n  rapport, il ne mesure alors plus la variation mais la petitesse du\n  nominal.\n\n  Et c'est l'ABSOLU qui compte pour l'Eq. (25) : la perturbation\n  injectee vaut L_alpha x L_DDi, c.-a-d. la demi-amplitude ELLE-MEME,\n  jamais son rapport au nominal. La synthese ne voit pas le pourcentage."
+
 LAB = [('(a)', 0, 0), ('(b)', 0, 1), ('(c)', 1, 0), ('(d)', 1, 1)]
 print('%6s %12s %12s %12s %12s %10s'
       % ('elem', 'min', 'max', 'nominal', 'perturb.', 'variation'))
@@ -65,16 +67,22 @@ for tag, i, j in LAB:
           % (f'({i+1},{j+1})', v.min(), v.max(), nom, per, 100*rel))
 
 r11 = stats[(0, 0)][3]
+a11 = stats[(0, 0)][2]
 others = [stats[k][3] for k in stats if k != (0, 0)]
+oth_abs = [stats[k][2] for k in stats if k != (0, 0)]
 print()
 print("VERIFICATION DE L'AFFIRMATION DE L'ARTICLE")
 print('  "Except for the first element, other elements all vary largely"')
-print(f'  variation relative de (1,1)      : {100*r11:.1f} %')
-print(f'  variation relative des autres    : '
-      f'{", ".join(f"{100*o:.0f} %" for o in others)}')
-ok = all(o > 5*r11 for o in others)
-print(f'  -> {"CONFORME" if ok else "NON CONFORME"} : les trois autres varient '
-      f'{min(others)/r11:.0f} a {max(others)/r11:.0f} fois plus que (1,1)')
+print(f'  en ABSOLU  : demi-amplitude {a11:.2f} pour (1,1), '
+      f'{min(oth_abs):.2f} a {max(oth_abs):.2f} pour les autres, '
+      f'soit {min(oth_abs)/a11:.1f} a {max(oth_abs)/a11:.1f} fois plus')
+print(f'  en RELATIF : {100*r11:.1f} % pour (1,1), '
+      f'{", ".join(f"{100*o:.0f} %" for o in others)} pour les autres, '
+      f'soit {min(others)/r11:.0f} a {max(others)/r11:.0f} fois plus')
+print(NOTE)
+ok = all(o > 5*a11 for o in oth_abs)
+print(f'  -> {"CONFORME" if ok else "NON CONFORME"} a l\'affirmation de '
+      f'l\'article, sur la mesure absolue.')
 assert ok, "l'affirmation qualitative de l'article n'est pas reproduite"
 
 print()

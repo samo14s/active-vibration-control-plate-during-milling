@@ -122,7 +122,7 @@ def first_crossing(t, y, level):
     return float(t[int(np.argmax(a >= level))])
 
 
-def floquet_modes(plate, rpm, ap, x_pos, m=120, n_modes=N_MODES, k=3):
+def floquet_modes(plate, rpm, ap, x_pos, m=80, n_modes=N_MODES, k=3):
     """k multiplicateurs dominants de la monodromie EXACTE (stability_fdm,
     matrice assemblee puis eig complet — aucune iteration de puissance), avec
     la frequence de broutement repliee la plus proche d'une frequence propre.
@@ -154,8 +154,8 @@ def floquet_modes(plate, rpm, ap, x_pos, m=120, n_modes=N_MODES, k=3):
 
 def exact_rho(plate, ap, x_pos, rpm=RPM, m=40, n_modes=N_MODES):
     """Rayon spectral EXACT (monodromie assemblee + eig complet). Sert de
-    reference : lti_floquet.spectral_radius est une iteration de puissance et
-    lti_floquet.is_stable la fige a n_period = 50, ce qui SOUS-ESTIME rho."""
+    reference independante a l'iteration de puissance de lti_floquet, dont la
+    convergence en |lambda_2/lambda_1| sous-estime rho si elle est tronquee."""
     tau = 60.0 / (N_TEETH * rpm)
     D = plate.D_row(x_pos, plate.hp)[:n_modes]
     _, a4 = alpha4_series(rpm, ap, plate.hp, m, midpoint=True)
@@ -164,11 +164,11 @@ def exact_rho(plate, ap, x_pos, rpm=RPM, m=40, n_modes=N_MODES):
     return float(np.max(np.abs(np.linalg.eigvals(Phi))))
 
 
-def exact_limit(plate, x_pos, L0, n_bisect=6):
+def exact_limit(plate, x_pos, L0, n_bisect=4):
     """Raffinement EXACT de la limite de passe autour de l'estimation L0."""
-    lo, hi = 0.70 * L0, 1.10 * L0
+    lo, hi = 0.85 * L0, 1.15 * L0
     if exact_rho(plate, lo, x_pos) > 1.0:
-        lo, hi = 0.40 * L0, lo
+        lo, hi = 0.55 * L0, lo
     for _ in range(n_bisect):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if exact_rho(plate, mid, x_pos) <= 1.0 else (lo, mid)
@@ -253,14 +253,18 @@ print('\n--- limite de passe SANS commande a %.0f tr/min (Floquet, m = 60,'
 print('    calage        x = 0 mm    x = 50 mm   x = 100 mm   |  papier Fig.13(b)')
 lims = {}
 for name, _ in CALIBS:
-    row = [lf.limit(plates[name], RPM, x, None, n_modes=N_MODES, m=60, tol=5e-6)
+    # NB : tol de lf.limit est en METRES ; 1e-5 m = 0.01 mm serait plus
+    # grossier que la limite cherchee elle-meme. On resserre a 0.3 um et on
+    # part d'un encadrement etroit pour garder le cout raisonnable.
+    row = [lf.limit(plates[name], RPM, x, None, n_modes=N_MODES, m=60,
+                    lo=0.015e-3, hi=0.150e-3, tol=3e-7)
            for x in (0.0, 0.050, 0.100)]
     lims[name] = row
     print('    %-12s %8.4f mm %8.4f mm %8.4f mm  |  ~0.05 mm'
           % (name, row[0] * 1e3, row[1] * 1e3, row[2] * 1e3))
-print('    NB : lti_floquet.is_stable fige l\'iteration de puissance a'
-      ' n_period = 50 ;')
-print('    raffinement par la monodromie EXACTE (eig complet, m = 40) en x = 0 :')
+print('    CONTROLE CROISE : lti_floquet.limit repose sur une iteration de'
+      ' puissance ;')
+print('    verification par la monodromie EXACTE (eig complet, m = 40) en x = 0 :')
 lims_ex = {}
 for name, _ in CALIBS:
     L0 = lims[name][0]
@@ -270,8 +274,9 @@ for name, _ in CALIBS:
           ' rho_exact(L0) = %.4f'
           % (name, L0 * 1e3, Lx * 1e3, 100 * (Lx / L0 - 1),
              exact_rho(plates[name], L0, 0.0)))
-print('    => les limites du tableau sont optimistes de ~4 %, sans consequence')
-print('       sur les conclusions (a_p = 0.30 mm reste 7 a 8 fois la limite).')
+dev = max(abs(lims_ex[n] / lims[n][0] - 1) for n, _ in CALIBS)
+print('    => accord des deux methodes a %.1f %% pres ; a_p = 0.30 mm reste'
+      ' %.0f fois la limite.' % (100 * dev, AP_S / max(lims_ex.values())))
 print('    => a_p = %.2f mm de la condition S est %.1f a %.1f fois la limite :'
       % (AP_S * 1e3, AP_S / max(lims["measured"]), AP_S / min(lims["measured"])))
 print('       la divergence annoncee par la Fig. 14(a) est bien reproduite.')
@@ -359,7 +364,7 @@ print('  => pas de temps non critique : ecarts < 0.1 % sur les trois'
 
 # --------------------------------------------------------- Floquet vs temps
 print('\n  Table 3 — multiplicateurs de Floquet dominants (monodromie exacte,'
-      ' x = 0, m = 120)')
+      ' x = 0, m = 80)')
 print('  ' + '-' * 75)
 print('  calage        rang  rho      sigma=ln(rho)/tau  f_c replie [Hz]'
       '   mode le plus proche')
@@ -411,10 +416,16 @@ for name, _ in CALIBS:
               ' %7.1f Hz  (%+.1f %% de 1135)'
               % (name if j == 0 else '', j + 1, rho, c,
                  100 * (c / F_C2_PAPER - 1)))
+_ev = fl['theoretical']
+_fpv = min(_ev[1][1] % FT, FT - _ev[1][1] % FT)
+_c = min([abs(sg * _fpv + k / TAU) for sg in (1, -1) for k in range(14)],
+         key=lambda z: abs(z - F_C2_PAPER))
 print('  => pour le calage theorique le multiplicateur de rang 2 admet le')
-print('     repliement 1125.8 Hz, a 0.8 % des 1135 Hz publies ; MAIS il est')
-print('     sous-dominant (rho = 1.068 contre 1.369) et la FFT temporelle,')
-print('     elle, ne souffre d\'aucun repliement : elle ne montre rien la.')
+print('     repliement %.1f Hz, a %.1f %% des 1135 Hz publies ; MAIS il est'
+      % (_c, 100 * abs(_c / F_C2_PAPER - 1)))
+print('     sous-dominant (rho = %.3f contre %.3f) et la FFT temporelle, elle,'
+      % (_ev[1][0], _ev[0][0]))
+print('     ne souffre d\'aucun repliement : elle ne montre rien la.')
 
 # ---------------------------------------------- comparaison avec le papier
 print('\n  Table 4 — RAIE DOMINANTE contre le papier')

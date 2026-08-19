@@ -55,7 +55,8 @@ def main():
 
     rows = {}
     for kind in ('fopid', 'adrc'):
-        Dg = Design(kind, plate, sign_loop)
+        var = float(d[f'{kind}__sign_variant'])
+        Dg = Design(kind, plate, sign_loop, sign_variant=var)
         x = d[f'{kind}__x']
         par = Dg.decode(x)
         J, info = evaluate(plate, Dg.build(x), detail=True)
@@ -64,13 +65,17 @@ def main():
                           seeds=d[f'{kind}__seeds'],
                           J_seeds=d[f'{kind}__J_seeds'],
                           n_par=int(d[f'{kind}__n_par']),
-                          n_states=int(d[f'{kind}__n_states']))
+                          n_states=int(d[f'{kind}__n_states']),
+                          variant=var,
+                          variants=d[f'{kind}__variants'])
 
     print("\n  1-2. budget et graines")
     for k, r in rows.items():
         print(f"    {k:5s} : {r['n_eval']} evaluations, graines"
-              f" {list(r['seeds'])}, {r['n_par']} parametres,"
-              f" {r['n_states']} etats")
+              f" {list(r['seeds'])}, conventions de signe"
+              f" {sorted(set(r['variants'].tolist()))}, {r['n_par']}"
+              f" parametres, {r['n_states']} etats"
+              f", convention retenue {r['variant']:+.0f}")
     same = (rows['fopid']['n_eval'] == rows['adrc']['n_eval']
             and list(rows['fopid']['seeds']) == list(rows['adrc']['seeds']))
     print(f"    -> budget et graines identiques : {'OUI' if same else 'NON'}")

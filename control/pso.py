@@ -26,12 +26,27 @@ from adrc import adrc_fopid_ss, b0_nominal
 
 # ---------------------------------------------------------------------------
 class Design:
-    """Fabrique de correcteurs : vecteur normalise -> (A, B, C, D)."""
+    """Fabrique de correcteurs : vecteur normalise -> (A, B, C, D).
 
-    def __init__(self, kind, plate, sign_loop):
+    CONVENTION DE SIGNE DE LA BOUCLE. Avec la geometrie de pastille imposee par
+    la Fig. 12(b), les residus D_obs(i) H_Pe(i) ne sont PAS tous de meme signe
+    ([-1 -1 -1 +1 +1]) : le gain du procede est NEGATIF en basse frequence et
+    POSITIF en haute frequence. Aucune convention de signe unique n'est donc
+    "la bonne" a priori — ni pour le FOPID (ou elle porte sur sign_loop), ni
+    pour l'ADRC-FOPID (ou elle est portee par le signe de b0).
+
+    On ne tranche donc pas a la main : `sign_variant` vaut +1 ou -1 et les DEUX
+    valeurs sont explorees, pour LES DEUX structures, avec les memes graines et
+    le meme budget. Ce n'est pas un parametre ajuste de plus (il reste 5 et 7
+    parametres continus) : c'est une convention structurelle enumeree de facon
+    exhaustive et identique des deux cotes.
+    """
+
+    def __init__(self, kind, plate, sign_loop, sign_variant=1.0):
         self.kind = kind
         self.plate = plate
         self.sign_loop = sign_loop
+        self.sign_variant = float(sign_variant)
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         bd = C.BOUNDS_FOPID if kind == 'fopid' else C.BOUNDS_ADRC
         self.names = list(bd.keys())
@@ -54,11 +69,12 @@ class Design:
         p = self.decode(u)
         if self.kind == 'fopid':
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
-                            C.OUST_WB, C.OUST_WH, C.OUST_N, self.sign_loop)
+                            C.OUST_WB, C.OUST_WH, C.OUST_N,
+                            self.sign_loop * self.sign_variant)
         else:
             core = adrc_fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
-                                 p['wo'], p['b0'], C.OUST_WB, C.OUST_WH,
-                                 C.OUST_N, 1.0)
+                                 p['wo'], p['b0'] * self.sign_variant,
+                                 C.OUST_WB, C.OUST_WH, C.OUST_N, 1.0)
         return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
 
     def order(self, u):

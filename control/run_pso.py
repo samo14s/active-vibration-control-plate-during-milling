@@ -56,22 +56,31 @@ def main():
 
     store = {}
     for kind in ('fopid', 'adrc'):
-        D = Design(kind, plate, sign_loop)
-        n_states = D.order(np.full(D.n, 0.5))
-        print(f"  --- {kind.upper()} : {D.n} parametres,"
+        D0 = Design(kind, plate, sign_loop)
+        n_states = D0.order(np.full(D0.n, 0.5))
+        print(f"  --- {kind.upper()} : {D0.n} parametres,"
               f" {n_states} etats ---", flush=True)
-        best_x, best_J, runs = None, -np.inf, []
-        for seed in C.PSO['seeds']:
-            t0 = time.time()
-            fit = lambda u: evaluate(plate, D.build(u))
-            x, J, inf = pso(fit, D.n, seed=seed)
-            runs.append(dict(seed=seed, x=x, J=J, history=inf['history'],
-                             n_eval=inf['n_eval']))
-            print(f"    graine {seed} : J = {J:+.4f}"
-                  f"  ({inf['n_eval']} evaluations, {time.time() - t0:.0f} s)",
-                  flush=True)
-            if J > best_J:
-                best_J, best_x = J, x.copy()
+        best_x, best_J, best_var, runs = None, -np.inf, None, []
+        # les deux conventions de signe de boucle sont explorees pour LES DEUX
+        # structures (le procede change de signe entre basse et haute
+        # frequence : aucune n'est correcte a priori)
+        for variant in (+1.0, -1.0):
+            D = Design(kind, plate, sign_loop, sign_variant=variant)
+            for seed in C.PSO['seeds']:
+                t0 = time.time()
+                fit = lambda u: evaluate(plate, D.build(u))
+                x, J, inf = pso(fit, D.n, seed=seed)
+                runs.append(dict(seed=seed, variant=variant, x=x, J=J,
+                                 history=inf['history'],
+                                 n_eval=inf['n_eval']))
+                print(f"    signe {variant:+.0f}, graine {seed} :"
+                      f" J = {J:+.4f}"
+                      f"  ({inf['n_eval']} evaluations,"
+                      f" {time.time() - t0:.0f} s)", flush=True)
+                if J > best_J:
+                    best_J, best_x, best_var = J, x.copy(), variant
+        D = Design(kind, plate, sign_loop, sign_variant=best_var)
+        print(f"    convention retenue : sign_variant = {best_var:+.0f}")
         par = D.decode(best_x)
         _, info = evaluate(plate, D.build(best_x), detail=True)
         print(f"    meilleur : J = {best_J:+.4f}   Ms = {info['Ms']:.2f}"
@@ -81,12 +90,14 @@ def main():
         ss = D.build(best_x)
         store[kind] = dict(
             x=best_x, J=best_J, n_par=D.n, n_states=n_states,
+            sign_variant=best_var,
             names=np.array(D.names), values=np.array([par[k] for k in par]),
             keys=np.array(list(par.keys())),
             Ms=info['Ms'], V=info['V'],
             A=ss[0], B=ss[1], C=ss[2], D=ss[3],
             hist=np.array([r['history'] for r in runs]),
             seeds=np.array([r['seed'] for r in runs]),
+            variants=np.array([r['variant'] for r in runs]),
             J_seeds=np.array([r['J'] for r in runs]),
             n_eval=int(sum(r['n_eval'] for r in runs)))
 

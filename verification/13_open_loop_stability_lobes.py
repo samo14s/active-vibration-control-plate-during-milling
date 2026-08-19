@@ -14,22 +14,25 @@ broche. Il en tire trois affirmations verifiables :
        commande — donc 0.30 mm doit se situer AU-DESSUS de a_p,lim(4900).
 
 Ce script recalcule a_p,lim avec la machinerie de Floquet du depot
-(discretisation complete, Ding et al. ; control/closed_loop.py) sur le modele
-Chebyshev-Ritz a 5 modes, dans les DEUX calages du Tableau 4 :
+(discretisation complete de Ding et al., control/closed_loop.py) sur le
+modele Chebyshev-Ritz a 5 modes, dans les DEUX calages du Tableau 4 :
 mesure (540/1068/2787/3351/4122 Hz) et theorique (537/1101/2805/3423/4254 Hz).
 Le papier a calcule sa Fig. 13 avec SON modele theorique : c'est la colonne
-"theoretical" qui doit lui etre comparee.
+"theoretical" qui lui est directement comparable ; la colonne "measured" est
+la plaque reelle, qui sert a la couche de commande.
 
-CONVENTION DE SIGNE — imposee ici a coeff_scale = config.SIGN_SIM = -1, celle
-de la couche control/ du depot (convention "derivee" des Eqs. 1-2-5-10 du
-papier). Le signe oppose (+1 = Eq. (13) telle qu'imprimee) est evalue en un
-point (4900 tr/min) pour montrer l'ecart : voir verification/18.
+CONVENTION DE SIGNE — le signe de reference est LU dans config.SIGN_SIM (il
+est imprime tel quel) : c'est la convention de la couche control/ du depot.
+Le signe oppose est calcule sur toute la grille lui aussi, parce que ce choix
+inverse creux et bosses des lobes et change d'un facteur ~10 la limite a une
+vitesse donnee (cf. verification/18_sign_convention.py). Ainsi le tableau
+reste lisible quel que soit l'etat de config.py.
 
 ACCELERATION — la carte de periode est identique a celle de
 control/closed_loop.period_maps (verifiee bit a bit, cf. sortie), mais les
 exponentielles de matrice sont MEMOISEES sur la valeur de alpha4 : en avalant
 a ae = 0.1 mm l'outil n'est engage que ~12 % de la periode de dent, donc
-alpha4 = 0 exactement sur la grande majorite des sous-intervalles et une
+alpha4 = 0 EXACTEMENT sur la grande majorite des sous-intervalles et une
 seule expm suffit pour eux. Gain ~7x, resultat inchange.
 
 Sortie : figures/verification/13_open_loop_stability_lobes.png + tableaux.
@@ -64,24 +67,26 @@ os.makedirs(FIG, exist_ok=True)
 STEM = '13_open_loop_stability_lobes'
 
 # ------------------------------------------------------------------ reglages
-N_MODES = C.N_MODES                 # 5
-AE = C.AE                           # 0.1 mm
-SIGN = C.SIGN_SIM                   # -1.0
-M_FLOQ = 60                         # sous-intervalles (C.M_FLOQUET = 200)
-N_PERIOD = 24                       # periodes d'iteration de puissance
+N_MODES = C.N_MODES                          # 5
+AE = C.AE                                    # 0.1 mm
+SIGN = float(C.SIGN_SIM)                     # signe de reference du depot
+M_FLOQ = 100                                 # sous-intervalles par periode
+N_PERIOD = 30                                # periodes d'iteration de puissance
 AP_LO, AP_HI, N_BIS = 5.0e-6, 2.5e-3, 8      # bissection LOG sur a_p
 SPEEDS = np.arange(3000, 7001, 200)          # pas 200 tr/min -> 21 vitesses
-POSITIONS = (0.0, 0.25, 0.5, 0.75, 1.0)      # x / l_P
+POSITIONS = tuple(np.round(np.arange(0.0, 1.001, 0.125), 3))    # 9 positions
+POS_PAPER = (0.0, 0.25, 0.5, 0.75, 1.0)      # les 5 demandees explicitement
 RPM_S, AP_S = 4900, 0.30e-3                  # condition S du papier
 CALIBS = (('measured', F_MEASURED), ('theoretical', F_THEORETICAL))
 PAPER_PEAKS = (3600, 5400)
+M_STUDY = (40, 60, 100, 200, 300)            # etude de convergence a 4900
 
 # ------------------------------------------------------- coeur de calcul ----
 _A4 = {}
 
 
 def a4_series(rpm, ap, hp, m, ae):
-    """alpha4(t) sur une periode de dent, memoise (independant de la position)."""
+    """alpha4(t) sur une periode de dent, memoise (independant de x)."""
     key = (rpm, ap, m)
     if key not in _A4:
         _A4[key] = alpha4_series(rpm, ap, hp, m, ae=ae, midpoint=True)[1]
@@ -89,8 +94,8 @@ def a4_series(rpm, ap, hp, m, ae):
 
 
 def fast_period_maps(plate, rpm, ap, x_pos, sign, n_modes, m, ae):
-    """Identique a closed_loop.period_maps(ctrl=None, pd=None) mais avec
-    memoisation de expm sur la valeur de alpha4 (0 sur ~88 % de la periode)."""
+    """Identique a closed_loop.period_maps(ctrl=None, pd=None), avec
+    memoisation de expm sur la valeur de alpha4 (nulle hors engagement)."""
     tau = 60.0 / (N_TEETH * rpm)
     h = tau / m
     D = plate.D_row(x_pos, plate.hp)[:n_modes]
@@ -116,18 +121,18 @@ def fast_period_maps(plate, rpm, ap, x_pos, sign, n_modes, m, ae):
 
 def stable(plate, rpm, ap, x_pos, sign, m=M_FLOQ, n_period=N_PERIOD):
     maps, _ = fast_period_maps(plate, rpm, ap, x_pos, sign, N_MODES, m, AE)
-    rho = spectral_radius(maps, m, maps[0][0].shape[0], n_period)
-    return rho <= 1.0
+    return spectral_radius(maps, m, maps[0][0].shape[0], n_period) <= 1.0
 
 
 def ap_limit(plate, rpm, x_pos, sign, m=M_FLOQ, lo=AP_LO, hi=AP_HI,
              n_bis=N_BIS):
-    """Profondeur limite [m] par bissection LOGARITHMIQUE (resolution
-    relative constante : (hi/lo)^(2^-n_bis) - 1 = 2.4 % ici)."""
+    """Profondeur limite [m] par bissection LOGARITHMIQUE : resolution
+    RELATIVE constante (hi/lo)^(2^-n_bis) - 1, mieux adaptee qu'une
+    bissection lineaire a des limites qui vont de 0.04 a 2.5 mm."""
     if not stable(plate, rpm, lo, x_pos, sign, m):
         return 0.0
     if stable(plate, rpm, hi, x_pos, sign, m):
-        return hi                       # sature : limite >= hi
+        return hi                            # sature : limite >= hi
     llo, lhi = np.log(lo), np.log(hi)
     for _ in range(n_bis):
         lm = 0.5 * (llo + lhi)
@@ -149,21 +154,19 @@ def _init():
 
 
 def _job(arg):
-    calib, rpm, sign, m = arg
+    calib, rpm, sign, m, pos = arg
     p = _PLATES[calib]
-    return arg, [ap_limit(p, rpm, fr * p.lp, sign, m) for fr in POSITIONS]
+    return arg, [ap_limit(p, rpm, fr * p.lp, sign, m) for fr in pos]
 
 
 def run_jobs(jobs, n_proc=4):
-    """Repartit les (calib, rpm, sign, m) sur les coeurs ; retombe en
-    sequentiel si le pool n'est pas disponible."""
+    """Repartit les taches sur les coeurs ; retombe en sequentiel au besoin."""
     try:
         import multiprocessing as mp
-        ctx = mp.get_context('fork')
-        with ctx.Pool(n_proc, initializer=_init) as pool:
+        with mp.get_context('fork').Pool(n_proc, initializer=_init) as pool:
             return dict(pool.map(_job, jobs, chunksize=1))
     except Exception as exc:                                # pragma: no cover
-        print(f"  [pool indisponible : {exc} -> sequentiel]")
+        print(f"  [pool indisponible : {exc} -> execution sequentielle]")
         _init()
         return dict(_job(j) for j in jobs)
 
@@ -173,226 +176,263 @@ def local_maxima(x, y):
             if y[i] > y[i - 1] and y[i] > y[i + 1]]
 
 
+def sign_tag(s):
+    return 'Eq. (13) as printed' if s > 0 else 'derived (Eqs. 1-2-5-10)'
+
+
 # ------------------------------------------------------------------- main ---
 def main():
     t0 = time.time()
     line = '=' * 78
+    other = -SIGN
     print(line)
     print(" SCRIPT 13 — LOBES DE STABILITE SANS COMMANDE (Fig. 13 du papier)")
     print(line)
     print(f"  Modele   : Chebyshev-Ritz, {N_MODES} modes, pastille coin droit,"
           " outil sur le bord superieur")
     print(f"  Coupe    : avalant, ae = {AE * 1e3:.3f} mm, fz ="
-          f" {C.FZ * 1e3:.3f} mm/dent, 3 dents, D = 10 mm")
+          f" {C.FZ * 1e3:.3f} mm/dent, 3 dents, D = 10 mm, helice 35 deg")
     print(f"  Floquet  : discretisation complete, m = {M_FLOQ}"
-          f" sous-intervalles (C.M_FLOQUET = {C.M_FLOQUET} en production),"
-          f" n_period = {N_PERIOD}")
+          f" sous-intervalles/periode de dent"
+          f" (C.M_FLOQUET = {C.M_FLOQUET} en production), n_period ="
+          f" {N_PERIOD}")
     print(f"  Recherche: bissection LOG de a_p dans"
-          f" [{AP_LO * 1e3:.3f}, {AP_HI * 1e3:.3f}] mm,"
-          f" {N_BIS} niveaux -> resolution relative"
+          f" [{AP_LO * 1e3:.3f}, {AP_HI * 1e3:.3f}] mm, {N_BIS} niveaux"
+          f" -> resolution relative"
           f" {((AP_HI / AP_LO) ** (2.0 ** -N_BIS) - 1) * 100:.1f} %")
-    print(f"  Grille   : {SPEEDS[0]}-{SPEEDS[-1]} tr/min pas"
-          f" {SPEEDS[1] - SPEEDS[0]} ({len(SPEEDS)} vitesses)"
-          f" x {len(POSITIONS)} positions x 2 calages")
+    print(f"  Grille   : {SPEEDS[0]}-{SPEEDS[-1]} tr/min, PAS"
+          f" {SPEEDS[1] - SPEEDS[0]} tr/min ({len(SPEEDS)} vitesses)"
+          f" x {len(POSITIONS)} positions x/l_P"
+          f" ({POSITIONS[0]:.3f}..{POSITIONS[-1]:.3f} pas 0.125)"
+          " x 2 calages x 2 signes")
     print(f"  SIGNE    : coeff_scale = config.SIGN_SIM = {SIGN:+.1f}"
-          "  (convention de la couche control/ ;")
-    print("             +1 = Eq. (13) telle qu'imprimee dans le papier)")
+          f"  ->  {sign_tag(SIGN)}")
+    print(f"             signe oppose {other:+.1f} = {sign_tag(other)}"
+          " (calcule aussi, pour la ligne de comparaison)")
+    print("  NOTE     : config.SIGN_SIM a ete lu A L'EXECUTION ; l'historique"
+          " du depot montre")
+    print("             qu'il a bascule de -1 a +1 (commit \"Make both model"
+          " layers follow Eq. (13)\").")
 
     # --- controles de la voie rapide ---------------------------------------
     plate_m = build_plate('right', n_modes=N_MODES, freqs=F_MEASURED)
-    A, _ = fast_period_maps(plate_m, 4900, 0.3e-3, 0.5 * plate_m.lp, SIGN,
+    A, _ = fast_period_maps(plate_m, RPM_S, 0.3e-3, 0.5 * plate_m.lp, SIGN,
                             N_MODES, M_FLOQ, AE)
-    B, _ = period_maps(plate_m, 4900, 0.3e-3, 0.5 * plate_m.lp, ctrl=None,
+    B, _ = period_maps(plate_m, RPM_S, 0.3e-3, 0.5 * plate_m.lp, ctrl=None,
                        pd=None, n_modes=N_MODES, m=M_FLOQ,
                        coeff_mode='time', coeff_scale=SIGN, ae=AE)
     d = max(float(np.abs(a[i] - b[i]).max())
             for a, b in zip(A, B) for i in range(3))
-    lref = repo_limit(plate_m, 4900, 0.5 * plate_m.lp, ctrl=None, pd=None,
+    lref = repo_limit(plate_m, RPM_S, 0.5 * plate_m.lp, ctrl=None, pd=None,
                       lo=AP_LO, hi=AP_HI, tol=2e-5, n_modes=N_MODES,
                       m=M_FLOQ, coeff_mode='time', coeff_scale=SIGN,
                       n_period=N_PERIOD, ae=AE)
-    lfast = ap_limit(plate_m, 4900, 0.5 * plate_m.lp, SIGN)
-    print(f"\n  [controle] cartes de periode rapides vs"
+    lfast = ap_limit(plate_m, RPM_S, 0.5 * plate_m.lp, SIGN)
+    print(f"\n  [controle 1] cartes de periode rapides vs"
           f" closed_loop.period_maps : ecart max = {d:.3e}")
-    print(f"  [controle] a_p,lim(4900, x/l=0.5) : closed_loop.limit ="
-          f" {lref * 1e3:.4f} mm, voie rapide = {lfast * 1e3:.4f} mm"
-          f"  (ecart {abs(lfast - lref) / max(lref, 1e-12) * 100:.1f} %)")
+    print(f"  [controle 2] a_p,lim(4900, x/l=0.5), calage mesure :"
+          f" closed_loop.limit = {lref * 1e3:.4f} mm,"
+          f" voie rapide = {lfast * 1e3:.4f} mm"
+          f"  (ecart {abs(lfast - lref) / max(lref, 1e-12) * 100:.1f} %,"
+          " du seul maillage de bissection)")
 
     # --- grille principale --------------------------------------------------
-    jobs = [(cal, int(r), SIGN, M_FLOQ) for cal, _ in CALIBS for r in SPEEDS]
-    jobs += [(cal, RPM_S, -SIGN, M_FLOQ) for cal, _ in CALIBS]      # autre signe
-    jobs += [(cal, RPM_S, SIGN, 200) for cal, _ in CALIBS]          # test de m
+    jobs = [(cal, int(r), sg, M_FLOQ, POSITIONS)
+            for cal, _ in CALIBS for sg in (SIGN, other) for r in SPEEDS]
+    jobs += [(cal, RPM_S, SIGN, mm, POS_PAPER)
+             for cal, _ in CALIBS for mm in M_STUDY]
     res = run_jobs(jobs)
-    print(f"\n  [{len(jobs)} points de vitesse calcules en"
-          f" {time.time() - t0:.0f} s]")
+    print(f"\n  [{len(jobs)} taches (vitesse x calage x signe) en"
+          f" {time.time() - t0:.0f} s sur 4 coeurs]")
 
-    grid = {cal: np.array([res[(cal, int(r), SIGN, M_FLOQ)] for r in SPEEDS])
-            for cal, _ in CALIBS}                        # (n_speed, n_pos)
-    low = {cal: grid[cal].min(axis=1) for cal in grid}
-    arg = {cal: grid[cal].argmin(axis=1) for cal in grid}
+    grid, low, arg = {}, {}, {}
+    for cal, _ in CALIBS:
+        for sg in (SIGN, other):
+            g = np.array([res[(cal, int(r), sg, M_FLOQ, POSITIONS)]
+                          for r in SPEEDS])
+            grid[(cal, sg)] = g
+            low[(cal, sg)] = g.min(axis=1)
+            arg[(cal, sg)] = g.argmin(axis=1)
 
-    # --- Tableau principal --------------------------------------------------
+    # --- (4) tableau principal ----------------------------------------------
     print("\n" + line)
-    print(" (4) a_p,lim MINIMALE sur le bord superieur  [mm]   (sat. ="
-          f" bornee a {AP_HI * 1e3:.2f} mm)")
+    print(f" (4) a_p,lim MINIMALE sur le bord superieur [mm], signe"
+          f" {SIGN:+.0f}   ('*' = bornee a {AP_HI * 1e3:.2f} mm)")
     print(line)
-    print("   rpm |  MESURE: min   x/l_P |  THEORIQUE: min   x/l_P |"
-          "  mesure/theorique")
+    print("   rpm |  MESURE  min   x/l_P |  THEORIQUE  min   x/l_P |"
+          " rapport mes./theo.")
     print("  " + "-" * 74)
     for i, r in enumerate(SPEEDS):
-        lm, lt = low['measured'][i], low['theoretical'][i]
+        lm, lt = low[('measured', SIGN)][i], low[('theoretical', SIGN)][i]
         sm = '*' if lm >= AP_HI - 1e-12 else ' '
         st = '*' if lt >= AP_HI - 1e-12 else ' '
-        print(f"  {r:5d} |     {lm * 1e3:7.4f}{sm}  {POSITIONS[arg['measured'][i]]:4.2f} "
-              f"|      {lt * 1e3:7.4f}{st}  {POSITIONS[arg['theoretical'][i]]:4.2f} "
-              f"|      {lm / lt:6.2f}")
+        print(f"  {r:5d} |    {lm * 1e3:7.4f}{sm}   {POSITIONS[arg[('measured', SIGN)][i]]:5.3f} "
+              f"|     {lt * 1e3:7.4f}{st}   {POSITIONS[arg[('theoretical', SIGN)][i]]:5.3f} "
+              f"|      {lm / max(lt, 1e-12):6.2f}")
 
-    # --- A1 : limite < 0.1 mm a la plupart des vitesses ---------------------
+    # --- (2) affirmations du papier -----------------------------------------
     print("\n" + line)
-    print(" (2) AFFIRMATIONS DU PAPIER")
+    print(" (2) AFFIRMATIONS DU PAPIER, testees sur la courbe la plus basse")
     print(line)
     print("  A1  papier : \"stability limit lower than 0.1 mm in most spindle"
           " speeds\"")
     for cal, _ in CALIBS:
-        n = int((low[cal] < 0.1e-3).sum())
+        v = low[(cal, SIGN)]
+        n = int((v < 0.1e-3).sum())
         print(f"      {cal:11s} : {n}/{len(SPEEDS)} vitesses sous 0.100 mm"
-              f"  ({100 * n / len(SPEEDS):.0f} %) ;"
-              f" mediane {np.median(low[cal]) * 1e3:.4f} mm,"
-              f" min {low[cal].min() * 1e3:.4f} mm,"
-              f" max {low[cal].max() * 1e3:.4f} mm")
+              f" ({100 * n / len(SPEEDS):3.0f} %) ;"
+              f" mediane {np.median(v) * 1e3:.4f}, min {v.min() * 1e3:.4f},"
+              f" max {v.max() * 1e3:.4f} mm")
 
     print("\n  A2  papier : limite \"relatively larger\" vers 3600 et"
           " 5400 tr/min")
     peaks = {}
     for cal, _ in CALIBS:
-        mx = sorted(local_maxima(SPEEDS, low[cal]), key=lambda p: -p[1])
+        v = low[(cal, SIGN)]
+        mx = sorted(local_maxima(SPEEDS, v), key=lambda p: -p[1])
         peaks[cal] = mx
-        txt = ", ".join(f"{int(s)} tr/min ({a * 1e3:.3f} mm)"
-                        for s, a in mx[:4])
-        print(f"      {cal:11s} : maxima locaux = {txt if txt else 'aucun'}")
-        hit = [f"{p}" for p in PAPER_PEAKS
-               if any(abs(s - p) <= 200 for s, _ in mx)]
-        print(f"      {'':11s}   coincidence avec {PAPER_PEAKS} a +-200 tr/min :"
-              f" {hit if hit else 'AUCUNE'}")
+        print(f"      {cal:11s} : maxima locaux (decroissants) = "
+              + ", ".join(f"{int(s)} tr/min ({a * 1e3:.3f} mm)"
+                          for s, a in mx[:4]))
         for p in PAPER_PEAKS:
+            near = [s for s, _ in mx if abs(s - p) <= 200]
             j = int(np.argmin(np.abs(SPEEDS - p)))
-            print(f"      {'':11s}   a {p} tr/min : a_p,lim ="
-                  f" {low[cal][j] * 1e3:.4f} mm"
-                  f"  (rang {int((low[cal] > low[cal][j]).sum()) + 1}"
-                  f"/{len(SPEEDS)} par valeur decroissante)")
+            rank = int((v > v[j]).sum()) + 1
+            print(f"      {'':11s}   {p} tr/min -> a_p,lim ="
+                  f" {v[j] * 1e3:.4f} mm, rang {rank}/{len(SPEEDS)} ;"
+                  f" maximum local a +-200 tr/min :"
+                  f" {int(near[0]) if near else 'AUCUN'}")
 
-    # --- A3 : condition S ---------------------------------------------------
+    # --- (3) condition S ----------------------------------------------------
     print("\n  A3  papier : condition S (4900 tr/min, a_p = 0.300 mm) DIVERGE"
           " sans commande (Fig. 14a)")
     j = int(np.argmin(np.abs(SPEEDS - RPM_S)))
     for cal, _ in CALIBS:
-        ls = low[cal][j]
+        ls = low[(cal, SIGN)][j]
         f = AP_S / ls if ls > 0 else np.inf
-        verdict = 'INSTABLE (accord)' if f > 1 else 'STABLE (DESACCORD)'
-        print(f"      {cal:11s} : a_p,lim(4900) = {ls * 1e3:.4f} mm ->"
-              f" a_p,S / a_p,lim = {f:5.2f}  -> {verdict}")
-    lm200 = {cal: float(np.min(res[(cal, RPM_S, SIGN, 200)]))
-             for cal, _ in CALIBS}
-    print(f"      [convergence] a 4900 tr/min avec m = 200 :"
-          + "".join(f"  {cal} {lm200[cal] * 1e3:.4f} mm"
-                    for cal, _ in CALIBS)
-          + f"   (m = {M_FLOQ} :"
-          + "".join(f"  {low[cal][j] * 1e3:.4f}" for cal, _ in CALIBS) + ")")
-
-    # --- (1) l'autre signe --------------------------------------------------
-    other = {cal: float(np.min(res[(cal, RPM_S, -SIGN, M_FLOQ)]))
-             for cal, _ in CALIBS}
-    print(f"\n  (1) AUTRE SIGNE (coeff_scale = {-SIGN:+.1f}, Eq. (13) imprimee)"
-          f" a 4900 tr/min : mesure {other['measured'] * 1e3:.4f} mm"
-          f" (facteur S {AP_S / max(other['measured'], 1e-12):.2f}),"
-          f" theorique {other['theoretical'] * 1e3:.4f} mm"
-          f" (facteur S {AP_S / max(other['theoretical'], 1e-12):.2f})"
-          " -> S diverge des deux cotes.")
-
-    # --- (3) surface : dispersion selon la position -------------------------
-    print("\n" + line)
-    print(" (1) SURFACE a_p,lim(vitesse, position) — dispersion selon x/l_P"
-          "  [mm]")
-    print(line)
-    hdr = "   rpm |" + "".join(f"  x/l={f:4.2f}" for f in POSITIONS) \
-        + " |  max/min"
+        print(f"      {cal:11s} : a_p,lim(4900) = {ls * 1e3:.4f} mm"
+              f"  ->  a_p,S / a_p,lim = {f:5.2f} x"
+              f"  ->  {'INSTABLE, accord avec Fig. 14a' if f > 1.0 else 'STABLE : DESACCORD avec Fig. 14a'}")
+    print("      [convergence en m a 4900 tr/min, 5 positions du papier,"
+          " min sur positions, mm]")
     for cal, _ in CALIBS:
+        vals = [float(np.min(res[(cal, RPM_S, SIGN, mm, POS_PAPER)]))
+                for mm in M_STUDY]
+        print(f"      {cal:11s} : "
+              + "  ".join(f"m={mm}:{v * 1e3:.4f}"
+                          for mm, v in zip(M_STUDY, vals))
+              + f"   (dispersion +-{50 * (max(vals) - min(vals)) / np.mean(vals):.0f} %)")
+
+    # --- (1) signe oppose ---------------------------------------------------
+    lo_o = {cal: low[(cal, other)][j] for cal, _ in CALIBS}
+    fo = {cal: AP_S / max(lo_o[cal], 1e-12) for cal, _ in CALIBS}
+    print(f"\n  SIGNE OPPOSE ({other:+.0f}, {sign_tag(other)}) a 4900 tr/min :"
+          f" mesure {lo_o['measured'] * 1e3:.4f} mm (S = {fo['measured']:.2f} x,"
+          f" {'instable' if fo['measured'] > 1 else 'STABLE -> contredit Fig. 14a'}),"
+          f" theorique {lo_o['theoretical'] * 1e3:.4f} mm"
+          f" (S = {fo['theoretical']:.2f} x,"
+          f" {'instable' if fo['theoretical'] > 1 else 'STABLE -> contredit Fig. 14a'}).")
+    for cal, _ in CALIBS:
+        v = low[(cal, other)]
+        mx = sorted(local_maxima(SPEEDS, v), key=lambda p: -p[1])[:3]
+        print(f"      {cal:11s} signe {other:+.0f} :"
+              f" {int((v < 0.1e-3).sum())}/{len(SPEEDS)} vitesses < 0.1 mm,"
+              " maxima locaux = "
+              + ", ".join(f"{int(s)} ({a * 1e3:.3f} mm)" for s, a in mx))
+
+    # --- (1) surface --------------------------------------------------------
+    print("\n" + line)
+    print(f" (1) SURFACE a_p,lim(vitesse, position) [mm], signe {SIGN:+.0f},"
+          " 5 positions du papier, 1 vitesse sur 2")
+    print(line)
+    idx = [POSITIONS.index(f) for f in POS_PAPER]
+    for cal, _ in CALIBS:
+        g = grid[(cal, SIGN)]
         print(f"  -- calage {cal} --")
-        print(hdr)
-        for i, r in enumerate(SPEEDS[::2]):
-            k = 2 * i
-            row = grid[cal][k]
-            print(f"  {r:5d} |" + "".join(f"  {v * 1e3:7.4f}" for v in row)
+        print("   rpm |" + "".join(f"  x/l={f:4.2f}" for f in POS_PAPER)
+              + " |  max/min")
+        for i in range(0, len(SPEEDS), 2):
+            row = g[i][idx]
+            print(f"  {SPEEDS[i]:5d} |"
+                  + "".join(f"  {v * 1e3:7.4f}" for v in row)
                   + f" |  {row.max() / max(row.min(), 1e-12):7.2f}")
-        print(f"   (une ligne sur deux ; ratio median max/min ="
-              f" {np.median(grid[cal].max(1) / np.maximum(grid[cal].min(1), 1e-12)):.2f})")
+        r9 = g.max(1) / np.maximum(g.min(1), 1e-12)
+        print(f"   (sur les {len(POSITIONS)} positions : ratio median"
+              f" max/min = {np.median(r9):.2f}, position du minimum"
+              f" = bord x/l=0 ou 1 dans"
+              f" {100 * np.mean([a in (0, len(POSITIONS) - 1) for a in arg[(cal, SIGN)]]):.0f} % des cas)")
 
     # ---------------------------------------------------------------- figure
-    fig = plt.figure(figsize=(15.0, 4.8))
-    X, Y = np.meshgrid(SPEEDS, np.array(POSITIONS))
+    fig = plt.figure(figsize=(15.4, 4.9))
+    P = np.array(POSITIONS)
+    X, Y = np.meshgrid(SPEEDS, P)
 
     ax = fig.add_subplot(1, 3, 1, projection='3d')
-    Z = grid['measured'].T * 1e3
-    ax.plot_surface(X, Y, Z, cmap='viridis', rstride=1, cstride=1,
-                    edgecolor='k', linewidth=.2, antialiased=True, alpha=.95)
+    Zm = grid[('measured', SIGN)].T * 1e3
+    ax.plot_surface(X, Y, Zm, cmap='viridis', rstride=1, cstride=1,
+                    edgecolor='k', linewidth=.15, antialiased=True, alpha=.96)
     ax.set_xlabel('Spindle speed (rpm)', fontsize=8, labelpad=1)
     ax.set_ylabel('Tool position $x/l_P$', fontsize=8, labelpad=1)
     ax.set_zlabel('$a_{p,lim}$ (mm)', fontsize=8, labelpad=1)
     ax.tick_params(labelsize=7)
-    ax.view_init(elev=26, azim=-124)
-    ax.set_title('(a) 3D stability surface, measured calibration\n'
-                 f'(paper Fig. 13a; sign = {SIGN:+.0f})', fontsize=9)
+    ax.view_init(elev=27, azim=-125)
+    ax.set_title('(a) 3D stability surface, all positions\n'
+                 'measured calibration (paper Fig. 13a)', fontsize=9)
 
     ax2 = fig.add_subplot(1, 3, 2)
-    Zt = grid['theoretical'].T * 1e3
-    vmin = max(min(Z.min(), Zt.min()), 1e-3)
-    pc = ax2.pcolormesh(SPEEDS, np.array(POSITIONS), Zt, shading='nearest',
-                        cmap='viridis',
-                        norm=LogNorm(vmin=vmin, vmax=max(Z.max(), Zt.max())))
-    cs = ax2.contour(SPEEDS, np.array(POSITIONS), Zt, levels=[0.1, 0.3],
-                     colors=['w', 'r'], linewidths=1.2)
+    Zt = grid[('theoretical', SIGN)].T * 1e3
+    pc = ax2.pcolormesh(SPEEDS, P, Zt, shading='nearest', cmap='viridis',
+                        norm=LogNorm(vmin=max(Zt.min(), 1e-3), vmax=Zt.max()))
+    cs = ax2.contour(SPEEDS, P, Zt, levels=[0.1, 0.3], colors=['w', 'r'],
+                     linewidths=1.3)
     ax2.clabel(cs, fmt='%.1f mm', fontsize=7)
-    ax2.plot([RPM_S], [0.0], 'r*', ms=13, mec='k', mew=.6, zorder=5)
-    ax2.annotate('S', (RPM_S, 0.0), textcoords='offset points',
-                 xytext=(8, 6), color='r', fontsize=10, weight='bold')
+    ax2.axvline(RPM_S, color='r', ls='--', lw=1.2)
+    ax2.annotate('condition S\n(4900 rpm, $a_p$ = 0.30 mm)',
+                 (RPM_S, 0.5), textcoords='offset points', xytext=(7, 0),
+                 color='r', fontsize=7, va='center')
     fig.colorbar(pc, ax=ax2, label='$a_{p,lim}$ (mm)')
     ax2.set_xlabel('Spindle speed (rpm)')
     ax2.set_ylabel('Tool position $x/l_P$')
     ax2.set_title('(b) same map, theoretical calibration\n'
-                  '(the paper computed Fig. 13 with its theoretical model)',
+                  '(the paper used its theoretical model for Fig. 13)',
                   fontsize=9)
 
     ax3 = fig.add_subplot(1, 3, 3)
     for cal, col in (('measured', '#1a3f8f'), ('theoretical', '#c0392b')):
-        ax3.semilogy(SPEEDS, low[cal] * 1e3, '-o', ms=3.4, lw=1.5, color=col,
-                     label=f'{cal} calibration')
-        for s, a in peaks[cal][:3]:
-            ax3.annotate(f'{int(s)}', (s, a * 1e3), textcoords='offset points',
-                         xytext=(0, 7), ha='center', fontsize=7, color=col)
+        ax3.semilogy(SPEEDS, low[(cal, SIGN)] * 1e3, '-o', ms=3.4, lw=1.6,
+                     color=col, label=f'{cal} calibration')
+        for s, a in peaks[cal][:2]:
+            ax3.annotate(f'{int(s)}', (s, a * 1e3),
+                         textcoords='offset points', xytext=(0, 7),
+                         ha='center', fontsize=7.5, color=col, weight='bold')
+    ax3.semilogy(SPEEDS, low[('measured', other)] * 1e3, ':', lw=1.2,
+                 color='0.45',
+                 label=f'measured, opposite sign ({other:+.0f})')
     ax3.axhline(0.1, color='k', ls='--', lw=1.1,
                 label='0.1 mm (paper: limit below this at most speeds)')
     for p in PAPER_PEAKS:
-        ax3.axvline(p, color='0.55', ls=':', lw=1.1)
-    ax3.annotate('paper: "relatively larger"\naround 3600 and 5400 rpm',
-                 (0.5, 0.03), xycoords='axes fraction', ha='center',
-                 fontsize=7, color='0.35')
-    ax3.plot([RPM_S], [AP_S * 1e3], 'r*', ms=14, mec='k', mew=.6, zorder=6,
+        ax3.axvline(p, color='0.6', ls=':', lw=1.1)
+    ax3.plot([RPM_S], [AP_S * 1e3], 'r*', ms=15, mec='k', mew=.6, zorder=6,
              label='condition S (4900 rpm, 0.30 mm)')
+    ax3.annotate('paper: "relatively larger"\naround 3600 and 5400 rpm',
+                 (0.5, 0.035), xycoords='axes fraction', ha='center',
+                 fontsize=7, color='0.3')
     ax3.set_xlabel('Spindle speed (rpm)')
     ax3.set_ylabel('lowest $a_{p,lim}$ over all positions (mm)')
     ax3.set_title('(c) paper Fig. 13(b): lowest limit of all positions',
                   fontsize=9)
     ax3.grid(alpha=.3, which='both')
-    ax3.legend(fontsize=7, loc='upper left')
+    ax3.legend(fontsize=6.8, loc='upper left', ncol=1)
 
     fig.suptitle('Uncontrolled milling stability of the cantilever plate — '
                  'reproduction of Fig. 13 (down milling, $a_e$ = 0.1 mm, '
-                 f'5-mode Chebyshev-Ritz, sign = {SIGN:+.0f})', fontsize=10.5)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+                 '5-mode Chebyshev-Ritz, full-discretisation Floquet, '
+                 f'sign = {SIGN:+.0f})', fontsize=10.5)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
     out = os.path.join(FIG, STEM + '.png')
     fig.savefig(out, dpi=140)
     plt.close(fig)
-    print(f"\n  -> {os.path.abspath(out)}   ({time.time() - t0:.0f} s)")
+    print(f"\n  -> {os.path.abspath(out)}   (total {time.time() - t0:.0f} s)")
 
 
 if __name__ == '__main__':

@@ -421,7 +421,7 @@ def main():
     print(f"  (c) meme test avec la convention de signe OPPOSEE"
           f" ({-SIGN:+.1f}), grille VOLONTAIREMENT GROSSIERE"
           f" ({SPEEDS_X.size} vitesses, pas"
-          f" {SPEEDS_X[1] - SPEEDS_X[0]} tr/min, pour tenir ~3 min) :")
+          f" {SPEEDS_X[1] - SPEEDS_X[0]} tr/min, pour limiter la duree) :")
     print(f"      {'position':>10s} {'bracketed':>12s} {'frac':>7s}"
           f" {'s_eff min':>10s} {'s_eff max':>10s}")
     tot_ok_x = tot_x = 0

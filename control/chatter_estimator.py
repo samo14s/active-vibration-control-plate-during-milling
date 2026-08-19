@@ -189,7 +189,15 @@ class ChatterEstimator:
         self.f_bar = f0
         self.f_var = 0.0
         self.locked = False
+        self.conf = 0.0
         self.lock_tol = 0.01
+        # CONFIANCE continue, entre 0 et 1, deduite de la meme dispersion que
+        # le verrou binaire. Le verrou repond a "faut-il recentrer ?" ; la
+        # confiance repond a "de combien faut-il y croire ?", et c'est elle
+        # qui module l'autorite donnee a l'observateur.
+        self.conf_lo = 0.004
+        self.conf_hi = 0.020
+        self.conf = 0.0
         self._i = 0
 
     def set_exclude(self, freqs):
@@ -218,6 +226,7 @@ class ChatterEstimator:
         self.f_hat = self.f_bar = self.f_nom
         self.f_var = 0.0
         self.locked = False
+        self.conf = 0.0
         self.P = 1.0e3
         self._i = 0
 
@@ -274,8 +283,11 @@ class ChatterEstimator:
                 b = self.beta_g
                 self.f_bar = b * self.f_bar + (1 - b) * f
                 self.f_var = b * self.f_var + (1 - b) * (f - self.f_bar) ** 2
-                self.locked = (np.sqrt(self.f_var)
-                               < self.lock_tol * max(self.f_bar, 1e-9))
+                sd = np.sqrt(self.f_var) / max(self.f_bar, 1e-9)
+                self.locked = sd < self.lock_tol
+                self.conf = float(np.clip(
+                    (self.conf_hi - sd) / (self.conf_hi - self.conf_lo),
+                    0.0, 1.0))
         else:
             # Pas de broutement : on RAMENE lentement le verrou vers la valeur
             # nominale au lieu de le laisser ou un transitoire l'avait mene.
@@ -284,6 +296,7 @@ class ChatterEstimator:
             self.f_hat += (1 - self.beta_g) * (self.f_nom - self.f_hat)
             self.f_bar, self.f_var = self.f_hat, 0.0
             self.locked = False
+            self.conf = 0.0
             self.P = 1.0e3
         self.y2, self.y1 = self.y1, v
         return self.f_hat, self.level

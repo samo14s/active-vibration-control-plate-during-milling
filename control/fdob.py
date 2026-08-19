@@ -133,7 +133,7 @@ def _tf(num, den):
     return (Ab, Ti @ B, C @ T, np.atleast_2d(D).reshape(1, 1))
 
 
-def _modal_blocks(w, zeta, res, zeta_q, wc):
+def _modal_blocks(w, zeta, res, zeta_q, wc, separate=False):
     """Les deux blocs du banc : V = sum Q_k  et  W = sum Q_k P_k^-1.
 
     Q_k(s)        = 2 zq wk s . wc^2 / [(s^2 + 2 zq wk s + wk^2)(s + wc)^2]
@@ -152,6 +152,13 @@ def _modal_blocks(w, zeta, res, zeta_q, wc):
         bv.append(_tf(num_q, den))
         inv = np.array([1.0, 2.0 * zk * wk, wk ** 2]) / rk
         bw.append(_tf(np.polymul(num_q, inv), den))
+    if separate:
+        # Blocs MODE PAR MODE, pour pouvoir donner a chacun son propre poids.
+        # C'est ce qu'exige un alpha par bande : un mode dont la frequence est
+        # bien estimee merite toute son autorite, un mode dont l'estimee erre
+        # n'en merite aucune, et une somme deja faite ne permet plus de les
+        # distinguer.
+        return bv, bw
     return _parallel(bv), _parallel(bw)
 
 

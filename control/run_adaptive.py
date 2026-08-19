@@ -121,14 +121,16 @@ def main():
                                               freqs=C.F_NOMINAL), tg)
         print(f'\n  --- plaque {pname} : f = {np.round(plate.freq_n, 1)} Hz')
 
-        def mk_adapt(sim, adapt, supervise, alpha_max=None):
+        def mk_adapt(sim, adapt, supervise, alpha_max=None, mode='global',
+                     floor=None):
             p = dict(par)
             if alpha_max is not None:
                 p['alpha'] = alpha_max
             return AdaptiveFDOB(p, w0, z0, r0, C.FDOB_WC, sim.dt, f_tooth,
                                 sl * var, C.OUST_WB, C.OUST_WH, C.OUST_N,
                                 C.ROLLOFF_HZ, C.ROLLOFF_ORDER,
-                                adapt=adapt, supervise=supervise)
+                                adapt=adapt, supervise=supervise, mode=mode,
+                                alpha_floor=floor)
 
         cfgs = [('boucle ouverte', lambda s: None)]
         for k in ('fopid', 'adrc', 'fdob'):
@@ -144,8 +146,16 @@ def main():
         # la contrainte de marge au repos ne le plafonne donc plus, et on
         # mesure ce que vaut cette liberte. Le prix — Ms = 5.30 dans le
         # regime engage — est rapporte tel quel, pas dissimule.
-        cfgs.append(('fdob_sup_alpha_haut',
+        cfgs.append(('fdob_sup_haut',
                      lambda s: mk_adapt(s, True, True, alpha_max=0.85)))
+        # alpha PAR BANDE, lie a la CONFIANCE de l'estimee de cette bande, en
+        # partant du plancher valide par le PSO. Voir fdob_adaptive.py : sans
+        # plancher cette loi coupe l'action preventive et fait diverger la
+        # plaque nominale.
+        cfgs.append(('fdob_sup_conf',
+                     lambda s: mk_adapt(s, True, True, alpha_max=0.85,
+                                        mode='bande',
+                                        floor=float(par['alpha']))))
 
         for name, mk in cfgs:
             t0 = time.time()

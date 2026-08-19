@@ -63,7 +63,8 @@ class AdaptiveFDOB:
     def __init__(self, par, w, zeta, res, wc, dt, f_tooth, sign_loop,
                  wb, wh, N, rolloff_hz, rolloff_order,
                  adapt=True, supervise=True, tol=2e-3,
-                 level_hi=0.60, tau_alpha=20e-3):
+                 level_hi=0.60, tau_alpha=20e-3, mode='global',
+                 alpha_floor=None):
         self.p = dict(par)
         self.w0 = np.asarray(w, float).copy()      # pulsations NOMINALES
         self.zeta = np.asarray(zeta, float)
@@ -76,6 +77,25 @@ class AdaptiveFDOB:
         self.alpha_max = float(par['alpha'])
         self.level_hi = float(level_hi)
         self.b_alpha = float(np.exp(-dt / tau_alpha))
+        # 'global' : un seul alpha, de 0 a alpha_max selon le niveau global.
+        # 'bande'  : un alpha PAR MODE, partant d'un PLANCHER et montant vers
+        #            alpha_max selon le niveau ET la confiance de SON
+        #            estimateur.
+        #
+        # LE PLANCHER N'EST PAS UN DETAIL. La premiere version faisait
+        # alpha_k = alpha_max . g_k . conf_k, donc alpha_k -> 0 des qu'une
+        # bande n'a pas de verrou. Mesure : sur la plaque NOMINALE a 0.30 mm
+        # la passe divergeait (3763 um) alors qu'elle tenait a 4.4 um avec un
+        # alpha global. La raison est nette et vaut d'etre retenue : le mode 2
+        # ne broute pas, mais l'autorite de l'observateur a ce mode est
+        # precisement ce qui l'EMPECHE de brouter. Couper alpha la ou "il ne
+        # se passe rien" supprime l'action preventive. Le plancher est donc la
+        # valeur validee par le PSO sous Ms <= 2 : sans broutement et sans
+        # verrou, on retombe exactement sur l'observateur a bandes fixes.
+        assert mode in ('global', 'bande')
+        self.mode = mode
+        self.alpha_floor = (self.alpha_max if alpha_floor is None
+                            else float(alpha_floor))
 
         # --- epine dorsale FOPID, invariante
         Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(m, float)) for m in
@@ -103,8 +123,12 @@ class AdaptiveFDOB:
         # rampe de 20 ms suffit a elle seule a rendre le cas "supervision
         # desactivee" different du correcteur LTI, et le test d'equivalence
         # ne prouverait plus rien.
-        self.alpha = 0.0 if supervise else float(par['alpha'])
+        self.alpha = (np.full(len(self.w0), self.alpha_floor) if supervise
+                      and mode == 'bande'
+                      else (np.zeros(len(self.w0)) if supervise
+                            else np.full(len(self.w0), float(par['alpha']))))
         self.level = 0.0
+        self.conf = np.zeros(len(self.w0))
         self.n_rebuild = 0
         self._build(self.w0)
 
@@ -122,26 +146,31 @@ class AdaptiveFDOB:
 
     def _build(self, w):
         """(Re)construit les blocs de l'observateur centres sur `w`."""
-        (Av, Bv, Cv, _), (Aw, Bw, Cw, _) = _modal_blocks(
-            w, self.zeta, self.res, self.p['zeta_q'], self.wc)
-        self.Avd, self.Bvd = _zoh(Av, Bv, self.dt)
-        self.Awd, self.Bwd = _zoh(Aw, Bw, self.dt)
-        self.Cv, self.Cw = Cv, Cw
+        bv, bw = _modal_blocks(w, self.zeta, self.res, self.p['zeta_q'],
+                               self.wc, separate=True)
+        self.blk = []
+        for (Av, Bv, Cv, _), (Aw, Bw, Cw, _) in zip(bv, bw):
+            Avd, Bvd = _zoh(Av, Bv, self.dt)
+            Awd, Bwd = _zoh(Aw, Bw, self.dt)
+            self.blk.append((Avd, Bvd, Cv, Awd, Bwd, Cw))
         if not hasattr(self, 'xv'):
-            self.xv = np.zeros(Av.shape[0])
-            self.xw = np.zeros(Aw.shape[0])
+            self.xv = [np.zeros(b[0].shape[0]) for b in self.blk]
+            self.xw = [np.zeros(b[3].shape[0]) for b in self.blk]
         self.w_built = np.asarray(w, float).copy()
         self.n_rebuild += 1
 
     def reset(self):
         self.xf[:] = 0.0
         self.xr[:] = 0.0
-        self.xv[:] = 0.0
-        self.xw[:] = 0.0
+        for a in self.xv:
+            a[:] = 0.0
+        for a in self.xw:
+            a[:] = 0.0
         for e in self.est:
             e.reset()
         self.f_hat = (self.w0 / (2 * np.pi)).copy()
-        self.alpha = 0.0 if self.supervise else self.alpha_max
+        self.alpha = np.zeros(len(self.w0)) if self.supervise \
+            else np.full(len(self.w0), self.alpha_max)
         self._build(self.w0)
 
     def __call__(self, y=0.0, yd=0.0, t=0.0, k=0):
@@ -164,13 +193,24 @@ class AdaptiveFDOB:
             lev = max(lev, e.level_slow)
         self.level = lev
 
-        # --- superviseur : alpha suit le niveau, avec inertie
-        if self.supervise:
-            on = self.est[0].level_on
-            tgt = self.alpha_max * float(
-                np.clip((lev - on) / max(self.level_hi - on, 1e-9), 0.0, 1.0))
+        # --- superviseur
+        on = self.est[0].level_on
+        self.conf = np.array([e.conf for e in self.est])
+        if not self.supervise:
+            tgt = np.full(len(self.est), self.alpha_max)
+        elif self.mode == 'bande':
+            # Chaque bande part du plancher valide et ne monte au-dela que si
+            # SON mode broute ET que SON estimee est sure : on ne pousse pas
+            # une autorite qu'on ne sait pas viser.
+            g = np.array([np.clip((e.level_slow - on)
+                                  / max(self.level_hi - on, 1e-9), 0.0, 1.0)
+                          for e in self.est])
+            tgt = self.alpha_floor + (self.alpha_max - self.alpha_floor) \
+                * g * self.conf
         else:
-            tgt = self.alpha_max
+            g = float(np.clip((lev - on) / max(self.level_hi - on, 1e-9),
+                              0.0, 1.0))
+            tgt = np.full(len(self.est), self.alpha_max * g)
         self.alpha = self.b_alpha * self.alpha + (1 - self.b_alpha) * tgt
 
         # --- recentrage, avec hysteresis pour ne pas reconstruire sans cesse
@@ -181,13 +221,16 @@ class AdaptiveFDOB:
 
         # --- loi de commande
         u_f = float((self.Cf @ self.xf)[0]) + self.Df * y
-        w = float((self.Cw @ self.xw)[0])
-        v = float((self.Cv @ self.xv)[0])
-        u_core = u_f - self.alpha * w + self.alpha * v
+        acc = 0.0
+        for i, (Avd, Bvd, Cv, Awd, Bwd, Cw) in enumerate(self.blk):
+            acc += self.alpha[i] * (float((Cv @ self.xv[i])[0])
+                                    - float((Cw @ self.xw[i])[0]))
+        u_core = u_f + acc
         u = float((self.Cr @ self.xr)[0]) + self.Dr * u_core
 
         self.xf = self.Afd @ self.xf + self.Bfd[:, 0] * y
-        self.xw = self.Awd @ self.xw + self.Bwd[:, 0] * y
-        self.xv = self.Avd @ self.xv + self.Bvd[:, 0] * u_core
+        for i, (Avd, Bvd, Cv, Awd, Bwd, Cw) in enumerate(self.blk):
+            self.xw[i] = Awd @ self.xw[i] + Bwd[:, 0] * y
+            self.xv[i] = Avd @ self.xv[i] + Bvd[:, 0] * u_core
         self.xr = self.Ard @ self.xr + self.Brd[:, 0] * u_core
         return u

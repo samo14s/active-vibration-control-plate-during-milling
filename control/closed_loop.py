@@ -87,22 +87,29 @@ def period_maps(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
 
 
 def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
-                    n_min=40, n_max=250):
+                    n_min=40, n_max=400):
     """Rayon spectral de la monodromie (iteration de puissance ADAPTATIVE).
 
-    L'iteration de puissance converge a la vitesse |lambda_2/lambda_1| : un
-    nombre de periodes FIXE et trop petit sous-estime systematiquement rho,
-    donc SURESTIME la stabilite. Mesure directe sur ce modele (boucle ouverte,
-    4900 tr/min, a_p = 0.05 mm, m = 200) :
+    Deux pieges, tous deux mesures sur ce modele :
 
-        n_period      10       20       50      100      200
-        rho        0.8270   0.9207   1.0126   1.0173   1.0164
+    1. Un nombre de periodes FIXE et petit sous-estime rho, donc SURESTIME la
+       stabilite (boucle ouverte, 4900 tr/min, a_p = 0.05 mm, m = 200) :
 
-    a 20 periodes le point est declare STABLE (rho < 1) alors qu'il ne l'est
-    pas. On itere donc jusqu'a stabilisation de l'estimateur : au moins n_min
-    periodes, puis arret quand la moyenne glissante des facteurs de croissance
-    ne bouge plus de plus de `tol` en relatif, plafond n_max. `n_period` reste
-    accepte pour forcer un nombre fixe (diagnostic).
+           n_period      10       20       50      100      200
+           rho        0.8270   0.9207   1.0126   1.0173   1.0164
+
+    2. Un critere d'arret mal construit s'arrete trop tot. La version
+       precedente comparait deux moyennes cumulees se recouvrant a 90 % et
+       tolerait une variation RELATIVE de log rho : pres de la frontiere de
+       stabilite log rho -> 0, la tolerance relative degenere, et sur des cas
+       de boucle fermee reels l'iteration s'arretait a 80 periodes en rendant
+       0.8887 la ou la valeur convergee (1500 periodes) vaut 0.9753 — avec une
+       dispersion de 9 % selon la graine.
+
+    D'ou : fenetres NON RECOUVRANTES (les dix derniers facteurs de croissance
+    contre les dix precedents), tolerance ABSOLUE sur log rho, et estimateur
+    pris sur la queue seule (le transitoire initial de l'iteration biaise une
+    moyenne sur toute la seconde moitie). `n_period` force un nombre fixe.
     """
     rng = np.random.default_rng(seed)
     Z = rng.standard_normal((m + 1, nx))
@@ -110,7 +117,7 @@ def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
     g = []
     n_fixed = None if n_period is None else int(n_period)
     limit_it = n_fixed if n_fixed is not None else n_max
-    prev = None
+    ok = 0
     for it in range(limit_it):
         for P0, C_lo, C_hi in maps:
             new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
@@ -123,13 +130,14 @@ def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
             return 0.0
         g.append(np.log(nz))
         Z /= nz
-        if n_fixed is None and it + 1 >= n_min and (it + 1) % 10 == 0:
-            cur = float(np.mean(g[len(g) // 2:]))
-            if prev is not None and abs(cur - prev) <= tol * max(abs(cur),
-                                                                1e-6):
+        if n_fixed is None and len(g) >= max(n_min, 20):
+            a = float(np.mean(g[-10:]))
+            b = float(np.mean(g[-20:-10]))
+            ok = ok + 1 if abs(a - b) <= tol else 0
+            if ok >= 2:                       # deux passages consecutifs
                 break
-            prev = cur
-    return float(np.exp(np.mean(np.array(g[len(g) // 2:]))))
+    w = max(10, len(g) // 4)
+    return float(np.exp(np.mean(np.array(g[-w:]))))
 def dominant_eig(maps, m, nx, q=6, n_period=60, seed=0):
     """Valeurs propres dominantes de la monodromie (iteration de sous-espace
     + projection de Rayleigh-Ritz orthonormee ; la phase donne la frequence
@@ -167,20 +175,30 @@ def is_stable(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
     return rho <= 1.0, rho
 
 
-def limit(plate, rpm, x_pos, ctrl=None, pd=None, lo=0.01e-3, hi=3.0e-3,
-          tol=2e-5, **kw):
-    """Profondeur axiale limite [m] par bissection (0 si deja instable)."""
+def limit(plate, rpm, x_pos, ctrl=None, pd=None, lo=0.005e-3, hi=4.0e-3,
+          tol=None, rtol=2e-3, atol=1e-6, **kw):
+    """Profondeur axiale limite [m] par bissection (0 si deja instable).
+
+    ARRET RELATIF. Avec un arret absolu a 0.02 mm, les limites de 0.03 a
+    0.27 mm rencontrees ici etaient quantifiees sur la grille dyadique de la
+    bissection : la boucle ouverte a 4900 tr/min rendait 0.0334 mm au lieu de
+    0.0363 mm (-8 %), et jusqu'a +18 % a 4600 tr/min. L'erreur ne se compense
+    pas entre structures — son signe depend de la position de la vraie limite
+    dans le dernier intervalle — et elle contamine les facteurs d'amelioration,
+    qui divisent tous par la limite en boucle ouverte. `tol` reste accepte
+    comme alias de `atol` pour les appels existants.
+    """
+    if tol is not None:
+        atol = float(tol)
     ok = lambda ap: is_stable(plate, rpm, ap, x_pos, ctrl, pd, **kw)[0]
     if not ok(lo):
         return 0.0
     if ok(hi):
         return hi
-    while hi - lo > tol:
+    while hi - lo > max(atol, rtol * hi):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if ok(mid) else (lo, mid)
     return 0.5 * (lo + hi)
-
-
 def limit_over_pass(plate, rpm, ctrl=None, pd=None, positions=(0.0, 0.25,
                     0.5, 0.75, 1.0), **kw):
     """Minimum de la limite le long du bord superieur (fractions de l_P)."""

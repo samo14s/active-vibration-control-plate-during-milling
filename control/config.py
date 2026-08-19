@@ -84,7 +84,7 @@ assert PROTOCOL in ('A', 'B')
 N_MODES = 5                   # modele d'evaluation = verite (lobes, temporel)
 N_MODES_OBJ = 2 if PROTOCOL == 'A' else 5     # modele vu par l'optimiseur
 N_MODES_DESIGN = N_MODES_OBJ  # ce que le correcteur "connait" (b0 nominal)
-M_FLOQUET_PSO = 32            # sous-intervalles pendant l'optimisation
+M_FLOQUET_PSO = 24            # sous-intervalles pendant l'optimisation
 M_FLOQUET = 200               # sous-intervalles pour tous les resultats
 # Nombre de periodes de l'iteration de puissance : None = critere d'arret
 # ADAPTATIF (voir closed_loop.spectral_radius). Un nombre fixe et petit
@@ -97,7 +97,8 @@ N_PERIOD = None
 # tol = 3e-3 coutent 25 % de moins et laissent rho a mieux que 0.3 %. Les
 # resultats publies (limites, lobes, robustesse) utilisent le reglage strict.
 N_PERIOD_MIN_PSO = 30
-N_PERIOD_TOL_PSO = 3e-3
+N_PERIOD_TOL_PSO = 5e-3
+N_PERIOD_MAX_PSO = 150
 # Pas d'integration temporelle. Les correcteurs contiennent des poles
 # d'Oustaloup jusqu'a w_h = 2*pi*100 kHz : a n_sub = 164 (fs = 40 kHz) ces
 # dynamiques se replient et la simulation diverge avec des tensions de 700 kV
@@ -193,4 +194,4 @@ BOUNDS_FOPID = dict(
 BOUNDS_ADRC = dict(
     log_Kp=(3.0, 9.0), log_Ki=(3.0, 11.0), log_Kd=(0.0, 6.0),
     lam=(0.05, 1.0), mu=(0.05, 1.0),
-    log_wo=(2.0, 5.5), b0_scale=(0.2, 50.0))
+    log_wo=(2.0, 5.5), b0_scale=(0.05, 50.0))

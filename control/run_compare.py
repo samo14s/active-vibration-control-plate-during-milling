@@ -115,7 +115,7 @@ def main():
     for name, ss in cfgs:
         v = []
         for rpm in speeds:
-            L = limits(plate, ss, rpm, hi=4.0e-3, tol=2e-5)
+            L = limits(plate, ss, rpm, hi=4.0e-3)
             v.append(L.min())
         lob[name] = np.array(v)
         print(f"  lobes {name:14s} : moyenne {np.mean(v) * 1e3:.3f} mm,"
@@ -126,7 +126,7 @@ def main():
     # ---------------- 2. limites par position -----------------------------
     pos = {}
     for name, ss in cfgs:
-        pos[name] = limits(plate, ss, C.RPM_DESIGN, hi=4.0e-3, tol=1e-5)
+        pos[name] = limits(plate, ss, C.RPM_DESIGN, hi=4.0e-3)
         print(f"  positions {name:14s} : {np.round(pos[name] * 1e3, 3)} mm"
               f"   min = {pos[name].min() * 1e3:.3f}", flush=True)
     store['positions'] = dict(x=np.array(C.POSITIONS), **pos)
@@ -159,8 +159,8 @@ def main():
     rob, labels = {}, []
     for tag, kw, nm in cases:
         pl = perturbed(**kw)
-        row = [limits(pl, ss, C.RPM_DESIGN, n_modes=nm, hi=4.0e-3,
-                      tol=2e-5).min() for _, ss in cfgs]
+        row = [limits(pl, ss, C.RPM_DESIGN, n_modes=nm,
+                      hi=4.0e-3).min() for _, ss in cfgs]
         rob[tag] = np.array(row)
         labels.append(tag)
         print(f"  robustesse [{tag:24s}] (n_modes={nm}) : " + "  ".join(

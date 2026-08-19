@@ -114,7 +114,8 @@ def floquet_margin(plate, ss, rpm, ap, x_pos, m=None, n_period=None):
                           n_modes=C.N_MODES_OBJ, m=m, coeff_mode='time',
                           coeff_scale=C.SIGN_SIM, ae=C.AE)
     rho = spectral_radius(maps, m, maps[0][0].shape[0], npd,
-                          tol=C.N_PERIOD_TOL_PSO, n_min=C.N_PERIOD_MIN_PSO)
+                          tol=C.N_PERIOD_TOL_PSO, n_min=C.N_PERIOD_MIN_PSO,
+                          n_max=C.N_PERIOD_MAX_PSO)
     if not np.isfinite(rho):        # divergence violente : borne haute graduee
         return 50.0
     return float(np.clip(np.log(max(rho, 1e-300)), -50.0, 50.0))
@@ -227,7 +228,7 @@ def _ap_from_margins(probes, g):
 
 # ---------------------------------------------------------------------------
 def limits(plate, ss, rpm, positions=None, m=None, n_modes=None,
-           lo=0.01e-3, hi=3.0e-3, tol=1e-5):
+           lo=0.005e-3, hi=4.0e-3, rtol=1e-3):
     """Profondeurs limites VRAIES (bissection de Floquet), pleine resolution."""
     from closed_loop import limit
     pos = C.POSITIONS if positions is None else positions
@@ -235,4 +236,4 @@ def limits(plate, ss, rpm, positions=None, m=None, n_modes=None,
               m=C.M_FLOQUET if m is None else m, n_period=C.N_PERIOD,
               coeff_mode='time', coeff_scale=C.SIGN_SIM, ae=C.AE)
     return np.array([limit(plate, rpm, fr * plate.lp, ctrl=ss, pd=None,
-                           lo=lo, hi=hi, tol=tol, **kw) for fr in pos])
+                           lo=lo, hi=hi, rtol=rtol, **kw) for fr in pos])

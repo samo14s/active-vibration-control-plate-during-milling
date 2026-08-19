@@ -96,15 +96,22 @@ def eso_bandwidth_guess(plate, n_modes=2, factor=4.0):
 def b0_nominal(plate, n_modes=2):
     """b0 nominal : gain haute frequence de y'' par volt, soit D_obs . H_Pe.
 
-    IL EST SIGNE. Ici D_obs.H = -0.985 : le gain du procede est NEGATIF, et
-    c'est b0 qui porte cette information dans la loi u = (u0 - z3)/b0. Prendre
-    |b0| inverserait la boucle et rendrait le systeme instable. Verifie contre
-    la fonction de transfert analytique du correcteur
+    C'est la definition de l'ADRC (le gain du canal y'' <- u quand s -> inf) et
+    on la garde telle quelle. Mais il faut savoir ce qu'elle vaut ICI : avec la
+    geometrie de pastille imposee par la Fig. 12(b) les residus valent
+    [-0.655, -0.980, -0.880, +3.294, +2.616], donc la somme (+3.395) est une
+    compensation a 60 % de somme|r_i| = 8.42, dominee par les modes 4-5 (3351
+    et 4122 Hz). Le gain effectif b(w) = -w^2 P_u(jw) mesure sur ce modele vaut
+    -4.4 a 1300 Hz, -3.8 a 2000 Hz, +11.2 a 5000 Hz : la valeur asymptotique
+    +3.4 n'est atteinte qu'au-dela de ~15 kHz, soit tres au-dessus du filtre
+    d'anti-repliement a 8 kHz. Autrement dit, dans la bande ou vit le
+    broutement, le canal a le SIGNE OPPOSE a cette limite, et une amplitude
+    d'ordre 1 a 4 au lieu de 3.4.
 
-        K(s) = -[ C_f(s)(b1 s + b2) + b3 (s^2 + C_f(s))/s ]
-                 / ( b0 (s^2 + b1 s + b2 + C_f(s)) )
-
-    (ecart realisation d'etat / analytique : 4e-12).
+    On ne corrige donc pas la definition — on s'assure que le boitier de
+    recherche COUVRE largement la valeur utile : sign_variant explore les deux
+    signes et b0_scale va de 0.05 a 50, soit |b0| de 0.17 a 170. C'est au PSO
+    de trouver, pas a cette fonction de deviner.
     """
     H = np.asarray(plate.H_Pe_modal, float)[:n_modes]
     D_obs = plate.D_row(plate.lp, plate.hp)[:n_modes]

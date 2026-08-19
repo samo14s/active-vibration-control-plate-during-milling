@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# rapport : le HTML intermediaire (7.7 Mo, images en base64) est regenerable
+report/rapport_final.html

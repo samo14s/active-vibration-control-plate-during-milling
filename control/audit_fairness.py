@@ -53,10 +53,18 @@ def main():
           f" {C.OUST_WH / 2 / np.pi:.0f}] Hz, N = {C.OUST_N} ; lissage"
           f" {C.ROLLOFF_HZ:.0f} Hz ordre {C.ROLLOFF_ORDER}")
 
+    kinds = []
+    for k in d.files:
+        kk = k.partition('__')[0]
+        if kk not in kinds and f'{kk}__A' in d.files:
+            kinds.append(kk)
     rows = {}
-    for kind in ('fopid', 'adrc'):
+    for kind in kinds:
         var = float(d[f'{kind}__sign_variant'])
-        Dg = Design(kind, plate, sign_loop, sign_variant=var)
+        # 'fdob12345' est la variante a cinq modes de la meme fabrique
+        tg = d[f'{kind}__targets'] if f'{kind}__targets' in d.files else None
+        Dg = Design(kind[:4] if kind.startswith('fdob') else kind,
+                    plate, sign_loop, sign_variant=var, targets=tg)
         x = d[f'{kind}__x']
         par = Dg.decode(x)
         J, info = evaluate(plate, Dg.build(x), detail=True)
@@ -76,8 +84,8 @@ def main():
               f" {sorted(set(r['variants'].tolist()))}, {r['n_par']}"
               f" parametres, {r['n_states']} etats"
               f", convention retenue {r['variant']:+.0f}")
-    same_seeds = (list(rows['fopid']['seeds'])
-                  == list(rows['adrc']['seeds']))
+    ref = list(rows[kinds[0]]['seeds'])
+    same_seeds = all(list(r['seeds']) == ref for r in rows.values())
     print(f"    -> graines identiques : {'OUI' if same_seeds else 'NON'}")
     print("    -> nombres d'evaluations DIFFERENTS par construction :"
           " l'essaim est proportionnel a la dimension (10 + 4 n_dim), parce"
@@ -120,12 +128,16 @@ def main():
         print(f"    {k:5s} : J par graine = {np.round(keep, 4)}"
               f"   etendue = {spreads[k]:.4f}"
               f"   (autre convention : {np.round(js[vs != r['variant']], 4)})")
-    gap = rows['adrc']['J'] - rows['fopid']['J']
-    spread = max(spreads['fopid'], spreads['adrc'])
-    print(f"    ecart entre structures = {gap:+.4f} ; plus grande dispersion"
-          f" intra-structure = {spread:.4f}")
-    print(f"    -> ecart {'SUPERIEUR' if abs(gap) > spread else 'INFERIEUR'}"
-          f" a la dispersion de l'optimiseur")
+    best = max(kinds, key=lambda k: rows[k]['J'])
+    spread = max(v for v in spreads.values() if np.isfinite(v))
+    print(f"    meilleure structure : {best} (J = {rows[best]['J']:+.4f})")
+    for k in kinds:
+        if k == best:
+            continue
+        gap = rows[best]['J'] - rows[k]['J']
+        print(f"    ecart {best} - {k:9s} = {gap:+.4f}"
+              f"  -> {'SUPERIEUR' if abs(gap) > spread else 'INFERIEUR'}"
+              f" a la plus grande dispersion intra-structure ({spread:.4f})")
 
     print("\n  6. controle croise : chaque structure notee par le MEME code")
     for k, r in rows.items():

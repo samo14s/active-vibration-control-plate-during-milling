@@ -36,13 +36,23 @@ from simulate import MillingSimulation, amplitude_spectrum, mean_abs_amplitude
 from sim_controller import LTIController
 
 OUT = os.path.join(HERE, '..', 'results')
-NAMES = ('boucle ouverte', 'fopid', 'adrc')
+# Les structures comparees sont celles que le fichier PSO contient, dans
+# l'ordre ou elles ont ete ajoutees. Rien n'est code en dur : une structure
+# nouvelle passe par EXACTEMENT le meme code d'evaluation que les anciennes,
+# ce qui est la condition meme de l'equite.
+def stored_kinds(d):
+    seen = []
+    for k in d.files:
+        kk = k.partition('__')[0]
+        if kk not in seen and f'{kk}__A' in d.files:
+            seen.append(kk)
+    return seen
 
 
 def load():
     d = np.load(os.path.join(OUT, f'pso_{C.PROTOCOL}.npz'), allow_pickle=True)
     out = {}
-    for k in ('fopid', 'adrc'):
+    for k in stored_kinds(d):
         out[k] = dict(ss=(d[f'{k}__A'], d[f'{k}__B'], d[f'{k}__C'],
                           d[f'{k}__D']),
                       keys=d[f'{k}__keys'], values=d[f'{k}__values'],
@@ -93,20 +103,20 @@ def time_case(plate, ap, cfgs, store, tag):
 def main():
     t00 = time.time()
     print("=" * 74)
-    print(f" ETAPE 2 — COMPARAISON EQUITABLE : FOPID contre ADRC-FOPID"
+    print(f" ETAPE 2 — COMPARAISON EQUITABLE DES STRUCTURES"
           f"   [protocole {C.PROTOCOL}, calage {C.CALIB}]")
     print("=" * 74)
     plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
     print(f"  plaque : f = {np.round(plate.freq_n, 1)} Hz,"
           f" zeta = {np.round(np.asarray(plate.zeta_modes) * 100, 2)} %")
     ctl = load()
-    for k in ('fopid', 'adrc'):
+    kinds = list(ctl)
+    for k in kinds:
         print(f"  {k:5s} : {ctl[k]['n_par']} parametres,"
               f" {ctl[k]['n_states']} etats, J = {ctl[k]['J']:+.4f}")
         print("          " + "  ".join(
             f"{n}={v:.4g}" for n, v in zip(ctl[k]['keys'], ctl[k]['values'])))
-    cfgs = [('boucle ouverte', None), ('fopid', ctl['fopid']['ss']),
-            ('adrc', ctl['adrc']['ss'])]
+    cfgs = [('boucle ouverte', None)] + [(k, ctl[k]['ss']) for k in kinds]
     store = {}
 
     # ---------------- 1. lobes de stabilite -------------------------------
@@ -168,7 +178,7 @@ def main():
             flush=True)
     store['robust'] = rob
     store['robust_labels'] = np.array(labels)
-    store['config_labels'] = np.array(list(NAMES))
+    store['config_labels'] = np.array([n for n, _ in cfgs])
 
     # ---------------- 5. metriques frequentielles -------------------------
     f = np.logspace(0.5, 4.1, 400)
@@ -197,11 +207,11 @@ def main():
                          n_modes_obj=np.array(C.N_MODES_OBJ),
                          n_modes=np.array(C.N_MODES),
                          v_max=np.array(C.V_MAX),
-                         n_par=np.array([ctl['fopid']['n_par'],
-                                         ctl['adrc']['n_par']]),
-                         n_states=np.array([ctl['fopid']['n_states'],
-                                            ctl['adrc']['n_states']]))
-    for k in ('fopid', 'adrc'):
+                         kinds=np.array(kinds),
+                         n_par=np.array([ctl[k]['n_par'] for k in kinds]),
+                         n_states=np.array([ctl[k]['n_states']
+                                            for k in kinds]))
+    for k in kinds:
         store[f'par_{k}'] = dict(keys=ctl[k]['keys'], values=ctl[k]['values'])
 
     np.savez_compressed(os.path.join(OUT, f'compare_{C.PROTOCOL}.npz'),

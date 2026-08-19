@@ -26,10 +26,19 @@ OUT = os.path.join(HERE, '..', 'results')
 FIG = os.path.join(HERE, '..', 'figures', 'comparison')
 os.makedirs(FIG, exist_ok=True)
 
-COL = {'boucle ouverte': '#c8963e', 'fopid': '#1a3f8f', 'adrc': '#16a085'}
+COL = {'boucle ouverte': '#c8963e', 'fopid': '#1a3f8f', 'adrc': '#16a085',
+       'fdob': '#c0392b', 'fdob12345': '#8e44ad'}
 LAB = {'boucle ouverte': 'no control', 'fopid': 'FOPID',
-       'adrc': 'ADRC-FOPID'}
-KEYS = ('boucle ouverte', 'fopid', 'adrc')
+       'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (2 modes)',
+       'fdob12345': 'FDOB (5 modes)'}
+# Les structures tracees sont celles que le fichier de comparaison contient.
+KEYS = ('boucle ouverte', 'fopid', 'adrc')          # defaut, remplace par main
+
+
+def set_keys(cp):
+    global KEYS
+    KEYS = tuple(str(x) for x in cp['config_labels'])
+    return KEYS
 # les etiquettes des cas de robustesse sont stockees en francais dans le .npz ;
 # les figures, elles, sont en anglais
 ROB_EN = {'modele de synthese': 'design model',
@@ -71,10 +80,10 @@ def fig_lobes(cp, prot):
     ax.axvline(C.RPM_DESIGN, color='k', ls=':', lw=1)
     ax.annotate('design speed', (C.RPM_DESIGN, ax.get_ylim()[1]), fontsize=8,
                 rotation=90, va='top', ha='right')
-    g_f = np.mean(d['fopid']) / np.mean(d['boucle ouverte'])
-    g_a = np.mean(d['adrc']) / np.mean(d['boucle ouverte'])
-    ax.text(0.02, 0.97, f'mean limit gain vs open loop:\n'
-                        f'FOPID  x{g_f:.1f}\nADRC-FOPID  x{g_a:.1f}',
+    gains = {k: np.mean(d[k]) / np.mean(d['boucle ouverte'])
+             for k in KEYS[1:]}
+    ax.text(0.02, 0.97, 'mean limit gain vs open loop:\n'
+            + '\n'.join(f'{LAB[k]}  x{g:.1f}' for k, g in gains.items()),
             transform=ax.transAxes, va='top', fontsize=9,
             bbox=dict(fc='w', ec='0.7', alpha=.9))
     ax.set_xlabel('Spindle speed (rpm)')
@@ -94,7 +103,8 @@ def fig_positions(cp, prot):
     w = 0.26
     xs = np.arange(len(d['x']))
     for i, k in enumerate(KEYS):
-        ax.bar(xs + (i - 1) * w, d[k] * 1e3, w, color=COL[k], label=LAB[k])
+        ax.bar(xs + (i - (len(KEYS) - 1) / 2) * w, d[k] * 1e3, w,
+               color=COL[k], label=LAB[k])
         for j, v in enumerate(d[k]):
             ax.text(xs[j] + (i - 1) * w, v * 1e3, f'{v * 1e3:.2f}',
                     ha='center', va='bottom', fontsize=7, rotation=90)
@@ -149,7 +159,7 @@ def fig_voltage(cp, prot, tag=''):
     meta = cp[f'time{tag}_meta']
     vmax = float(meta['v_max'])
     fig, ax = plt.subplots(1, 2, figsize=(11.5, 4.2))
-    for k in ('fopid', 'adrc'):
+    for k in KEYS[1:]:
         s = cp[f'time{tag}_{k}']
         ax[0].fill_between(s['t'], s['u_min'], s['u_max'], color=COL[k],
                            alpha=.6, lw=0,
@@ -181,7 +191,7 @@ def fig_freq(cp, prot):
     d = cp['freq']
     f = d['f']
     fig, ax = plt.subplots(1, 3, figsize=(13.8, 4.1))
-    for k in ('fopid', 'adrc'):
+    for k in KEYS[1:]:
         ax[0].loglog(f, d[f'K_{k}'], color=COL[k], lw=1.4, label=LAB[k])
         ax[1].semilogx(f, d[f'S_{k}'], color=COL[k], lw=1.4, label=LAB[k])
         ax[2].loglog(f, d[f'U_{k}'], color=COL[k], lw=1.4, label=LAB[k])
@@ -208,7 +218,7 @@ def fig_freq(cp, prot):
 
 def fig_pso(ps, prot):
     fig, ax = plt.subplots(1, 2, figsize=(11.5, 4.2))
-    for k in ('fopid', 'adrc'):
+    for k in KEYS[1:]:
         h = ps[k]['hist']
         it = np.arange(h.shape[1])
         for i in range(h.shape[0]):
@@ -220,10 +230,10 @@ def fig_pso(ps, prot):
     ax[0].set_title('(a) convergence, 3 seeds per structure', fontsize=10)
     ax[0].grid(alpha=.3)
     ax[0].legend(fontsize=9)
-    fin = np.concatenate([ps[k]['J_seeds'] for k in ('fopid', 'adrc')])
+    fin = np.concatenate([ps[k]['J_seeds'] for k in KEYS[1:]])
     lo = np.min(fin) - 0.4 * (np.ptp(fin) + 1e-3)
     ax[0].set_ylim(lo, np.max(fin) + 0.15 * (np.ptp(fin) + 1e-3))
-    ks = ('fopid', 'adrc')
+    ks = KEYS[1:]
     xs = np.arange(len(ks))
     for i, k in enumerate(ks):
         js = ps[k]['J_seeds']
@@ -276,14 +286,14 @@ def fig_summary(cp, ps, prot):
     lob = cp['lobes']
     pos = cp['positions']
     rows = [
-        ('Design parameters', '-', f"{int(ps['fopid']['n_par'])}",
-         f"{int(ps['adrc']['n_par'])}"),
-        ('Controller states', '-', f"{int(ps['fopid']['n_states'])}",
-         f"{int(ps['adrc']['n_states'])}"),
-        ('PSO evaluations', '-', f"{int(ps['fopid']['n_eval'])}",
-         f"{int(ps['adrc']['n_eval'])}"),
-        ('Objective J', '-', f"{float(ps['fopid']['J']):+.3f}",
-         f"{float(ps['adrc']['J']):+.3f}"),
+        ('Design parameters', '-',
+         *[f"{int(ps[k]['n_par'])}" for k in KEYS[1:]]),
+        ('Controller states', '-',
+         *[f"{int(ps[k]['n_states'])}" for k in KEYS[1:]]),
+        ('PSO evaluations', '-',
+         *[f"{int(ps[k]['n_eval'])}" for k in KEYS[1:]]),
+        ('Objective J', '-',
+         *[f"{float(ps[k]['J']):+.3f}" for k in KEYS[1:]]),
     ]
     rows.append(('Lobes, mean 3000-7000 rpm (mm)',
                  *[f"{np.mean(lob[k]) * 1e3:.3f}" for k in KEYS]))
@@ -301,26 +311,25 @@ def fig_summary(cp, ps, prot):
                        for k in KEYS]))
         rows.append((f'Peak voltage, {lab} (V)', '-',
                      *[f"{float(cp[f'time{tag}_{k}']['max_u']):.1f}"
-                       for k in ('fopid', 'adrc')]))
+                       for k in KEYS[1:]]))
         rows.append((f'Mean |voltage|, {lab} (V)', '-',
                      *[f"{float(cp[f'time{tag}_{k}']['mean_u']):.2f}"
-                       for k in ('fopid', 'adrc')]))
+                       for k in KEYS[1:]]))
         rows.append((f'Saturated steps, {lab}', '-',
                      *[f"{int(cp[f'time{tag}_{k}']['n_saturated'])}"
-                       for k in ('fopid', 'adrc')]))
+                       for k in KEYS[1:]]))
     rows.append(('Modulus margin $M_s$ (constraint 2.0)', '-',
-                 *[f"{cp[f'metrics_{k}'][0]:.3f}" for k in ('fopid', 'adrc')]))
+                 *[f"{cp[f'metrics_{k}'][0]:.3f}" for k in KEYS[1:]]))
     rows.append(('Actuator effort (V/N, constraint 450)', '-',
-                 *[f"{cp[f'metrics_{k}'][1]:.0f}" for k in ('fopid', 'adrc')]))
+                 *[f"{cp[f'metrics_{k}'][1]:.0f}" for k in KEYS[1:]]))
     rows.append(('Slowest nominal pole (1/s)', '-',
-                 *[f"{cp[f'metrics_{k}'][2]:.1f}" for k in ('fopid', 'adrc')]))
+                 *[f"{cp[f'metrics_{k}'][2]:.1f}" for k in KEYS[1:]]))
 
     fig, ax = plt.subplots(figsize=(11.5, 0.32 * len(rows) + 1.4))
     ax.axis('off')
     tab = ax.table(cellText=[list(r) for r in rows],
-                   colLabels=['quantity', 'no control', 'FOPID',
-                              'ADRC-FOPID'],
-                   colWidths=[0.46, 0.18, 0.18, 0.18],
+                   colLabels=['quantity'] + [LAB[k] for k in KEYS],
+                   colWidths=([0.46] + [0.54 / len(KEYS)] * len(KEYS)),
                    cellLoc='center', colLoc='center', loc='center')
     tab.auto_set_font_size(False)
     tab.set_fontsize(9)
@@ -396,10 +405,12 @@ def main():
         return
     prot = C.PROTOCOL
     ps = load(f'pso_{prot}.npz')
-    fig_pso(ps, prot)
     cp_path = os.path.join(OUT, f'compare_{prot}.npz')
     if os.path.exists(cp_path):
         cp = load(f'compare_{prot}.npz')
+        set_keys(cp)
+    fig_pso(ps, prot)
+    if os.path.exists(cp_path):
         fig_lobes(cp, prot)
         fig_positions(cp, prot)
         fig_time(cp, prot, tag='_S', fname='fig_time_S')

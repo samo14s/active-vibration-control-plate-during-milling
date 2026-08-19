@@ -34,6 +34,36 @@ OUT = os.path.join(HERE, '..', 'results')
 os.makedirs(OUT, exist_ok=True)
 
 
+def _pack(D, best_x, best_J, best_var, runs, plate, n_states,
+          hist=None, n_eval=None):
+    """Le dictionnaire stocke pour une structure. Commun aux deux chemins
+    (optimisation complete et ajout de graines), pour qu'ils ne puissent pas
+    diverger."""
+    par = D.decode(best_x)
+    ss = D.build(best_x)
+    _, info = evaluate(plate, ss, detail=True)
+    hs = [r['history'] for r in runs if r.get('history') is not None] \
+        if hist is None else hist
+    return dict(
+        targets=np.array(D.targets),
+        x=best_x, J=best_J, n_par=D.n, n_states=n_states,
+        sign_variant=best_var,
+        names=np.array(D.names), values=np.array([par[k] for k in par]),
+        keys=np.array(list(par.keys())),
+        Ms=info['Ms'], V=info['V'],
+        A=ss[0], B=ss[1], C=ss[2], D=ss[3],
+        # x de CHAQUE graine : sans eux on ne peut pas mesurer la dispersion
+        # sur la metrique FINALE (a_p,lim a m = 200), mais seulement sur J,
+        # qui est l'estimation bruitee de l'optimiseur.
+        xs=np.array([r['x'] for r in runs]),
+        hist=np.array(hs),
+        seeds=np.array([r['seed'] for r in runs]),
+        variants=np.array([r['variant'] for r in runs]),
+        J_seeds=np.array([r['J'] for r in runs]),
+        n_eval=int(sum(r['n_eval'] for r in runs)) if n_eval is None
+        else n_eval)
+
+
 def main():
     t00 = time.time()
     print("=" * 74)
@@ -60,6 +90,14 @@ def main():
     # d'en ajouter une sans refaire les autres (les resultats deja calcules
     # sont relus et fusionnes, jamais ecrases).
     kinds = os.environ.get('KINDS', 'fopid,adrc').split(',')
+    # EXTRA_SEEDS=5,6 : ajoute des graines a une structure DEJA optimisee, sur
+    # la convention de signe qu'elle avait retenue, et fusionne les resultats.
+    # Sert a trancher la separabilite : la regle du protocole compare l'ecart
+    # entre structures a la dispersion INTRA-structure, et une dispersion
+    # large ne se reduit qu'en tirant plus de graines — pour TOUTES les
+    # structures, sans quoi ce serait une faveur.
+    extra = [int(v) for v in os.environ['EXTRA_SEEDS'].split(',')] \
+        if os.environ.get('EXTRA_SEEDS') else None
     store = {}
     path = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
     if os.path.exists(path):
@@ -74,6 +112,43 @@ def main():
         print(f"  --- {kind.upper()} : {D0.n} parametres,"
               f" {n_states} etats ---", flush=True)
         best_x, best_J, best_var, runs = None, -np.inf, None, []
+        if extra is not None:
+            key0 = kind if kind != 'fdob' or C.FDOB_MODES == '12' \
+                else 'fdob' + C.FDOB_MODES
+            prev = store[key0]
+            best_var = float(prev['sign_variant'])
+            best_x, best_J = np.array(prev['x']), float(prev['J'])
+            D = Design(kind, plate, sign_loop, sign_variant=best_var,
+                       targets=prev.get('targets'))
+            # Les structures optimisees avant l'ajout du champ 'xs' n'ont
+            # pas leurs x par graine ; on garde alors leurs J et on marque
+            # les x manquants par NaN plutot que d'inventer une valeur.
+            pxs = prev['xs'] if 'xs' in prev else np.full(
+                (len(prev['seeds']), len(np.atleast_1d(prev['x']))), np.nan)
+            for sd, xx, jj, vv in zip(prev['seeds'], pxs,
+                                      prev['J_seeds'], prev['variants']):
+                runs.append(dict(seed=int(sd), variant=float(vv), x=xx,
+                                 J=float(jj), history=None, n_eval=0))
+            print(f"    reprise : {len(runs)} graines deja faites,"
+                  f" convention {best_var:+.0f}, J = {best_J:+.4f}",
+                  flush=True)
+            for seed in extra:
+                t0 = time.time()
+                fit = lambda u: evaluate(plate, D.build(u))
+                x, J, inf = pso(fit, D.n, seed=seed)
+                runs.append(dict(seed=seed, variant=best_var, x=x, J=J,
+                                 history=inf['history'],
+                                 n_eval=inf['n_eval']))
+                print(f"    graine supplementaire {seed} : J = {J:+.4f} mm"
+                      f"  ({inf['n_eval']} evaluations,"
+                      f" {time.time() - t0:.0f} s)", flush=True)
+                if J > best_J:
+                    best_J, best_x = J, x.copy()
+            hs = [r['history'] for r in runs if r['history'] is not None]
+            n_ev = int(prev['n_eval']) + sum(r['n_eval'] for r in runs)
+            store[key0] = _pack(D, best_x, best_J, best_var, runs,
+                                plate, int(prev['n_states']), hs, n_ev)
+            continue
         # ETAPE 1 — depistage : une graine par convention de signe.
         # "Meme budget" n'est pas "meme budget UTILE" : la moitie +1 du boitier
         # ADRC-FOPID ne contient AUCUN correcteur nominalement stable (0 sur
@@ -126,18 +201,8 @@ def main():
         ss = D.build(best_x)
         key = kind if kind != 'fdob' or C.FDOB_MODES == '12' \
             else 'fdob' + C.FDOB_MODES
-        store[key] = dict(
-            x=best_x, J=best_J, n_par=D.n, n_states=n_states,
-            sign_variant=best_var,
-            names=np.array(D.names), values=np.array([par[k] for k in par]),
-            keys=np.array(list(par.keys())),
-            Ms=info['Ms'], V=info['V'],
-            A=ss[0], B=ss[1], C=ss[2], D=ss[3],
-            hist=np.array([r['history'] for r in runs]),
-            seeds=np.array([r['seed'] for r in runs]),
-            variants=np.array([r['variant'] for r in runs]),
-            J_seeds=np.array([r['J'] for r in runs]),
-            n_eval=int(sum(r['n_eval'] for r in runs)))
+        store[key] = _pack(D, best_x, best_J, best_var, runs, plate,
+                           n_states)
 
     print("\n  budget : "
           + ", ".join(f"{int(v['n_eval'])} ({k})" for k, v in store.items())

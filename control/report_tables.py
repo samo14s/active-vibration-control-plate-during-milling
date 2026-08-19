@@ -17,8 +17,9 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C
 
 OUT = os.path.join(HERE, '..', 'results')
-KEYS = ('boucle ouverte', 'fopid', 'adrc')
-LAB = {'boucle ouverte': 'بلا تحكّم', 'fopid': 'FOPID', 'adrc': 'ADRC-FOPID'}
+LAB = {'boucle ouverte': 'بلا تحكّم', 'fopid': 'FOPID',
+       'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (نمطان)',
+       'fdob12345': 'FDOB (5 أنماط)'}
 
 
 def load(name):
@@ -44,21 +45,20 @@ def main(prot=None):
     cp = load(f'compare_{prot}.npz')
     ps = load(f'pso_{prot}.npz')
     lob, pos = cp['lobes'], cp['positions']
+    KEYS = [str(x) for x in cp['config_labels']]
+    K = KEYS[1:]                                  # sans la boucle ouverte
 
     print(f'\n### البروتوكول {prot}\n')
-    print('| الكمّية | بلا تحكّم | FOPID | ADRC-FOPID |')
-    print('|---|---|---|---|')
-    print(row('عدد البارامترات', ['—', int(ps['fopid']['n_par']),
-                                  int(ps['adrc']['n_par'])]))
-    print(row('عدد الحالات', ['—', int(ps['fopid']['n_states']),
-                              int(ps['adrc']['n_states'])]))
-    print(row('تقييمات PSO', ['—', int(ps['fopid']['n_eval']),
-                              int(ps['adrc']['n_eval'])]))
+    print('| الكمّية | ' + ' | '.join(LAB.get(k, k) for k in KEYS) + ' |')
+    print('|---' * (len(KEYS) + 1) + '|')
+    print(row('عدد البارامترات', ['—'] + [int(ps[k]['n_par']) for k in K]))
+    print(row('عدد الحالات', ['—'] + [int(ps[k]['n_states']) for k in K]))
+    print(row('تقييمات PSO', ['—'] + [int(ps[k]['n_eval']) for k in K]))
     print(row('اتّفاقية الإشارة المُختارة',
               ['—'] + [f"{float(ps[k]['sign_variant']):+.0f}"
-                       for k in ('fopid', 'adrc')]))
+                       for k in K]))
     print(row('الهدف J', ['—'] + [float(ps[k]['J'])
-                                  for k in ('fopid', 'adrc')], '{:+.4f}'))
+                                  for k in K], '{:+.4f}'))
     print(row('متوسّط الفصوص 3000–7000 (mm)',
               [float(np.mean(lob[k]) * 1e3) for k in KEYS]))
     print(row('أدنى الفصوص (mm)',
@@ -76,34 +76,34 @@ def main(prot=None):
         print(row(f'أقصى إزاحة عند ap = {ap:.2f} mm (µm)', vals))
         print(row(f'ذروة التوتر عند ap = {ap:.2f} mm (V)',
                   ['—'] + [float(cp[f'time{tag}_{k}']['max_u'])
-                           for k in ('fopid', 'adrc')], '{:.1f}'))
+                           for k in K], '{:.1f}'))
         print(row(f'متوسّط |التوتر| عند ap = {ap:.2f} mm (V)',
                   ['—'] + [float(cp[f'time{tag}_{k}']['mean_u'])
-                           for k in ('fopid', 'adrc')], '{:.2f}'))
+                           for k in K], '{:.2f}'))
         print(row(f'خطوات التشبّع عند ap = {ap:.2f} mm',
                   ['—'] + [int(cp[f'time{tag}_{k}']['n_saturated'])
-                           for k in ('fopid', 'adrc')]))
+                           for k in K]))
     print(row('هامش الوحدة Ms (قيد ≤ 2)',
               ['—'] + [float(cp[f'metrics_{k}'][0])
-                       for k in ('fopid', 'adrc')]))
+                       for k in K]))
     print(row('الجهد لكل نيوتن (V/N، قيد ≤ 450)',
               ['—'] + [float(cp[f'metrics_{k}'][1])
-                       for k in ('fopid', 'adrc')], '{:.0f}'))
+                       for k in K], '{:.0f}'))
     print(row('أبطأ قطب اسمي (1/s)',
               ['—'] + [float(cp[f'metrics_{k}'][2])
-                       for k in ('fopid', 'adrc')], '{:.1f}'))
+                       for k in K], '{:.1f}'))
 
     print('\n**المتانة** (أدنى حدّ عند سرعة التصميم، mm)\n')
     labs = [str(x) for x in cp['robust_labels']]
-    print('| الحالة | بلا تحكّم | FOPID | ADRC-FOPID |')
-    print('|---|---|---|---|')
+    print('| الحالة | ' + ' | '.join(LAB.get(k, k) for k in KEYS) + ' |')
+    print('|---' * (len(KEYS) + 1) + '|')
     for t in labs:
         print(row(t, [float(v * 1e3) for v in cp['robust'][t]]))
 
     print('\n**البارامترات المُختارة**\n')
-    for k in ('fopid', 'adrc'):
+    for k in K:
         pr = cp[f'par_{k}']
-        print(f"* {LAB[k]} : " + ', '.join(
+        print(f"* {LAB.get(k, k)} : " + ', '.join(
             f"`{n}` = {v:.4g}" for n, v in zip(pr['keys'], pr['values'])))
 
 

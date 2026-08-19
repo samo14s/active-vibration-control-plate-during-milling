@@ -43,14 +43,16 @@ class Design:
     exhaustive et identique des deux cotes.
     """
 
-    def __init__(self, kind, plate, sign_loop, sign_variant=1.0):
+    def __init__(self, kind, plate, sign_loop, sign_variant=1.0,
+                 targets=None):
         self.kind = kind
+        self.targets = tuple(C.FDOB_TARGETS if targets is None else targets)
         self.plate = plate
         self.sign_loop = sign_loop
         self.sign_variant = float(sign_variant)
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
-            self.tw, self.tz, self.tr = target_modes(plate, C.FDOB_TARGETS)
+            self.tw, self.tz, self.tr = target_modes(plate, self.targets)
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
                   fdob=C.BOUNDS_FDOB)[kind]
         self.names = list(bd.keys())

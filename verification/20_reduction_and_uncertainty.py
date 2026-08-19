@@ -260,7 +260,7 @@ print('     DES PRODUITS  (plaque NUE, jauge du papier, %d positions)'
       % N_POS_G1)
 print(SEP)
 
-xs_g1, DtD_g1, DD0_g1, LDD_g1, gauge = md.dtd_paper_gauge(bare, N_POS_G1)
+_, DtD_g1, _, _, gauge = md.dtd_paper_gauge(bare, N_POS_G1)
 abar4_S = md.alpha4_average(RPM_S, AP_S, bare.hp)
 print(' jauge modale identifiee s = (%.4f, %.4f)  (script 12)' % gauge)
 print(' abar4(condition S) = %+.4e N/m ; SIGNE NEGATIF avec l Eq. (13) :'
@@ -268,14 +268,14 @@ print(' abar4(condition S) = %+.4e N/m ; SIGNE NEGATIF avec l Eq. (13) :'
 print(' tout ce qui suit est en UNITES DE abar4, donc invariant par ce signe.')
 print('\n ARITHMETIQUE DU PAPIER (Eq. 23) : alpha4/abar4 dans [%.1f, %.1f],'
       % (ALPHA_LO, ALPHA_HI))
-print(' alpha40 = %.1f abar4 (= milieu), L_Palpha = %.1f abar4 (= demi-etendue)'
+print(' alpha40 = %.1f abar4 (milieu), L_Palpha = %.1f abar4 (demi-etendue)'
       % (ALPHA_0, L_ALPHA))
 print(' MA LECTURE de l Eq. (25) : boite = %.1f DD_i0 +/- %.1f L_DD_i.'
       % (ALPHA_0, L_ALPHA))
 print(' Rayon EXACT requis autour de %.1f DD_i0 : %.1f |DD_i0| + %.1f L_DD_i'
       % (ALPHA_0, L_ALPHA, ALPHA_HI))
-print(' (= |alpha40| L + |DD0| L_Palpha + L_Palpha L ; l Eq. (25) ne garde que')
-print('  le dernier terme : il lui manque %.1f L_DD_i ET %.1f |DD_i0|.)'
+print(' (= alpha40 L + |DD0| L_Palpha + L_Palpha L ; l Eq. (25) ne garde')
+print('  que le dernier : il lui manque %.1f L_DD_i ET %.1f |DD_i0|.)'
        % (ALPHA_0, L_ALPHA))
 
 ELEM = ((0, 0, '(1,1)', 'DD10 / L_DD1'), (0, 1, '(1,2)', 'DD20 / L_DD2'),
@@ -481,10 +481,10 @@ print(' (%+.1f %%, %.0f um = %.0f %% du pic dominant), cas "%s".'
 print(' Au nominal la raie de mode 2 est a %.1f Hz (%+.1f %% de 1135 Hz).'
       % (g2['L-omega'][0]['f2line'],
          100 * (g2['L-omega'][0]['f2line'] / F_C2P - 1)))
-print(' MAIS aucun cas ne fait de 1135 Hz la raie DOMINANTE : le pic reste sur')
-print(' le mode 1 (534 -> 577 Hz), comme deja etabli au nominal par le script')
-print(' 14 (534 Hz contre les 1135 Hz publies, -53 %).')
-print(' NB coin non divergent : sigma_t > 0 alors que rho_Fl < 1 — la bande de')
+print(' MAIS aucun cas ne fait de 1135 Hz la raie DOMINANTE : le pic reste')
+print(' sur le mode 1 (534 -> 577 Hz), comme deja etabli au nominal par')
+print(' le script 14 (534 Hz contre les 1135 Hz publies, -53 %).')
+print(' NB coin non divergent : sigma_t > 0 mais rho_Fl < 1 — la bande de')
 print(' regression [10 um, 1 mm] y capte la MONTEE FORCEE du transitoire et')
 print(' non une croissance de broutement ; c est rho_Fl qui fait foi.')
 
@@ -629,10 +629,10 @@ if n_dis:
 print('\n ECART A DING et al. (2010) [79], la reference citee pour la Fig. 6')
 print(' ("A full-discretization method for prediction of milling stability",')
 print(' Int J Mach Tool Manu 2010;50:502-9) :')
-print('   * Ding et al. separent A(t) = A0 + A_p(t) et prennent l exponentielle')
-print('     de la SEULE partie CONSTANTE A0, puis interpolent LINEAIREMENT sur')
-print('     chaque sous-intervalle a la fois l etat, le coefficient periodique')
-print('     et le terme retarde ;')
+print('   * Ding et al. separent A(t) = A0 + A_p(t) et prennent l exponen-')
+print('     tielle de la SEULE partie CONSTANTE A0, puis interpolent LINEAI-')
+print('     REMENT sur chaque sous-intervalle a la fois l etat, le coeffi-')
+print('     cient periodique et le terme retarde ;')
 print('   * les deux modules de ce depot GELENT A_k = A0 + A_p(t_milieu) au')
 print('     point milieu et prennent expm(A_k h) : exact a coefficient gele,')
 print('     aucune interpolation de l etat courant, interpolation lineaire du')
@@ -678,9 +678,11 @@ for k, (_, _, nm, _) in enumerate(ELEM):
     ax.plot([ALPHA_0 * st['dd0']], [y0], marker='|', ms=16, mew=2.0,
             color='k', zorder=4,
             label='nominal 1.6 DD_i0' if k == 0 else None)
-    ax.text(st['true'][1] + 0.35, y0 + 0.16, 'R1 %.1f %%' % (100 * st['cov_R1']),
+    ax.text(st['true'][1] + 0.35, y0 + 0.16,
+            'R1 %.1f %%' % (100 * st['cov_R1']),
             va='center', fontsize=8.5, color=CB['r1'], fontweight='bold')
-    ax.text(st['true'][1] + 0.35, y0 - 0.16, 'R2 %.1f %%' % (100 * st['cov_R2']),
+    ax.text(st['true'][1] + 0.35, y0 - 0.16,
+            'R2 %.1f %%' % (100 * st['cov_R2']),
             va='center', fontsize=8.5, color=CB['r2'], fontweight='bold')
 ax.set_yticks(ypos)
 ax.set_yticklabels(['DtD %s' % n for n in names])
@@ -689,50 +691,62 @@ ax.set_title('(a) G1 — Eq. (25) uncertainty box vs the true product set\n'
              'coverage fraction of the true set is printed on the right',
              fontsize=10.5)
 ax.set_xlim(-11.5, 16.5)
+ax.set_ylim(-1.35, 3.55)                 # une ligne vide pour la legende
 ax.grid(axis='x', alpha=0.3, zorder=0)
-ax.legend(fontsize=7.6, loc='lower right', framealpha=0.95)
+ax.legend(fontsize=7.5, loc='lower center', ncol=2, framealpha=0.95,
+          borderpad=0.5)
 
 # ---- (b) coins de perturbation --------------------------------------------
+# Le nuage (frequence, sigma) etait illisible : plusieurs coins donnent des
+# points confondus. On passe a des barres horizontales par cas, avec les deux
+# frequences (raie dominante / raie de mode 2) ecrites en bout de barre.
 ax = axes[0, 1]
-mk = {'L-omega': 'o', 'L-coherente': 's'}
-for read_tag in ('L-omega', 'L-coherente'):
-    rows = g2[read_tag]
-    col = CB['p2'] if read_tag == 'L-omega' else CB['p5']
-    for r in rows:
-        f0 = r['lines'][0][0]
-        f2l = r['f2line']
-        nominal = (r['tag'] == 'nominal')
-        c = CB['nom'] if nominal else col
-        ax.plot([f0, f2l], [r['sigma']] * 2, '-', color=c, lw=0.8,
-                alpha=0.45, zorder=2)
-        ax.scatter([f0], [r['sigma']], s=120 if nominal else 74,
-                   marker='*' if nominal else mk[read_tag],
-                   color=c, edgecolor='k', lw=0.6, zorder=4)
-        ax.scatter([f2l], [r['sigma']], s=44, marker=mk[read_tag],
-                   facecolor='none', edgecolor=c, lw=1.2, zorder=4)
-        if read_tag == 'L-omega' or r['tag'] not in ('nominal',
-                                                     'zeta x0.8 only'):
-            ax.annotate(r['tag'].replace('dm', 'm').replace('dk', 'k'),
-                        (f0, r['sigma']), textcoords='offset points',
-                        xytext=(6, 5), fontsize=7.2)
+labels = [r['tag'] for r in g2['L-omega']][1:]     # sans le nominal
+ypos = np.arange(len(labels))[::-1]
+hgt = 0.34
+for jj, (read_tag, col) in enumerate((('L-omega', CB['p5']),
+                                      ('L-coherente', CB['p2']))):
+    rows = g2[read_tag][1:]
+    off = (0.5 - jj) * hgt
+    ax.barh(ypos + off, [r['sigma'] for r in rows], height=hgt * 0.92,
+            color=col, edgecolor='k', lw=0.5, zorder=3,
+            label='%s reading' % ('omega-only' if jj == 0
+                                  else 'consistent-mass'))
+    for y0, r in zip(ypos + off, rows):
+        near = abs(r['f2line'] / F_C2P - 1) < 0.02
+        # pour un cas non divergent les raies sont de la vibration FORCEE :
+        # on n'affiche que le verdict de stabilite
+        txt = ('NO DIVERGENCE (rho = %.3f)' % r['rho'] if r['t5'] is None
+               else 'f_dom %.0f  |  f_mode2 %.0f Hz'
+               % (r['lines'][0][0], r['f2line']))
+        ax.text(r['sigma'] + 2.5, y0, txt, va='center', fontsize=7.4,
+                color=CB['r2'] if near else '#333333',
+                fontweight='bold' if near else 'normal', zorder=4)
 ref = g2['L-omega'][0]
-ax.axhline(ref['sigma'], color=CB['nom'], ls='--', lw=1.2,
-           label='nominal growth rate %.1f 1/s' % ref['sigma'])
-ax.axvline(F_C2P, color=CB['r2'], ls='-.', lw=1.6,
-           label='paper f_c2 = f_c2p = 1135 Hz (same number)')
-ax.axvline(plate.freq_n[0], color='#777777', ls=':', lw=1.2,
-           label='nominal f_1 = %.0f Hz, f_2 = %.0f Hz'
-           % (plate.freq_n[0], plate.freq_n[1]))
-ax.axvline(plate.freq_n[1], color='#777777', ls=':', lw=1.2)
-ax.axhline(0.0, color='k', lw=0.8)
-ax.set_xlabel('dominant spectral line of the second half  [Hz]')
-ax.set_ylabel('envelope growth rate sigma  [1/s]')
-ax.set_title('(b) G2 — Fig. 16 perturbation corners, uncontrolled '
-             'condition S\nfilled: dominant line; open: mode-2 line. '
-             'circles = omega-only, squares = consistent-mass', fontsize=10.5)
-ax.set_xlim(420, 1290)
-ax.grid(alpha=0.3)
-ax.legend(fontsize=7.6, loc='center left')
+ax.axvline(ref['sigma'], color='k', ls='--', lw=1.4)
+ax.axvline(0.0, color='k', lw=0.9)
+ax.text(0.015, 0.985,
+        'nominal (Fig. 14a): sigma = %.1f 1/s (dashed),\n'
+        't(5mm) = %.4f s, f_dom = %.0f Hz, f_mode2 = %.0f Hz'
+        % (ref['sigma'], ref['t5'], ref['lines'][0][0], ref['f2line']),
+        transform=ax.transAxes, ha='left', va='top', fontsize=7.4,
+        bbox=dict(fc='white', ec='#999999', alpha=0.93,
+                  boxstyle='round,pad=0.35'))
+ax.set_yticks(ypos)
+ax.set_yticklabels([l.replace('dm', 'dm ').replace('dk', ' dk ')
+                    for l in labels], fontsize=8.5)
+ax.set_xlabel('envelope growth rate sigma  [1/s]   '
+              '(negative / near zero = no divergence)')
+ax.set_xlim(-8, 172)
+ax.set_ylim(-0.65, len(labels) - 1 + 0.95)   # bandeau libre pour les notes
+ax.set_title('(b) G2 — Fig. 16 perturbation corners, uncontrolled condition S'
+             '\npaper: "diverges faster than Fig. 14(a)" and f_c2p = 1135 Hz'
+             ' (= its own f_c2)', fontsize=10.5)
+ax.grid(axis='x', alpha=0.3, zorder=0)
+ax.legend(fontsize=7.6, loc='center right', framealpha=0.95)
+ax.text(0.985, 0.985, 'orange bold = mode-2 line within 2 % of 1135 Hz',
+        transform=ax.transAxes, ha='right', va='top', fontsize=7.6,
+        color=CB['r2'], fontweight='bold')
 
 # ---- (c) troncature 2 / 5 modes -------------------------------------------
 ax = axes[1, 0]
@@ -750,10 +764,12 @@ ax.set_title('(c) G3 — is the 2-mode truncation of Eq. (21) safe for '
              % (RPM_G3[1] - RPM_G3[0]), fontsize=10.5)
 ax.grid(alpha=0.3, which='both')
 ax.legend(fontsize=7.4, ncol=2, loc='upper left')
-axi = ax.inset_axes([0.60, 0.08, 0.37, 0.30])
+axi = ax.inset_axes([0.62, 0.055, 0.35, 0.26])
 for ip, fr in enumerate(POS_G3):
     axi.plot(RPM_G3, ratio[ip], '-o', ms=3, color=cols[ip], lw=1.2)
 axi.axhline(1.0, color='k', lw=0.9)
+axi.set_ylim(min(0.86, ratio.min() - 0.02),
+             max(1.20, ratio.max() + 0.02))
 axi.set_title('ratio 2-mode / 5-mode', fontsize=7.5)
 axi.tick_params(labelsize=6.5)
 axi.grid(alpha=0.3)
@@ -764,24 +780,41 @@ aa = np.array([r['a'] for r in rows4]) * 1e3
 bb = np.array([r['b'] for r in rows4]) * 1e3
 sc = ax.scatter(aa, bb, c=[r['rpm'] for r in rows4], cmap='viridis',
                 s=80, edgecolor='k', lw=0.6, zorder=3)
-lim_hi = max(aa.max(), bb.max()) * 1.12
-ax.plot([0, lim_hi], [0, lim_hi], 'k-', lw=1.0, label='identity')
-ax.fill_between([0, lim_hi], [0, lim_hi * 0.95], [0, lim_hi * 1.05],
-                color='#bbbbbb', alpha=0.35, label='+/- 5 %', zorder=0)
-for r, x0, y0 in zip(rows4, aa, bb):
-    if r['rel'] > 0.005:
-        ax.annotate('%.0f rpm, x=%.2f\n%.1f %%'
-                    % (r['rpm'], r['fr'], 100 * r['rel']), (x0, y0),
-                    textcoords='offset points', xytext=(7, -13), fontsize=6.8)
+lo_g = min(aa.min(), bb.min()) * 0.7
+hi_g = max(aa.max(), bb.max()) * 1.4
+gg = np.geomspace(lo_g, hi_g, 50)
+ax.plot(gg, gg, 'k-', lw=1.0, label='identity', zorder=2)
+ax.fill_between(gg, gg * 0.95, gg * 1.05, color='#bbbbbb', alpha=0.40,
+                label='+/- 5 %', zorder=0)
+# les points en desaccord sont listes dans un encadre : les annoter un par un
+# les faisait se recouvrir dans l'amas central
+dis = ['%.0f rpm, x = %.2f l_P : %+.1f um  (%.1f %%)'
+       % (r['rpm'], r['fr'], (r['b'] - r['a']) * 1e6, 100 * r['rel'])
+       for r in rows4 if r['dtol'] > 1.0]
+ax.text(0.985, 0.035,
+        'points beyond the %.0f um bisection tolerance (%d / %d):\n'
+        % (AP_TOL * 1e6, len(dis), len(rows4)) + '\n'.join(dis)
+        + '\npower iteration is the larger one everywhere here',
+        transform=ax.transAxes, ha='right', va='bottom', fontsize=7.2,
+        bbox=dict(fc='white', ec='#999999', alpha=0.93, boxstyle='round,'
+                  'pad=0.4'))
 ax.set_xscale('log')
 ax.set_yscale('log')
+ax.set_xlim(lo_g, hi_g)
+ax.set_ylim(lo_g, hi_g)
+tk = [0.03, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8]
+for a_ in (ax.xaxis, ax.yaxis):
+    a_.set_major_locator(matplotlib.ticker.FixedLocator(tk))
+    a_.set_minor_locator(matplotlib.ticker.NullLocator())
+    a_.set_major_formatter(matplotlib.ticker.FixedFormatter(
+        ['%.2f' % v for v in tk]))
 ax.set_xlabel('a_p,lim from stability_fdm (assembled monodromy + eig)  [mm]')
 ax.set_ylabel('a_p,lim from lti_floquet (power iteration)  [mm]')
 ax.set_title('(d) G4 — the two stability engines on a common grid\n'
              '%d points, 2 modes, m = 60, bisection tol %.0f um; max '
              'difference %.2f %%' % (len(rows4), AP_TOL * 1e6, 100 * rel_max),
              fontsize=10.5)
-ax.grid(alpha=0.3, which='both')
+ax.grid(alpha=0.3)
 ax.legend(fontsize=8, loc='upper left')
 cb = fig.colorbar(sc, ax=ax, pad=0.02)
 cb.set_label('spindle speed [rpm]', fontsize=8)
@@ -809,7 +842,7 @@ print(' G2  divergence plus rapide qu au nominal : %d coin(s) sur 4 (lecture'
 print('     L-omega), %d sur 4 (lecture L-coherente) ; le coin (dm +10 %%,'
       % sum(1 for r in g2['L-coherente'][2:]
             if r['t5'] is not None and r['t5'] < g2['L-coherente'][0]['t5']))
-print('     dk -10 %%) ne diverge pas du tout (rho_Fl = %.4f < 1) dans les deux'
+print('     dk -10 %%) ne diverge pas (rho_Fl = %.4f < 1) dans les deux'
       % g2['L-omega'][3]['rho'])
 print('     lectures. Raie dominante : mode 1 partout, jamais 1135 Hz.')
 print(' G3  ratio a_p,lim (2 modes / 5 modes) : moyen %.3f, pire %.3f a'

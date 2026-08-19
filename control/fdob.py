@@ -79,6 +79,7 @@ fabrique ADRC recevait gratuitement. w_c est fixe a la coupure du filtre
 d'anti-repliement (8 kHz), commune aux trois structures.
 """
 import numpy as np
+from scipy.linalg import matrix_balance
 from scipy.signal import tf2ss
 
 from fopid import fopid_ss
@@ -108,10 +109,28 @@ def _parallel(blocks):
 
 
 def _tf(num, den):
-    """(A, B, C, D) d'une fraction rationnelle propre."""
+    """(A, B, C, D) d'une fraction rationnelle propre, EQUILIBREE.
+
+    L'equilibrage n'est pas cosmetique. La forme compagne que renvoie tf2ss
+    porte les coefficients du denominateur tels quels : pour un passe-bande
+    au mode 5 suivi d'un double pole a 8 kHz, le terme constant vaut
+    w_k^2 w_c^2 ~ 3e16 a cote de coefficients d'ordre 1. La matrice d'etat de
+    la boucle fermee atteignait alors un conditionnement de 6.5e30 (et 2.2e34
+    pour la variante a cinq modes), tres au-dela de 1/eps : le calcul de
+    Floquet, qui resout A x = P0 - I, y perdait TOUS ses chiffres
+    significatifs et finissait par lever "Singular matrix".
+
+    L'equilibrage est une similitude diagonale, donc il ne change pas la
+    fonction de transfert — seulement le conditionnement.
+    """
     A, B, C, D = tf2ss(np.asarray(num, float), np.asarray(den, float))
-    return (np.atleast_2d(A), np.atleast_2d(B).reshape(-1, 1),
-            np.atleast_2d(C).reshape(1, -1), np.atleast_2d(D).reshape(1, 1))
+    A = np.atleast_2d(A)
+    B = np.atleast_2d(B).reshape(-1, 1)
+    C = np.atleast_2d(C).reshape(1, -1)
+    Ab, T = matrix_balance(A, separate=False)
+    # matrix_balance renvoie T tel que Ab = T^-1 A T (T diagonale)
+    Ti = np.diag(1.0 / np.diag(T))
+    return (Ab, Ti @ B, C @ T, np.atleast_2d(D).reshape(1, 1))
 
 
 def _modal_blocks(w, zeta, res, zeta_q, wc):

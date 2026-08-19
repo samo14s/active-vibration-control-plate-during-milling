@@ -101,6 +101,19 @@ FIGS_COMP = [
 ]
 
 
+FIGS_DIAG = [
+    ('## 8. الحكم: ما العنصر الذي يجب تغييره رياضيًّا', 'fig_diagnostic_B.png',
+     'التشخيص حلقةً حلقة: (a) الكسب الفعّال يقلب إشارته، (b) صفر في النصف الأيمن، '
+     '(c) الـ ESO مضبوط تمامًا، (d) المتبقّي غير المُلغى يبلغ ذُراه عند الرنينات، '
+     '(e) التشبّع عَرَض، (f) السقف الأساسي.'),
+    ('## 8. الحكم: ما العنصر الذي يجب تغييره رياضيًّا',
+     'fig_diagnostic_form_B.png',
+     'الإجابة: (g) الـ ESO يضيف مُكامِلًا صحيحًا واحدًا بالضبط، (h) رُتَب `s` القابلة '
+     'للتحقيق — المشتقّة الكسرية ‎μ∈(0,1)‎ خارج متناول ADRC‑FOPID، (i) ‎ω_o‎ بواجبَين '
+     'متعارضَين، والعلاج كان داخل صندوق البحث ورُفض.'),
+]
+
+
 def b64(path):
     with open(path, 'rb') as f:
         return base64.b64encode(f.read()).decode()
@@ -196,16 +209,21 @@ a { color: var(--acc); text-decoration: none; }
 def main():
     md_v = open(os.path.join(ROOT, 'MODELE_PAPIER.md')).read()
     md_c = open(os.path.join(ROOT, 'COMPARAISON_ADRC_FOPID.md')).read()
+    md_d = open(os.path.join(ROOT, 'DIAGNOSTIC_ADRC.md')).read()
 
     md_v, n = insert_figures(md_v, FIGS_VERIF,
                              os.path.join(ROOT, 'figures', 'verification'), 1)
     md_c, n = insert_figures(md_c, FIGS_COMP,
+                             os.path.join(ROOT, 'figures', 'comparison'), n)
+    md_d, n = insert_figures(md_d, FIGS_DIAG,
                              os.path.join(ROOT, 'figures', 'comparison'), n)
 
     conv = markdown.Markdown(extensions=['tables', 'fenced_code', 'md_in_html'])
     html_v = conv.convert(md_v)
     conv.reset()
     html_c = conv.convert(md_c)
+    conv.reset()
+    html_d = conv.convert(md_d)
 
     cover = """
 <div class="cover">
@@ -219,6 +237,8 @@ def main():
     <b>ما يحتويه هذا التقرير.</b> الجزء الأوّل يحدّد النموذج الذي تستعمله المقالة
     معادلةً بمعادلة، ثمّ يتحقّق منه بثلاث عشرة تجربة عددية مستقلّة، كلٌّ منها بشكلها.
     الجزء الثاني يقارن بنيتَي تحكّم على النموذج نفسه ببروتوكول إنصاف قابل للتدقيق.
+    الجزء الثالث يُشخّص رياضيًّا، حلقةً حلقة، لماذا يخسر ADRC‑FOPID هنا — وأيّ عنصر
+    يجب تغييره.
     كلّ رقم في الصفحات التالية يُعاد إنتاجه بسكربت واحد في المستودع.
   </div>
   <div class="meta">مستودع <code>active-vibration-control-plate-during-milling</code>
@@ -230,6 +250,7 @@ def main():
            f'{cover}'
            f'<div class="part">{html_v}</div>'
            f'<div class="part">{html_c}</div>'
+           f'<div class="part">{html_d}</div>'
            f'</body></html>')
 
     with open(OUT_HTML, 'w') as f:

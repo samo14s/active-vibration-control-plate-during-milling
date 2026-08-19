@@ -31,7 +31,16 @@ from plate_model import plant_vectors, plant_frf
 from fopid import ss_frf
 from closed_loop import period_maps, spectral_radius
 
-_F_LOG = np.logspace(0.5, 4.1, 140)          # fond logarithmique [Hz]
+# Fond logarithmique [Hz]. La borne BASSE compte autant que la finesse : avec
+# une grille demarrant a 3.16 Hz, le FOPID retenu au protocole B affichait
+# Ms = 1.985 sur la grille et |S| = 28.7 EN DESSOUS d'elle (pole de boucle
+# fermee a 0.11 Hz : le gain de boucle au continu vaut +0.965, la boucle perd
+# presque toute sa raideur statique). L'ADRC-FOPID, lui, valait 0.227 au meme
+# endroit : la contrainte de marge de module ne pesait donc pas du tout de la
+# meme facon sur les deux structures. On couvre desormais toute la bande ou la
+# realisation d'Oustaloup a un sens, de 0.01 Hz a 126 kHz (w_b = 0.159 Hz,
+# w_h = 100 kHz), et un peu au-dela des deux cotes.
+_F_LOG = np.logspace(-2.0, 5.1, 300)
 
 
 def _con_grid(plate, poles=None, n_modes=None):

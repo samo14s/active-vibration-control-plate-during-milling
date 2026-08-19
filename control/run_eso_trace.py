@@ -53,9 +53,17 @@ def main():
     d = np.load(os.path.join(OUT, f'pso_{C.PROTOCOL}.npz'), allow_pickle=True)
     ss = (d['adrc__A'], d['adrc__B'], d['adrc__C'], d['adrc__D'])
     par = dict(zip([str(k) for k in d['adrc__keys']], d['adrc__values']))
-    b0 = float(par['b0'])
+    # b0 SIGNE. Le correcteur construit par pso.Design applique
+    #     b0_effectif = par['b0'] * sign_variant
+    # (control/pso.py). Comparer z3 a y'' - par['b0'] u au lieu de
+    # y'' - b0_effectif u inverse la reference et rend la mesure d'erreur
+    # d'estimation sans valeur : c'est le defaut qui avait produit le chiffre
+    # de 147 % annonce dans la premiere version de ce trace.
+    var = float(d[f'adrc__sign_variant'])
+    b0 = float(par['b0']) * var
     wo = float(par['wo'])
-    print(f"  ADRC-FOPID (protocole {C.PROTOCOL}) : b0 = {b0:.4g},"
+    print(f"  ADRC-FOPID (protocole {C.PROTOCOL}) : b0 = {b0:.4g}"
+          f" (= {float(par['b0']):.4g} x sign_variant {var:+.0f}),"
           f" w_o = {wo:.4g} rad/s ({wo / 2 / np.pi:.0f} Hz)")
 
     plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)

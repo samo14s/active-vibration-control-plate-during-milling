@@ -103,7 +103,7 @@ for kw, kr in PEN_LIST:
     d = 100.0 * np.abs(freqs_pen[(kw, kr)] / fpen_ref - 1.0)
     print(f" {kw:>10.0e} {kr:>8.0e} | {fmt5(freqs_pen[(kw, kr)])} | {d.max():>23.4f}")
 F_RITZ = freqs_P[18]                          # reference convergee du depot
-print(" -> l'encastrement penalise converge par le haut ; a (1e12,1e8) il reste "
+print(" -> l'encastrement penalise converge par le BAS (frequences trop basses) ; a (1e12,1e8) il reste "
       f"{100*np.abs(F_RITZ/fpen_ref-1).max():.3f} % de souplesse residuelle.")
 print(" REFERENCE RITZ CONVERGEE (P=18, kw=1e12, kr=1e8) :", fmt5(F_RITZ))
 
@@ -121,7 +121,7 @@ for N1, N2 in MESH_LIST:
     freqs_fe[(N1, N2)] = fe.freq_n.copy()
     print(f" {N1:>4d} x{N2:>3d} {3*(N1+1)*(N2+1):>7d} | {fmt5(fe.freq_n)}")
 F_FE = freqs_fe[MESH_LIST[-1]]
-print(" -> maillage Q4 converge par le haut aussi (il n'y a pas d'encastrement penalise :")
+print(" -> maillage Q4 converge par le HAUT (il n'y a pas d'encastrement penalise :")
 print("    les ddl du bord z=0 sont bloques exactement).")
 
 d_ritz_fe = 100.0 * (F_RITZ / F_FE - 1.0)
@@ -311,7 +311,7 @@ b.set_ylabel("relative error vs Table 4 theoretical  [%]")
 b.set_title("(b) Which parameter set reproduces the paper's theory?")
 b.grid(True, axis='y', alpha=0.3)
 _lo = min(e_t1.min(), e_patch.min(), e_meas.min())
-_hi = max(e_meas.max(), e_id.max()) + 0.55
+_hi = max(e_meas.max(), e_id.max(), e_patch.max()) + 0.55
 b.set_ylim(_lo - 1.35, _hi)
 for x, v in zip(modes - 0.5 * w, e_id):          # etiquettes du jeu identifie
     b.text(x, _hi - 0.13, f"{v:+.2f}", ha='center', va='top',

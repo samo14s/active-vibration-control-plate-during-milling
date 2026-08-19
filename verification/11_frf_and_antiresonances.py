@@ -44,7 +44,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from plate_model import build_plate, F_MEASURED, F_THEORETICAL
+from plate_model import build_plate, PATCH, F_MEASURED, F_THEORETICAL
 
 FIGDIR = os.path.join(HERE, '..', 'figures', 'verification')
 os.makedirs(FIGDIR, exist_ok=True)
@@ -151,7 +151,9 @@ print('    ecart relatif                          : '
                   100 * (raw.freq_n / np.array(F_MEASURED) - 1)))
 print('    amortissements imposes (Tableau 4)     : '
       + '  '.join('%6.2f%%' % (100 * z) for z in ZETA))
-print('    pastille "right" = [80,100]x[0,60] mm ; "left" = [0,20]x[0,60] mm')
+print('    pastille "%s" = [%.0f,%.0f]x[%.0f,%.0f] mm ; "%s" = [%.0f,%.0f]x[%.0f,%.0f] mm'
+      % (('right',) + tuple(1e3 * PATCH['right'][k] for k in ('x1', 'x2', 'z1', 'z2'))
+         + ('left',) + tuple(1e3 * PATCH['left'][k] for k in ('x1', 'x2', 'z1', 'z2'))))
 print('    capteur / marteau : coin superieur droit (x=100, z=80 mm)')
 
 res = {}

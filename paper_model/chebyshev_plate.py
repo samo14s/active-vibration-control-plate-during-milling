@@ -187,7 +187,25 @@ class ChebyshevPlate:
                                       EPe, nuPe, hPa, G_adh, t_adh)
         self.eta_bond = eta
 
-        # C_P0, Eq. (15) du papier (reference)
+        # C_P0, Eq. (15) du papier — VALEUR DE REFERENCE, non utilisee par le
+        # couplage (H_Pe est construit a partir de m_pz plus bas).
+        #
+        # ECART ASSUME PAR RAPPORT A L'EQUATION IMPRIMEE : le signe devant P_M.
+        # Telle qu'elle est ecrite, l'Eq. (15) est numeriquement pathologique
+        # avec les donnees des Tableaux 1-2 : P_M = 0.932580 alors que le pole
+        # du denominateur est en P_M = 0.985185, soit 5.6 % plus loin
+        # seulement ; le denominateur vaut 0.071017 et la sensibilite
+        # d ln C_P0 / d ln P_M atteint +18.7. Elle donne alors
+        # -C_P0 d31/hPa = -1.2171 N/V, soit 34.5 fois le modele classique du
+        # moment equivalent — un moment de 1.2 N par volt pour une pastille
+        # PZT de 0.7 mm avec d31 = 175 pm/V est physiquement impossible.
+        # Avec le signe ci-dessous (equivalent a lire le denominateur comme
+        # 1+nu_P + (1+nu_Pe)|P_M|) la quasi-annulation disparait et l'on
+        # obtient -C_P0 d31/hPa = -0.033387 N/V, a 5.8 % du moment equivalent
+        # avec collage reel (et +19 % avec collage parfait). C'est la lecture
+        # numeriquement saine, mais c'est une lecture : l'equation imprimee est
+        # tres probablement mal transcrite dans le papier.
+        # (verification/15_piezo_coupling_eq14_15.py chiffre tout ceci.)
         PM = -(EPe / self.E) * ((1 - self.nu**2) / (1 - nuPe**2)) \
             * (3 * hPa * self.bp * (self.bp + hPa)) \
             / (0.5 * self.bp**3 + 4 * hPa**3 + 3 * self.bp * hPa**2)

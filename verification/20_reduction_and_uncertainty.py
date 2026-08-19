@@ -166,8 +166,10 @@ def hann_spectrum(t, y, fmax=3000.0, pad=8):
     return f[m], np.abs(Y[m]) * 1e6
 
 
-def top_lines(f, A, k=3, min_sep=25.0):
-    """k plus grandes raies separees d'au moins min_sep Hz."""
+def top_lines(f, A, k=3, min_sep=120.0):
+    """k plus grandes raies separees d'au moins min_sep Hz. min_sep doit
+    depasser la largeur du lobe principal de Hann (4/duree ~ 100 Hz sur la
+    seconde moitie), sinon on ne liste que les flancs d'un meme pic."""
     order = np.argsort(A)[::-1]
     out = []
     for i in order:
@@ -194,6 +196,16 @@ def envelope_growth(t, y, tau, lo=10e-6, hi=1e-3):
     c = np.polyfit(tb[m], np.log(eb[m]), 1)
     r2 = float(np.corrcoef(tb[m], np.log(eb[m]))[0, 1] ** 2)
     return float(c[0]), r2, int(m.sum())
+
+
+def peak_near(f, A, f0, half=100.0):
+    """Plus grande valeur du spectre dans la fenetre f0 +/- half, et sa
+    position : reponse directe a la question "y a-t-il une raie a f0 ?"."""
+    m = (f >= f0 - half) & (f <= f0 + half)
+    if not np.any(m):
+        return np.nan, 0.0
+    i = int(np.argmax(A[m]))
+    return float(f[m][i]), float(A[m][i])
 
 
 def interval_overlap(a, b):
@@ -232,7 +244,7 @@ print(' plaque NUE (Fig. 7)      f [Hz] : '
 print(' plaque de commande       f [Hz] : '
       + '  '.join('%7.1f' % v for v in plate.freq_n[:5])
       + '   (calage MESURE, Tab. 4)')
-print(' zeta [%%]                        : '
+print(' zeta [%]                         : '
       + '  '.join('%7.2f' % v for v in 100 * plate.zeta_modes[:5]))
 print(' condition S : %.0f tr/min, a_e = %.2f mm, a_p = %.2f mm, '
       'f_z = %.3f mm/dent' % (RPM_S, AE * 1e3, AP_S * 1e3, FZ * 1e3))
@@ -385,12 +397,16 @@ def run_g2(tag, dm, dk, zs, consistent):
     q = perturbed_plate(plate, ws, zs)
     _, rho = lf.is_stable(q, RPM_S, AP_S, 0.0, None, n_modes=5, m=60,
                           coeff_scale=cs)
+    # raie du MODE 2 : plus grand pic dans une fenetre autour du f_2 perturbe
+    # (c'est elle que le papier appelle f_c2 / f_c2p)
+    f2p = float(plate.freq_n[1] * ws)
+    f2l, a2l = peak_near(f, A, f2p, 0.15 * f2p)
     return dict(tag=tag, ws=ws, sigma=sig, r2=r2, npt=npt,
                 t5=r['t_div'] if r['diverged'] else None,
                 ymax=float(np.abs(y).max()),
                 lines=lines, rho=rho, sig_fl=float(np.log(rho) / TAU_S),
                 f2=float(plate.freq_n[1] * ws), f1=float(plate.freq_n[0] * ws),
-                A1135=float(np.interp(F_C2P, f, A)), Amax=float(A.max()))
+                f2line=f2l, a2line=a2l, Amax=float(A.max()))
 
 
 g2 = {}
@@ -402,10 +418,10 @@ for read_tag, cons in (('L-omega', False), ('L-coherente', True)):
                            dm, dk, 0.8, cons))
     g2[read_tag] = rows
 
-for read_tag in ('L-omega', 'L-coherente'):
+for jj, read_tag in enumerate(('L-omega', 'L-coherente')):
     rows = g2[read_tag]
     print('\n ' + SUB)
-    print(' Table G2-%s — lecture %s' % (read_tag[:1].upper(), read_tag))
+    print(' Table G2-%s — lecture %s' % ('ab'[jj], read_tag))
     print(' ' + SUB)
     print(' case              w/w0    f_2      sigma_t   R^2    t(5mm)'
           '   max|y|   rho_Fl  sigma_Fl   dominant line')
@@ -433,28 +449,44 @@ for read_tag in ('L-omega', 'L-coherente'):
             verdict = 'diverge MOINS vite (%.1f %% de temps en plus)' \
                 % (100 * (r['t5'] / ref['t5'] - 1))
         print('   %-16s %s' % (r['tag'], verdict))
+    nf = sum(1 for r in rows[2:]
+             if r['t5'] is not None and r['t5'] < ref['t5'])
+    print('   => %d coin(s) sur 4 divergent PLUS vite que le nominal ;'
+          ' %d ne diverge(nt) pas du tout.'
+          % (nf, sum(1 for r in rows[2:] if r['t5'] is None)))
 
 print('\n ' + SUB)
-print(' Table G2c — les trois plus grandes raies et le contenu a %.0f Hz'
-      % F_C2P)
+print(' Table G2c — raies dominantes (separees d au moins 120 Hz, largeur du')
+print('  lobe de Hann) et RAIE DU MODE 2 (plus grand pic dans f_2 +/- 15 %),')
+print('  qui est ce que le papier nomme f_c2 / f_c2p')
 print(' ' + SUB)
 print(' lecture       case              raie 1        raie 2        raie 3'
-      '     A(1135 Hz)/A_max')
+      '     mode-2 line   ecart a 1135 Hz')
 print(' ' + SUB)
 for read_tag in ('L-omega', 'L-coherente'):
     for r in g2[read_tag]:
         ln = '  '.join('%6.0f Hz:%5.0f' % (f, a) for f, a in r['lines'])
-        print(' %-13s %-16s %s   %6.2f %%'
-              % (read_tag, r['tag'], ln, 100 * r['A1135'] / r['Amax']))
+        ln += '   ' * (3 - len(r['lines']))
+        print(' %-13s %-16s %s  %6.1f Hz:%5.0f   %+6.1f %%'
+              % (read_tag, r['tag'], ln, r['f2line'], r['a2line'],
+                 100 * (r['f2line'] / F_C2P - 1)))
 print(' ' + SUB)
-best = min((r for tg in g2 for r in g2[tg]
-            for f, a in r['lines']),
-           key=lambda r: min(abs(f - F_C2P) for f, _ in r['lines']))
-bf = min(best['lines'], key=lambda p: abs(p[0] - F_C2P))
-print(' raie la plus proche de %.0f Hz sur tous les cas : %.1f Hz (%.0f um,'
-      % (F_C2P, bf[0], bf[1]))
-print(' soit %.0f %% du pic dominant) dans le cas "%s".'
-      % (100 * bf[1] / best['Amax'], best['tag']))
+best = min((r for tg in g2 for r in g2[tg]),
+           key=lambda r: abs(r['f2line'] - F_C2P))
+print(' raie de mode 2 la plus proche de %.0f Hz sur tous les cas : %.1f Hz'
+      % (F_C2P, best['f2line']))
+print(' (%+.1f %%, %.0f um = %.0f %% du pic dominant), cas "%s".'
+      % (100 * (best['f2line'] / F_C2P - 1), best['a2line'],
+         100 * best['a2line'] / best['Amax'], best['tag']))
+print(' Au nominal la raie de mode 2 est a %.1f Hz (%+.1f %% de 1135 Hz).'
+      % (g2['L-omega'][0]['f2line'],
+         100 * (g2['L-omega'][0]['f2line'] / F_C2P - 1)))
+print(' MAIS aucun cas ne fait de 1135 Hz la raie DOMINANTE : le pic reste sur')
+print(' le mode 1 (534 -> 577 Hz), comme deja etabli au nominal par le script')
+print(' 14 (534 Hz contre les 1135 Hz publies, -53 %).')
+print(' NB coin non divergent : sigma_t > 0 alors que rho_Fl < 1 — la bande de')
+print(' regression [10 um, 1 mm] y capte la MONTEE FORCEE du transitoire et')
+print(' non une croissance de broutement ; c est rho_Fl qui fait foi.')
 
 # ===========================================================================
 # G3 — TRONCATURE A DEUX MODES ET STABILITE
@@ -549,32 +581,51 @@ for rpm in RPM_G4:
 print('\n ' + SUB)
 print(' Table G4 — a_p,lim [mm] et rayon spectral au milieu des deux limites')
 print(' ' + SUB)
-print('  rpm   x/l_P   fdm(eig)  floquet(pow)   |diff|/max  |diff|/tol'
+print('  rpm   x/l_P   fdm(eig)  floquet(pow)  |diff|  |diff|  |diff|'
       '   rho(eig)  rho(pow)  ecart')
+print('                  [mm]        [mm]        [um]    /max    /tol'
+      '                        rho')
 print(' ' + SUB)
 for r in rows4:
-    print(' %5.0f  %5.2f  %9.5f %13.5f %11.2e %10.2f %10.5f %9.5f %6.2f %%'
-          % (r['rpm'], r['fr'], r['a'] * 1e3, r['b'] * 1e3, r['rel'],
-             r['dtol'], r['rho_a'], r['rho_b'], 100 * r['rrel']))
+    print(' %5.0f  %5.2f  %9.5f %12.5f %8.2f %7.4f %7.2f %10.5f %9.5f %6.2f %%'
+          % (r['rpm'], r['fr'], r['a'] * 1e3, r['b'] * 1e3,
+             abs(r['a'] - r['b']) * 1e6, r['rel'], r['dtol'],
+             r['rho_a'], r['rho_b'], 100 * r['rrel']))
 print(' ' + SUB)
 rel_max = max(r['rel'] for r in rows4)
+abs_max = max(abs(r['a'] - r['b']) for r in rows4)
 tol_max = max(r['dtol'] for r in rows4)
 rrel_max = max(r['rrel'] for r in rows4)
 n_ident = sum(1 for r in rows4 if r['dtol'] <= 1.0)
-print(' ecart relatif MAX sur a_p,lim : %.2e (%.2f %%)'
+print(' ecart relatif MAX sur a_p,lim : %.2e (%.2f %%) — atteint la ou'
       % (rel_max, 100 * rel_max))
-print(' ecart MAX en unites de la tolerance de bissection (%.0f um) : %.2f'
-      % (AP_TOL * 1e6, tol_max))
+print('   a_p,lim est le plus PETIT, ou le relatif est trompeur ;')
+print(' ecart ABSOLU MAX : %.2f um, soit %.2f fois la tolerance de'
+      % (abs_max * 1e6, tol_max))
+print('   bissection (%.0f um).' % (AP_TOL * 1e6))
 print(' %d points sur %d identiques a la tolerance de bissection pres'
       % (n_ident, len(rows4)))
 print(' ecart relatif MAX sur rho au meme a_p : %.2e (%.3f %%)'
       % (rrel_max, 100 * rrel_max))
-print(' -> %s'
-      % ('les deux moteurs sont d accord a la tolerance de bissection pres'
-         if tol_max <= 1.0 else
-         'les deux moteurs DIFFERENT au-dela de la tolerance de bissection'
-         ' sur %d point(s) : l iteration de puissance change de verdict pres'
-         ' de la frontiere' % sum(1 for r in rows4 if r['dtol'] > 1.0)))
+n_dis = sum(1 for r in rows4 if r['dtol'] > 1.0)
+n_hi = sum(1 for r in rows4 if r['b'] > r['a'] + AP_TOL)
+print(' -> %s' % ('les deux moteurs sont d accord a la tolerance de bissection'
+                  ' pres sur TOUS les points'
+                  if tol_max <= 1.0 else
+                  'les deux moteurs DIFFERENT au-dela de la tolerance de'
+                  ' bissection sur %d point(s) sur %d' % (n_dis, len(rows4))))
+if n_dis:
+    print('    Direction : sur ces %d points l iteration de puissance rend un'
+          % n_dis)
+    print('    a_p,lim %s (%d/%d), avec rho(pow) < rho(eig) au meme a_p : elle'
+          % ('PLUS GRAND' if n_hi >= n_dis - n_hi else 'PLUS PETIT',
+             n_hi, n_dis))
+    print('    sous-estime legerement rho pres de la frontiere et est donc,')
+    print('    la, NON CONSERVATIVE. L ecart sur rho reste <= %.2f %%, mais'
+          % (100 * rrel_max))
+    print('    rho(a_p) est quasi plat au voisinage de 1 (drho/da_p faible),')
+    print('    de sorte que %.2f %% sur rho deplace la limite de %.1f um.'
+          % (100 * rrel_max, abs_max * 1e6))
 print('\n ECART A DING et al. (2010) [79], la reference citee pour la Fig. 6')
 print(' ("A full-discretization method for prediction of milling stability",')
 print(' Int J Mach Tool Manu 2010;50:502-9) :')
@@ -646,14 +697,19 @@ ax = axes[0, 1]
 mk = {'L-omega': 'o', 'L-coherente': 's'}
 for read_tag in ('L-omega', 'L-coherente'):
     rows = g2[read_tag]
+    col = CB['p2'] if read_tag == 'L-omega' else CB['p5']
     for r in rows:
         f0 = r['lines'][0][0]
+        f2l = r['f2line']
         nominal = (r['tag'] == 'nominal')
-        ax.scatter([f0], [r['sigma']], s=110 if nominal else 72,
+        c = CB['nom'] if nominal else col
+        ax.plot([f0, f2l], [r['sigma']] * 2, '-', color=c, lw=0.8,
+                alpha=0.45, zorder=2)
+        ax.scatter([f0], [r['sigma']], s=120 if nominal else 74,
                    marker='*' if nominal else mk[read_tag],
-                   color=CB['nom'] if nominal else
-                   (CB['p2'] if read_tag == 'L-omega' else CB['p5']),
-                   edgecolor='k', lw=0.6, zorder=3)
+                   color=c, edgecolor='k', lw=0.6, zorder=4)
+        ax.scatter([f2l], [r['sigma']], s=44, marker=mk[read_tag],
+                   facecolor='none', edgecolor=c, lw=1.2, zorder=4)
         if read_tag == 'L-omega' or r['tag'] not in ('nominal',
                                                      'zeta x0.8 only'):
             ax.annotate(r['tag'].replace('dm', 'm').replace('dk', 'k'),
@@ -663,7 +719,7 @@ ref = g2['L-omega'][0]
 ax.axhline(ref['sigma'], color=CB['nom'], ls='--', lw=1.2,
            label='nominal growth rate %.1f 1/s' % ref['sigma'])
 ax.axvline(F_C2P, color=CB['r2'], ls='-.', lw=1.6,
-           label='paper f_c2p = f_c2 = 1135 Hz')
+           label='paper f_c2 = f_c2p = 1135 Hz (same number)')
 ax.axvline(plate.freq_n[0], color='#777777', ls=':', lw=1.2,
            label='nominal f_1 = %.0f Hz, f_2 = %.0f Hz'
            % (plate.freq_n[0], plate.freq_n[1]))
@@ -672,9 +728,9 @@ ax.axhline(0.0, color='k', lw=0.8)
 ax.set_xlabel('dominant spectral line of the second half  [Hz]')
 ax.set_ylabel('envelope growth rate sigma  [1/s]')
 ax.set_title('(b) G2 — Fig. 16 perturbation corners, uncontrolled '
-             'condition S\ncircles: omega-only reading, squares: '
-             'consistent-mass reading', fontsize=10.5)
-ax.set_xlim(400, 1250)
+             'condition S\nfilled: dominant line; open: mode-2 line. '
+             'circles = omega-only, squares = consistent-mass', fontsize=10.5)
+ax.set_xlim(420, 1290)
 ax.grid(alpha=0.3)
 ax.legend(fontsize=7.6, loc='center left')
 
@@ -750,19 +806,22 @@ print('     rend valable partout ; R2 ne sauve que l element (1,1).')
 print(' G2  divergence plus rapide qu au nominal : %d coin(s) sur 4 (lecture'
       % sum(1 for r in g2['L-omega'][2:]
             if r['t5'] is not None and r['t5'] < g2['L-omega'][0]['t5']))
-print('     L-omega), %d sur 4 (lecture L-coherente) ; %d coin(s) ne divergent'
-      % (sum(1 for r in g2['L-coherente'][2:]
-             if r['t5'] is not None and r['t5'] < g2['L-coherente'][0]['t5']),
-         sum(1 for tg in g2 for r in g2[tg][2:] if r['t5'] is None)))
-print('     pas du tout en 0.30 s. Raie dominante : mode 1, jamais 1135 Hz.')
+print('     L-omega), %d sur 4 (lecture L-coherente) ; le coin (dm +10 %%,'
+      % sum(1 for r in g2['L-coherente'][2:]
+            if r['t5'] is not None and r['t5'] < g2['L-coherente'][0]['t5']))
+print('     dk -10 %%) ne diverge pas du tout (rho_Fl = %.4f < 1) dans les deux'
+      % g2['L-omega'][3]['rho'])
+print('     lectures. Raie dominante : mode 1 partout, jamais 1135 Hz.')
 print(' G3  ratio a_p,lim (2 modes / 5 modes) : moyen %.3f, pire %.3f a'
       % (ratio.mean(), ratio[iw]))
 print('     %.0f tr/min et x = %.2f l_P -> la troncature est NON CONSERVATIVE.'
       % (RPM_G3[iw[1]], POS_G3[iw[0]]))
-print(' G4  ecart max entre moteurs %.2f %% sur a_p,lim et %.3f %% sur rho ;'
-      % (100 * rel_max, 100 * rrel_max))
-print('     %d/%d points identiques a la tolerance de bissection pres.'
+print(' G4  ecart max entre moteurs %.2f %% (%.1f um) sur a_p,lim et %.3f %%'
+      % (100 * rel_max, abs_max * 1e6, 100 * rrel_max))
+print('     sur rho au meme a_p ;', end=' ')
+print('%d/%d points identiques a la tolerance de'
       % (n_ident, len(rows4)))
+print('     bissection pres.')
 print('\n figure : %s' % FIGPATH)
 print(' temps total : %.1f s' % (time.time() - t_start))
 print(SEP)

@@ -24,6 +24,8 @@ warnings.filterwarnings('ignore')
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 
+from math import comb
+
 import config as C
 from plate_model import build_plate, plant_vectors
 from pso import Design
@@ -128,6 +130,33 @@ def main():
         print(f"    {k:5s} : J par graine = {np.round(keep, 4)}"
               f"   etendue = {spreads[k]:.4f}"
               f"   (autre convention : {np.round(js[vs != r['variant']], 4)})")
+    # La regle "ecart > dispersion" est grossiere quand une structure a un
+    # paysage difficile : sa dispersion mesure alors la difficulte de la
+    # RECHERCHE, pas l'incertitude sur l'optimum. On rapporte donc aussi,
+    # pour chaque paire, combien de graines de l'une depassent la MEILLEURE
+    # graine de l'autre — un test qui ne suppose rien sur la distribution.
+    print("\n  5bis. combien de graines de X depassent la meilleure de Y")
+    for a in kinds:
+        ja = np.asarray(rows[a]['J_seeds'])[
+            np.asarray(rows[a]['variants']) == rows[a]['variant']]
+        for b in kinds:
+            if a == b:
+                continue
+            jb = np.asarray(rows[b]['J_seeds'])[
+                np.asarray(rows[b]['variants']) == rows[b]['variant']]
+            n = int((ja > jb.max()).sum())
+            # Sous l'hypothese nulle d'echangeabilite (memes tirages, meme
+            # loi), la probabilite que les n meilleures valeurs de
+            # l'echantillon groupe appartiennent TOUTES au groupe a vaut
+            # C(na, n) / C(na + nb, n). C'est un test de rang exact, sans
+            # aucune hypothese de distribution — ce qui est indispensable
+            # ici, les J n'ayant aucune raison d'etre gaussiens.
+            na, nb = len(ja), len(jb)
+            pval = (comb(na, n) / comb(na + nb, n)) if n else 1.0
+            print(f"    {a:10s} : {n}/{na} graines au-dessus du meilleur"
+                  f" {b} ({jb.max():+.4f})"
+                  + (f"   p = {pval:.4f}" if n else ""))
+
     best = max(kinds, key=lambda k: rows[k]['J'])
     spread = max(v for v in spreads.values() if np.isfinite(v))
     print(f"    meilleure structure : {best} (J = {rows[best]['J']:+.4f})")

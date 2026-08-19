@@ -152,7 +152,14 @@ V_MAX = 150.0
 # 0.30 mm, et ses experiences montent a 0.6-0.8 mm sous commande (Fig. 18).
 # Le jeu (0.5, 1, 2) mm herite de la version pre-correction du modele, ou la
 # limite sans commande etait cinq fois plus haute.
-AP_PROBE = (0.12e-3, 0.30e-3, 0.70e-3)
+# Les sondes DEPENDENT DU PROTOCOLE, parce qu'elles doivent encadrer la zone
+# atteignable DU MODELE SUR LEQUEL ON NOTE. Le modele reduit a deux modes du
+# protocole A est bien plus facile a stabiliser que la plaque complete : avec
+# les sondes du protocole B, le depistage FOPID y saturait deja le plafond de
+# l'estimateur (2.1 mm), donc l'objectif ne discriminait plus rien. Les deux
+# structures subissent evidemment les MEMES sondes dans un protocole donne.
+AP_PROBE = ((0.5e-3, 1.5e-3, 3.0e-3) if PROTOCOL == 'A'
+            else (0.12e-3, 0.30e-3, 0.70e-3))
 
 # Taille d'essaim PROPORTIONNELLE A LA DIMENSION. A budget d'evaluations egal,
 # un PSO de 24 particules n'a pas la meme qualite de recherche en 5 et en 7

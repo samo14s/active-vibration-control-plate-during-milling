@@ -76,9 +76,15 @@ def main():
               f" {sorted(set(r['variants'].tolist()))}, {r['n_par']}"
               f" parametres, {r['n_states']} etats"
               f", convention retenue {r['variant']:+.0f}")
-    same = (rows['fopid']['n_eval'] == rows['adrc']['n_eval']
-            and list(rows['fopid']['seeds']) == list(rows['adrc']['seeds']))
-    print(f"    -> budget et graines identiques : {'OUI' if same else 'NON'}")
+    same_seeds = (list(rows['fopid']['seeds'])
+                  == list(rows['adrc']['seeds']))
+    print(f"    -> graines identiques : {'OUI' if same_seeds else 'NON'}")
+    print("    -> nombres d'evaluations DIFFERENTS par construction :"
+          " l'essaim est proportionnel a la dimension (10 + 4 n_dim), parce"
+          " qu'a budget d'evaluations egal la qualite de recherche ne l'est"
+          " pas (ecart a l'optimum ~2x plus grand en 7-D qu'en 5-D sur des"
+          " paysages de reference). C'est la qualite de recherche qu'on"
+          " egalise, et le cout est rapporte tel quel.")
 
     print("\n  3. position de l'optimum dans les bornes"
           " (0 = borne basse, 1 = borne haute)")

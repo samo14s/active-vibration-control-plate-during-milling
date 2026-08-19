@@ -30,6 +30,15 @@ COL = {'boucle ouverte': '#c8963e', 'fopid': '#1a3f8f', 'adrc': '#16a085'}
 LAB = {'boucle ouverte': 'no control', 'fopid': 'FOPID',
        'adrc': 'ADRC-FOPID'}
 KEYS = ('boucle ouverte', 'fopid', 'adrc')
+# les etiquettes des cas de robustesse sont stockees en francais dans le .npz ;
+# les figures, elles, sont en anglais
+ROB_EN = {'modele de synthese': 'design model',
+          'modele complet (verite)': 'full 5-mode model (truth)',
+          'derive +17/+9 %': 'modal drift +17/+9 %',
+          'amortissement x0.8': 'damping x0.8',
+          'raideur/masse +10 %': 'stiffness/mass +10 %',
+          'raideur/masse -10 %': 'stiffness/mass -10 %',
+          'calage theorique': 'theoretical calibration'}
 PROT_TITLE = {'A': 'Protocol A - design on the 2-mode reduced model,'
                    ' evaluation on 5 modes',
               'B': 'Protocol B - design and evaluation on the full 5-mode'
@@ -250,7 +259,8 @@ def fig_robust(cp, prot):
             ax.text(xs[j] + (i - 1) * w, val, f'{val:.2f}', ha='center',
                     va='bottom', fontsize=7, rotation=90)
     ax.set_xticks(xs)
-    ax.set_xticklabels([t.replace(' ', '\n', 1) for t in tags], fontsize=8)
+    ax.set_xticklabels([ROB_EN.get(t, t).replace(' ', '\n', 1) for t in tags],
+                       fontsize=8)
     ax.set_ylabel('Worst-position limit at design speed (mm)')
     ax.grid(alpha=.3, axis='y')
     ax.legend(fontsize=9)
@@ -295,6 +305,9 @@ def fig_summary(cp, ps, prot):
         rows.append((f'Mean |voltage|, {lab} (V)', '-',
                      *[f"{float(cp[f'time{tag}_{k}']['mean_u']):.2f}"
                        for k in ('fopid', 'adrc')]))
+        rows.append((f'Saturated steps, {lab}', '-',
+                     *[f"{int(cp[f'time{tag}_{k}']['n_saturated'])}"
+                       for k in ('fopid', 'adrc')]))
     rows.append(('Modulus margin $M_s$ (constraint 2.0)', '-',
                  *[f"{cp[f'metrics_{k}'][0]:.3f}" for k in ('fopid', 'adrc')]))
     rows.append(('Actuator effort (V/N, constraint 450)', '-',
@@ -302,11 +315,12 @@ def fig_summary(cp, ps, prot):
     rows.append(('Slowest nominal pole (1/s)', '-',
                  *[f"{cp[f'metrics_{k}'][2]:.1f}" for k in ('fopid', 'adrc')]))
 
-    fig, ax = plt.subplots(figsize=(11, 0.42 * len(rows) + 1.6))
+    fig, ax = plt.subplots(figsize=(11.5, 0.32 * len(rows) + 1.4))
     ax.axis('off')
     tab = ax.table(cellText=[list(r) for r in rows],
                    colLabels=['quantity', 'no control', 'FOPID',
                               'ADRC-FOPID'],
+                   colWidths=[0.46, 0.18, 0.18, 0.18],
                    cellLoc='center', colLoc='center', loc='center')
     tab.auto_set_font_size(False)
     tab.set_fontsize(9)
@@ -324,7 +338,9 @@ def fig_summary(cp, ps, prot):
         elif c == 3:
             cell.set_facecolor('#e6f5f1')
     _suptitle(fig, 'Fair comparison summary - identical plant, objective, '
-                   'constraints, optimiser and budget', prot)
+                   'constraints, seeds and evaluation;\nswarm size scales with '
+                   'dimension, so the evaluation count differs and is reported',
+              prot)
     fig.tight_layout()
     fig.savefig(f'{FIG}/fig_summary_{prot}.png', dpi=140)
     plt.close(fig)

@@ -14,6 +14,12 @@
 | أيّهما أفضل بين FOPID و ADRC‑FOPID، بمقارنة عادلة؟ | `COMPARAISON_ADRC_FOPID.md` | `control/` | `figures/comparison/` |
 | تدقيق النموذج بعناصر منتهية (عمل سابق) | `VERIFICATION.md` | `simulation/` + `verification/01..08` | — |
 
+**الخلاصة في سطرين.** النموذج منقول بأمانة (تقطيعان مستقلّان يتّفقان إلى ‎0.002 %‎)، وفارقه
+مع الجدول 4 ثابتٌ مادّي واحد داخل المقالة نفسها. وعلى الصفيحة الحقيقية، **FOPID بخمسة
+بارامترات يتفوّق على ADRC‑FOPID بسبعة** (‎0.250‎ مقابل ‎0.188 mm‎ متوسّط فصوص، وهو الوحيد
+الذي يُثبّت الحالة S للمقالة) — لكنّ هامشه رقيق: إزاحة نمطية ‎−5 %‎ تُسقطه إلى الصفر بينما
+يصمد ADRC‑FOPID.
+
 ## البنية
 
 ```
@@ -21,7 +27,7 @@ paper_model/     نموذج المقالة نفسه : Chebyshev–Ritz (المع
                  + قوى القطع (المعادلات 2–5) + استقرار فلوكيه + تكامل زمني
 control/         FOPID و ADRC-FOPID + PSO + بروتوكول المقارنة العادلة
 simulation/      تنفيذ مستقلّ بعناصر منتهية Kirchhoff-Q4 (يُستعمل كتحقّق متقاطع)
-verification/    سكربتات التحقّق : 01–08 لنموذج العناصر المنتهية، 09–18 لنموذج المقالة
+verification/    سكربتات التحقّق : 01–08 لنموذج العناصر المنتهية، 09–20 لنموذج المقالة
 figures/         مخرجات الأشكال (verification/ و comparison/)
 results/         مخرجات رقمية (‎.npz‎) لإعادة إنتاج الأشكال بلا إعادة حساب
 ```
@@ -35,7 +41,7 @@ pip install numpy scipy matplotlib
 python3 verification/09_ritz_model_identification.py
 python3 verification/10_cutting_force_coefficients.py
 ...
-python3 verification/18_sign_convention.py
+python3 verification/20_reduction_and_uncertainty.py
 
 # 2) المقارنة العادلة : بروتوكولان (A تصميم على نمطين، B تصميم على خمسة)
 cd control

@@ -124,7 +124,8 @@ def fig_positions(cp, prot):
 def fig_time(cp, prot, tag='', fname='fig_time'):
     meta = cp[f'time{tag}_meta']
     ap = float(meta['ap']) * 1e3
-    fig, ax = plt.subplots(3, 2, figsize=(11.5, 9))
+    fig, ax = plt.subplots(len(KEYS), 2,
+                           figsize=(11.5, 3.0 * len(KEYS)))
     for r, k in enumerate(KEYS):
         s, sp = cp[f'time{tag}_{k}'], cp[f'spec{tag}_{k}']
         ax[r, 0].fill_between(s['t'], s['y_mill_min'] * 1e6,

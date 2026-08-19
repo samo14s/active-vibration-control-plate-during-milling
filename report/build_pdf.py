@@ -114,6 +114,19 @@ FIGS_DIAG = [
 ]
 
 
+FIGS_OBS = [
+    ('## 7. الخلاصة', 'fig_fdob_B.png',
+     'المُلاحِظ المودالي مقيسًا ضدّ ما وصفه التشخيص: (a) أين تُنفَق الميزانية، '
+     '(b) تكامل بواسون يساوي صفرًا للبنى الأربع — الرهان واحد والتوزيع يختلف، '
+     '(c) هامش المقياس تحت خطأ المعايرة.'),
+    ('## 7. الخلاصة', 'fig_summary_B.png',
+     'جدول الأرقام الكامل للبنى الأربع.'),
+    ('## 7. الخلاصة', 'fig_positions_B.png',
+     'ملمح الموضع: FOPID مُدبَّب، والمُلاحِظ المودالي مُسطَّح — وهذا يقرّر أيّ '
+     'مقياس يفوز به كلٌّ منهما.'),
+]
+
+
 def b64(path):
     with open(path, 'rb') as f:
         return base64.b64encode(f.read()).decode()
@@ -210,12 +223,15 @@ def main():
     md_v = open(os.path.join(ROOT, 'MODELE_PAPIER.md')).read()
     md_c = open(os.path.join(ROOT, 'COMPARAISON_ADRC_FOPID.md')).read()
     md_d = open(os.path.join(ROOT, 'DIAGNOSTIC_ADRC.md')).read()
+    md_o = open(os.path.join(ROOT, 'OBSERVATEUR_MODAL.md')).read()
 
     md_v, n = insert_figures(md_v, FIGS_VERIF,
                              os.path.join(ROOT, 'figures', 'verification'), 1)
     md_c, n = insert_figures(md_c, FIGS_COMP,
                              os.path.join(ROOT, 'figures', 'comparison'), n)
     md_d, n = insert_figures(md_d, FIGS_DIAG,
+                             os.path.join(ROOT, 'figures', 'comparison'), n)
+    md_o, n = insert_figures(md_o, FIGS_OBS,
                              os.path.join(ROOT, 'figures', 'comparison'), n)
 
     conv = markdown.Markdown(extensions=['tables', 'fenced_code', 'md_in_html'])
@@ -224,6 +240,8 @@ def main():
     html_c = conv.convert(md_c)
     conv.reset()
     html_d = conv.convert(md_d)
+    conv.reset()
+    html_o = conv.convert(md_o)
 
     cover = """
 <div class="cover">
@@ -238,7 +256,7 @@ def main():
     معادلةً بمعادلة، ثمّ يتحقّق منه بثلاث عشرة تجربة عددية مستقلّة، كلٌّ منها بشكلها.
     الجزء الثاني يقارن بنيتَي تحكّم على النموذج نفسه ببروتوكول إنصاف قابل للتدقيق.
     الجزء الثالث يُشخّص رياضيًّا، حلقةً حلقة، لماذا يخسر ADRC‑FOPID هنا — وأيّ عنصر
-    يجب تغييره.
+    يجب تغييره. والجزء الرابع يبني ذلك العنصر ويقيسه بالبروتوكول نفسه.
     كلّ رقم في الصفحات التالية يُعاد إنتاجه بسكربت واحد في المستودع.
   </div>
   <div class="meta">مستودع <code>active-vibration-control-plate-during-milling</code>
@@ -251,6 +269,7 @@ def main():
            f'<div class="part">{html_v}</div>'
            f'<div class="part">{html_c}</div>'
            f'<div class="part">{html_d}</div>'
+           f'<div class="part">{html_o}</div>'
            f'</body></html>')
 
     with open(OUT_HTML, 'w') as f:

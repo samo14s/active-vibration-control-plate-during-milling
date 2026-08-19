@@ -22,6 +22,7 @@ import numpy as np
 import config as C
 from fopid import fopid_ss, rolloff_ss, series
 from adrc import adrc_fopid_ss, b0_nominal
+from fdob import fdob_fopid_ss, target_modes
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +49,10 @@ class Design:
         self.sign_loop = sign_loop
         self.sign_variant = float(sign_variant)
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
-        bd = C.BOUNDS_FOPID if kind == 'fopid' else C.BOUNDS_ADRC
+        if kind == 'fdob':
+            self.tw, self.tz, self.tr = target_modes(plate, C.FDOB_TARGETS)
+        bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
+                  fdob=C.BOUNDS_FDOB)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -63,6 +67,9 @@ class Design:
         if self.kind == 'adrc':
             out['wo'] = 10.0 ** p['log_wo']
             out['b0'] = p['b0_scale'] * self.b0_nom
+        elif self.kind == 'fdob':
+            out['zeta_q'] = 10.0 ** p['log_zq']
+            out['alpha'] = p['alpha']
         return out
 
     def build(self, u):
@@ -71,10 +78,18 @@ class Design:
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
                             C.OUST_WB, C.OUST_WH, C.OUST_N,
                             self.sign_loop * self.sign_variant)
-        else:
+        elif self.kind == 'adrc':
             core = adrc_fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
                                  p['wo'], p['b0'] * self.sign_variant,
                                  C.OUST_WB, C.OUST_WH, C.OUST_N, 1.0)
+        else:
+            # Le signe de l'observateur est porte mode par mode par 1/r_k et
+            # vient donc du modele ; sign_variant ne porte que sur l'epine
+            # dorsale FOPID, exactement comme pour le FOPID seul.
+            core = fdob_fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
+                                 p['zeta_q'], p['alpha'], self.tw, self.tz,
+                                 self.tr, C.FDOB_WC, C.OUST_WB, C.OUST_WH,
+                                 C.OUST_N, self.sign_loop * self.sign_variant)
         return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
 
     def order(self, u):

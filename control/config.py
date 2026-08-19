@@ -195,3 +195,53 @@ BOUNDS_ADRC = dict(
     log_Kp=(3.0, 9.0), log_Ki=(3.0, 11.0), log_Kd=(0.0, 6.0),
     lam=(0.05, 1.0), mu=(0.05, 1.0),
     log_wo=(2.0, 5.5), b0_scale=(0.05, 50.0))
+
+# Boitier de la structure FOPID + observateur modal (control/fdob.py). Les
+# gains gardent les bornes du FOPID : la structure CONTIENT le FOPID a
+# alpha = 0, donc lui donner un boitier de gains different fausserait la
+# comparaison avec son propre cas particulier. S'y ajoutent zeta_q (largeur
+# relative des passe-bande, en log car elle couvre presque deux decades) et
+# alpha (le melange). Soit SEPT parametres, autant que l'ADRC-FOPID.
+#
+# Le coin "zeta_q large x alpha grand" contient des correcteurs INSTABLES
+# (1 - alpha sum Q_k s'approche de zero). On ne retrecit pas les bornes pour
+# l'eviter : ce serait une faveur que ni le FOPID ni l'ADRC-FOPID n'ont
+# recue. Le crible de stabilite nominale les rejette, exactement comme il
+# rejette la moitie morte du boitier ADRC, et la part perdue est mesuree et
+# rapportee par control/audit_fairness.py.
+# La borne BASSE de zeta_q compte, et elle se CALCULE. Le bloc de
+# l'observateur est W = sum_k Q_k P_k^-1, et P_k^-1 CROIT en s^2 : evalue au
+# mode voisin, P_1^-1(j w_2) vaut 470 fois P_1^-1(j w_1). Pour que le terme du
+# mode 1 ne domine pas celui du mode 2 chez lui, il faut |Q_1(j w_2)| < 1/470,
+# ce qui exige zeta_q de l'ordre de zeta_k lui-meme (0.0017-0.0056 ici), voire
+# moitie moins. Mesure directe : a zeta_q = 0.05 la contribution de
+# l'observateur au gain de boucle au mode vaut 22 alpha au lieu de alpha, et
+# 85 alpha a zeta_q = 0.2 — c'est le mode VOISIN qu'on entend, pas le sien.
+# Avec une borne basse a 0.01 l'optimiseur n'aurait pas pu atteindre la region
+# selective. On descend donc a 3.2e-4, un ordre de grandeur sous le mode le
+# plus fin.
+#
+# MAIS la mesure contredit cette prescription, et c'est la mesure qui tranche.
+# Balayage a gains FOPID figes, alpha = 0.8, |S| au mode 1 puis max|S| :
+#     zeta_q = 0.0005 -> 0.0315 / 4.38     zeta_q = 0.010 -> 0.0220 / 48.6
+#     zeta_q = 0.0030 -> 0.0235 / 11.3     zeta_q = 0.050 -> 0.0110 /  2.18
+# Le zeta_q etroit cree un accident de phase tres peu amorti qui fait exploser
+# la marge de module, pendant que le "diaphonie" entre modes voisins, elle,
+# ajoute du gain LA OU ON EN VEUT — aux deux modes de broutement. L'argument
+# algebrique ci-dessus dit ou la normalisation exacte du gain de boucle est
+# atteinte ; il ne dit pas ou le meilleur correcteur se trouve.
+# On garde donc les DEUX regions dans le boitier (3.2e-4 a 0.7) et on laisse
+# l'optimiseur choisir, en rapportant si une borne devient active.
+BOUNDS_FDOB = dict(
+    log_Kp=(2.0, 7.0), log_Ki=(2.0, 9.0), log_Kd=(0.0, 5.0),
+    lam=(0.05, 1.0), mu=(0.05, 1.0),
+    log_zq=(-3.5, -0.155), alpha=(0.0, 0.9))
+
+# Modes vises par l'observateur modal. '12' suit la prescription du maillon 6
+# du diagnostic (concentrer le budget sur les deux modes de broutement, ne
+# rien depenser au-dela du zero instable a 2459 Hz) ; '12345' exerce en plus
+# la conscience du SIGNE, puisque les residus des modes 4-5 sont de signe
+# oppose a ceux des modes 1-3. Les deux sont essayes.
+FDOB_MODES = os.environ.get('FDOB_MODES', '12')
+FDOB_TARGETS = tuple(int(c) - 1 for c in FDOB_MODES)
+FDOB_WC = 2 * np.pi * 8000.0      # = coupure d'anti-repliement, non ajustee

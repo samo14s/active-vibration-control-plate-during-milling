@@ -56,8 +56,19 @@ def main():
           f" x {C.PSO['n_iter']} iterations, graines {C.PSO['seeds']}"
           f" (1 depistage par convention de signe, puis raffinement)\n")
 
+    # Structures a optimiser. Par defaut les deux d'origine ; KINDS permet
+    # d'en ajouter une sans refaire les autres (les resultats deja calcules
+    # sont relus et fusionnes, jamais ecrases).
+    kinds = os.environ.get('KINDS', 'fopid,adrc').split(',')
     store = {}
-    for kind in ('fopid', 'adrc'):
+    path = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
+    if os.path.exists(path):
+        old = np.load(path, allow_pickle=True)
+        for k in old.files:
+            kk, _, field = k.partition('__')
+            store.setdefault(kk, {})[field] = old[k]
+        print(f"  deja en memoire : {sorted(store)}\n")
+    for kind in kinds:
         D0 = Design(kind, plate, sign_loop)
         n_states = D0.order(np.full(D0.n, 0.5))
         print(f"  --- {kind.upper()} : {D0.n} parametres,"
@@ -113,7 +124,9 @@ def main():
         print("    parametres : " + "  ".join(
             f"{k}={v:.4g}" for k, v in par.items()), flush=True)
         ss = D.build(best_x)
-        store[kind] = dict(
+        key = kind if kind != 'fdob' or C.FDOB_MODES == '12' \
+            else 'fdob' + C.FDOB_MODES
+        store[key] = dict(
             x=best_x, J=best_J, n_par=D.n, n_states=n_states,
             sign_variant=best_var,
             names=np.array(D.names), values=np.array([par[k] for k in par]),
@@ -126,11 +139,11 @@ def main():
             J_seeds=np.array([r['J'] for r in runs]),
             n_eval=int(sum(r['n_eval'] for r in runs)))
 
-    print(f"\n  budget : {store['fopid']['n_eval']} evaluations (FOPID),"
-          f" {store['adrc']['n_eval']} (ADRC-FOPID) — l'essaim est"
-          f" proportionnel a la dimension, donc le nombre d'evaluations"
-          f" differe et est rapporte tel quel")
-    np.savez_compressed(os.path.join(OUT, f'pso_{C.PROTOCOL}.npz'),
+    print("\n  budget : "
+          + ", ".join(f"{int(v['n_eval'])} ({k})" for k, v in store.items())
+          + " — l'essaim est proportionnel a la dimension, donc le nombre"
+            " d'evaluations differe et est rapporte tel quel")
+    np.savez_compressed(path,
                         **{f'{k}__{kk}': vv for k, v in store.items()
                            for kk, vv in v.items()})
     print(f"  -> results/pso_{C.PROTOCOL}.npz   ({time.time() - t00:.0f} s)")

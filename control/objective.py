@@ -6,19 +6,15 @@ C'est ici que se joue l'equite de la comparaison : FOPID et ADRC-FOPID sont
 notes par le MEME code, avec les MEMES contraintes. Seule change la fonction
 qui fabrique le (A, B, C, D) a partir du vecteur de decision.
 
-OBJECTIF — maximiser les limites de stabilite du fraisage.
-Le critere exact serait la profondeur axiale limite a_p,lim obtenue par
-bissection sur le rayon spectral de Floquet ; c'est 12 a 15 evaluations par
-position, trop cher dans une boucle PSO. On maximise donc une mesure
-STRICTEMENT MONOTONE de la meme quantite : la marge logarithmique de Floquet
-
-    J = - moyenne_{a_p sondes} [ max_{x} log rho(a_p, x) ]
-
-rho <= 1 signifie stable ; J > 0 signifie donc "stable a toutes les
-profondeurs sondes et a toutes les positions", et J croit avec la marge. Les
-profondeurs sondes (0.5, 1.0, 2.0 mm) encadrent la zone utile, la limite en
-boucle ouverte etant ~0.15 mm. Les a_p,lim VRAIS sont ensuite calcules par
-bissection, a pleine resolution, pour les seuls correcteurs retenus.
+OBJECTIF — maximiser la profondeur axiale limite du fraisage.
+Le critere exact est a_p,lim obtenu par bissection sur le rayon spectral de
+Floquet, soit 12 a 15 evaluations par position : trop cher dans une boucle
+PSO. On l'ESTIME donc a partir de quelques profondeurs sondes, en interpolant
+le premier croisement de max_x log rho(a_p, x) par zero (voir
+_ap_from_margins). J est ainsi en millimetres, dans l'unite de la grandeur
+visee, et son classement coincide avec elle a la resolution des sondes pres.
+Les a_p,lim VRAIS sont ensuite bissectes a pleine resolution (m = 200, cinq
+positions) pour les seuls correcteurs retenus.
 
 CONTRAINTES (penalisees, identiques des deux cotes) :
   1. stabilite nominale sans coupe : max Re(lambda) <= -1 s^-1 ;
@@ -117,7 +113,8 @@ def floquet_margin(plate, ss, rpm, ap, x_pos, m=None, n_period=None):
     maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl=ss, pd=None,
                           n_modes=C.N_MODES_OBJ, m=m, coeff_mode='time',
                           coeff_scale=C.SIGN_SIM, ae=C.AE)
-    rho = spectral_radius(maps, m, maps[0][0].shape[0], npd)
+    rho = spectral_radius(maps, m, maps[0][0].shape[0], npd,
+                          tol=C.N_PERIOD_TOL_PSO, n_min=C.N_PERIOD_MIN_PSO)
     if not np.isfinite(rho):        # divergence violente : borne haute graduee
         return 50.0
     return float(np.clip(np.log(max(rho, 1e-300)), -50.0, 50.0))
@@ -143,12 +140,22 @@ def _evaluate(plate, ss, rpm, probes, positions, m, detail):
     info = dict(feasible=False, reason='', Ms=np.nan, V=np.nan, J=-np.inf)
 
     # -- crible 1 : stabilite nominale
+    # Le seuil etait -1 s^-1. Il n'est PAS neutre vis-a-vis des structures :
+    # l'integrateur fractionnaire du FOPID est realise par Oustaloup, donc
+    # borne en bande a w_b = 2 pi rad/s, et son pole le plus lent est
+    # structurellement loin de zero ; l'etat z3 de l'observateur etendu est un
+    # VRAI integrateur en s = 0, dont l'image en boucle fermee se place
+    # typiquement entre -0.2 et -0.5 s^-1, c'est-a-dire dans la bande rejetee.
+    # Mesure par echantillonnage (2500 tirages par boitier) : le seuil -1 tuait
+    # 58.3 % des ADRC-FOPID nominalement STABLES contre 1.0-1.7 % des FOPID, et
+    # la penalite y etait plate (-1000 exactement), donc sans gradient. On ne
+    # rejette plus que l'instabilite reelle, avec une penalite graduee.
     ev = nominal_poles(plate, ss)
     mre = float(np.max(ev.real))
     info['max_re'] = mre
-    if not np.isfinite(mre) or mre > -1.0:
+    if not np.isfinite(mre) or mre > 0.0:
         info['reason'] = 'boucle nominale instable'
-        info['J'] = -1e3 - max(mre, 0.0)
+        info['J'] = -1e3 - (mre if np.isfinite(mre) else 1e3)
         return (info['J'], info) if detail else info['J']
 
     # -- crible 2/3 : marge de module et effort, sur une grille resolue par
@@ -165,15 +172,51 @@ def _evaluate(plate, ss, rpm, probes, positions, m, detail):
         info['J'] = -100.0 - pen
         return (info['J'], info) if detail else info['J']
 
-    # -- objectif : marge de Floquet moyennee sur les profondeurs sondes
-    margins = []
-    for ap in probes:
-        worst = max(floquet_margin(plate, ss, rpm, ap, fr * plate.lp, m=m)
-                    for fr in pos)
-        margins.append(worst)
-    J = -float(np.mean(margins))
+    # -- objectif : estimation de a_p,lim par interpolation du croisement
+    margins = [max(floquet_margin(plate, ss, rpm, ap, fr * plate.lp, m=m)
+                   for fr in pos) for ap in probes]
+    J = _ap_from_margins(np.asarray(probes, float),
+                         np.asarray(margins, float)) * 1e3      # en mm
     info.update(feasible=True, J=J, margins=margins)
     return (J, info) if detail else J
+
+
+def _ap_from_margins(probes, g):
+    """Estimation de a_p,lim [m] a partir de log rho aux profondeurs sondes.
+
+    L'ancien critere etait J = -moyenne(log rho). Il etait presente comme
+    "strictement monotone" en a_p,lim ; il ne l'est pas. Des qu'une sonde est
+    au-dessus de la limite, son terme mesure a quel point la boucle est
+    INSTABLE a une profondeur que personne n'atteint, et cette quantite n'a
+    aucune relation monotone avec le premier croisement de rho = 1. Mesure sur
+    dix correcteurs faisables : tau de Kendall entre J et le vrai a_p,lim
+    bissecte = 0.809 seulement, avec des inversions y compris ENTRE STRUCTURES
+    (un FOPID note J = -0.132 contre un ADRC a -0.223, alors que les limites
+    vraies etaient 0.219 mm contre 0.231 mm).
+
+    On estime donc directement la profondeur ou max_x log rho croise zero, par
+    interpolation lineaire du PREMIER croisement montant (et extrapolation
+    lineaire si toutes les sondes sont du meme cote). Le critere est alors dans
+    la meme unite que la grandeur visee, et son classement coincide avec elle
+    par construction a la resolution des sondes pres.
+    """
+    ap = np.asarray(probes, float)
+    g = np.asarray(g, float)
+    if g[0] > 0.0:                       # deja instable a la plus petite sonde
+        if g[1] > g[0]:                  # extrapolation vers le bas
+            sl = (g[1] - g[0]) / (ap[1] - ap[0])
+            return max(ap[0] - g[0] / sl, 0.0)
+        return 0.0
+    for k in range(len(ap) - 1):         # premier croisement montant
+        if g[k] <= 0.0 < g[k + 1]:
+            t = -g[k] / (g[k + 1] - g[k])
+            return float(ap[k] + t * (ap[k + 1] - ap[k]))
+    if g[-1] <= 0.0:                     # stable partout : extrapolation haute
+        if g[-1] > g[-2]:
+            sl = (g[-1] - g[-2]) / (ap[-1] - ap[-2])
+            return float(ap[-1] - g[-1] / sl)
+        return float(ap[-1] * 2.0)
+    return float(ap[0])
 
 
 # ---------------------------------------------------------------------------

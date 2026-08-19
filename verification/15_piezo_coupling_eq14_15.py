@@ -408,7 +408,7 @@ a.bar(modes + w / 2, pr, w, label='right (b0=%+.2f)' % pr.sum(),
 a.axhline(0, color='k', lw=0.8)
 a.set_xticks(modes)
 a.set_xlabel('mode')
-a.set_ylabel(r'$D_{obs}(i)\,H_{Pe}(i)$  [1/V]')
+a.set_ylabel(r'$D_{obs}(i)\,H_{Pe}(i)$  [m s$^{-2}$/V]')
 a.set_title('(b) Collocated residues (sign pattern)')
 a.legend(fontsize=8)
 a.grid(alpha=0.3, axis='y')

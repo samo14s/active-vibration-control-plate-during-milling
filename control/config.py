@@ -84,7 +84,7 @@ assert PROTOCOL in ('A', 'B')
 N_MODES = 5                   # modele d'evaluation = verite (lobes, temporel)
 N_MODES_OBJ = 2 if PROTOCOL == 'A' else 5     # modele vu par l'optimiseur
 N_MODES_DESIGN = N_MODES_OBJ  # ce que le correcteur "connait" (b0 nominal)
-M_FLOQUET_PSO = 40            # sous-intervalles pendant l'optimisation
+M_FLOQUET_PSO = 32            # sous-intervalles pendant l'optimisation
 M_FLOQUET = 200               # sous-intervalles pour tous les resultats
 # Nombre de periodes de l'iteration de puissance : None = critere d'arret
 # ADAPTATIF (voir closed_loop.spectral_radius). Un nombre fixe et petit
@@ -92,6 +92,12 @@ M_FLOQUET = 200               # sous-intervalles pour tous les resultats
 # ouverte a 4900 tr/min etait declaree stable jusqu'a 0.080 mm au lieu de
 # 0.045 mm. Ne remettre une valeur entiere que pour un diagnostic.
 N_PERIOD = None
+# Tolerance de l'iteration de puissance PENDANT l'optimisation. Le classement
+# n'a pas besoin de la precision des resultats finals : n_min = 30 et
+# tol = 3e-3 coutent 25 % de moins et laissent rho a mieux que 0.3 %. Les
+# resultats publies (limites, lobes, robustesse) utilisent le reglage strict.
+N_PERIOD_MIN_PSO = 30
+N_PERIOD_TOL_PSO = 3e-3
 # Pas d'integration temporelle. Les correcteurs contiennent des poles
 # d'Oustaloup jusqu'a w_h = 2*pi*100 kHz : a n_sub = 164 (fs = 40 kHz) ces
 # dynamiques se replient et la simulation diverge avec des tensions de 700 kV
@@ -101,7 +107,12 @@ N_PERIOD = None
 # depasser quelques fois w_h/2pi. Une implantation materielle a 40 kHz
 # demanderait de retrecir la bande d'Oustaloup.
 N_SUB = 656
-POSITIONS_DESIGN = (0.0, 0.5, 1.0)          # fractions de l_P (synthese)
+# Positions vues par l'objectif. Trois points (0, 1/2, 1) laissaient un angle
+# mort : l'ADRC-FOPID retenu avant correction avait une explosion locale a
+# x/l_P = 0.125 que la grille de synthese ne voyait pas (log rho = +2.11 la
+# contre +0.57 sur la grille), alors que le FOPID n'en avait pas. La grille de
+# synthese abritait donc une structure et pas l'autre.
+POSITIONS_DESIGN = (0.0, 0.125, 0.25, 0.5, 0.75, 1.0)
 POSITIONS = (0.0, 0.25, 0.5, 0.75, 1.0)     # fractions de l_P (validation)
 
 # ------------------------------------- realisation d'ordre fractionnaire
@@ -141,10 +152,18 @@ V_MAX = 150.0
 # 0.30 mm, et ses experiences montent a 0.6-0.8 mm sous commande (Fig. 18).
 # Le jeu (0.5, 1, 2) mm herite de la version pre-correction du modele, ou la
 # limite sans commande etait cinq fois plus haute.
-AP_PROBE = (0.15e-3, 0.30e-3, 0.60e-3)
+AP_PROBE = (0.12e-3, 0.30e-3, 0.70e-3)
 
-PSO = dict(n_particles=24, n_iter=24, w=0.72, c1=1.5, c2=1.5, v_max=0.25,
-           seeds=(1, 2, 3))
+# Taille d'essaim PROPORTIONNELLE A LA DIMENSION. A budget d'evaluations egal,
+# un PSO de 24 particules n'a pas la meme qualite de recherche en 5 et en 7
+# dimensions : mesure sur trois paysages de reference avec ce meme code, l'ecart
+# a l'optimum est environ 2x plus grand en 7-D (sphere x1.91, rosenbrock x2.06,
+# rastrigin x2.36, 12 graines chacun). "Meme nombre d'evaluations" n'est donc
+# PAS une garantie d'equite ; c'est la qualite de recherche qu'il faut egaliser.
+# n_particles = 10 + 4 n_dim donne 30 particules pour le FOPID et 38 pour
+# l'ADRC-FOPID ; le nombre d'evaluations differe alors et est rapporte tel quel.
+PSO = dict(n_particles=None, n_iter=20, w=0.72, c1=1.5, c2=1.5, v_max=0.25,
+           seeds=(1, 2, 3, 4), n_particles_base=10, n_particles_per_dim=4)
 
 # bornes de recherche (log10 pour les gains)
 # Les bornes couvrent, pour CHAQUE structure, la plage physiquement utile de

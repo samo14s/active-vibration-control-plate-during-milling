@@ -93,7 +93,11 @@ def pso(fitness, n_dim, seed=0, n_particles=None, n_iter=None, w=None,
         c1=None, c2=None, v_max=None, verbose=False, callback=None):
     """Maximise `fitness` sur [0, 1]^n_dim. Retourne (x*, f*, historique)."""
     cfg = dict(C.PSO)
-    n_particles = cfg['n_particles'] if n_particles is None else n_particles
+    if n_particles is None:
+        n_particles = cfg['n_particles']
+    if n_particles is None:                     # taille liee a la dimension
+        n_particles = int(cfg['n_particles_base']
+                          + cfg['n_particles_per_dim'] * n_dim)
     n_iter = cfg['n_iter'] if n_iter is None else n_iter
     w = cfg['w'] if w is None else w
     c1 = cfg['c1'] if c1 is None else c1

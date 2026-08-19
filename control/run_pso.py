@@ -51,8 +51,10 @@ def main():
     print(f"  objectif : marge de Floquet aux profondeurs"
           f" {[f'{a * 1e3:.1f}' for a in C.AP_PROBE]} mm,"
           f" positions {C.POSITIONS_DESIGN}")
-    print(f"  PSO : {C.PSO['n_particles']} particules x {C.PSO['n_iter']}"
-          f" iterations, graines {C.PSO['seeds']}\n")
+    print(f"  PSO : {C.PSO['n_particles_base']}"
+          f" + {C.PSO['n_particles_per_dim']} x dim particules"
+          f" x {C.PSO['n_iter']} iterations, graines {C.PSO['seeds']}"
+          f" (1 depistage par convention de signe, puis raffinement)\n")
 
     store = {}
     for kind in ('fopid', 'adrc'):
@@ -61,24 +63,47 @@ def main():
         print(f"  --- {kind.upper()} : {D0.n} parametres,"
               f" {n_states} etats ---", flush=True)
         best_x, best_J, best_var, runs = None, -np.inf, None, []
-        # les deux conventions de signe de boucle sont explorees pour LES DEUX
-        # structures (le procede change de signe entre basse et haute
-        # frequence : aucune n'est correcte a priori)
+        # ETAPE 1 — depistage : une graine par convention de signe.
+        # "Meme budget" n'est pas "meme budget UTILE" : la moitie +1 du boitier
+        # ADRC-FOPID ne contient AUCUN correcteur nominalement stable (0 sur
+        # 2500 tirages, et 0 sur les 1800 evaluations qu'elle avait consommees
+        # dans la version precedente), pendant que les deux moities du boitier
+        # FOPID sont productives. On depiste donc, puis on REPORTE le budget de
+        # la moitie vide sur la moitie qui vit — identiquement pour les deux
+        # structures : 2 depistages + 3 raffinements chacune.
+        screen = {}
         for variant in (+1.0, -1.0):
             D = Design(kind, plate, sign_loop, sign_variant=variant)
-            for seed in C.PSO['seeds']:
-                t0 = time.time()
-                fit = lambda u: evaluate(plate, D.build(u))
-                x, J, inf = pso(fit, D.n, seed=seed)
-                runs.append(dict(seed=seed, variant=variant, x=x, J=J,
-                                 history=inf['history'],
-                                 n_eval=inf['n_eval']))
-                print(f"    signe {variant:+.0f}, graine {seed} :"
-                      f" J = {J:+.4f}"
-                      f"  ({inf['n_eval']} evaluations,"
-                      f" {time.time() - t0:.0f} s)", flush=True)
-                if J > best_J:
-                    best_J, best_x, best_var = J, x.copy(), variant
+            t0 = time.time()
+            fit = lambda u: evaluate(plate, D.build(u))
+            x, J, inf = pso(fit, D.n, seed=C.PSO['seeds'][0])
+            screen[variant] = J
+            runs.append(dict(seed=C.PSO['seeds'][0], variant=variant, x=x, J=J,
+                             history=inf['history'], n_eval=inf['n_eval']))
+            print(f"    depistage signe {variant:+.0f} : J = {J:+.4f} mm"
+                  f"  ({inf['n_eval']} evaluations,"
+                  f" {time.time() - t0:.0f} s)", flush=True)
+            if J > best_J:
+                best_J, best_x, best_var = J, x.copy(), variant
+        alive = [v for v, J in screen.items() if J > -900.0]
+        if not alive:
+            alive = list(screen)
+        best_var = max(alive, key=lambda v: screen[v])
+        print(f"    conventions productives : {sorted(alive)}"
+              f" -> raffinement sur {best_var:+.0f}", flush=True)
+        # ETAPE 2 — raffinement : les graines restantes sur la convention retenue
+        D = Design(kind, plate, sign_loop, sign_variant=best_var)
+        for seed in C.PSO['seeds'][1:]:
+            t0 = time.time()
+            fit = lambda u: evaluate(plate, D.build(u))
+            x, J, inf = pso(fit, D.n, seed=seed)
+            runs.append(dict(seed=seed, variant=best_var, x=x, J=J,
+                             history=inf['history'], n_eval=inf['n_eval']))
+            print(f"    raffinement graine {seed} : J = {J:+.4f} mm"
+                  f"  ({inf['n_eval']} evaluations,"
+                  f" {time.time() - t0:.0f} s)", flush=True)
+            if J > best_J:
+                best_J, best_x, best_var = J, x.copy(), best_var
         D = Design(kind, plate, sign_loop, sign_variant=best_var)
         print(f"    convention retenue : sign_variant = {best_var:+.0f}")
         par = D.decode(best_x)
@@ -101,8 +126,10 @@ def main():
             J_seeds=np.array([r['J'] for r in runs]),
             n_eval=int(sum(r['n_eval'] for r in runs)))
 
-    print(f"\n  budget identique : "
-          f"{store['fopid']['n_eval']} evaluations chacun")
+    print(f"\n  budget : {store['fopid']['n_eval']} evaluations (FOPID),"
+          f" {store['adrc']['n_eval']} (ADRC-FOPID) — l'essaim est"
+          f" proportionnel a la dimension, donc le nombre d'evaluations"
+          f" differe et est rapporte tel quel")
     np.savez_compressed(os.path.join(OUT, f'pso_{C.PROTOCOL}.npz'),
                         **{f'{k}__{kk}': vv for k, v in store.items()
                            for kk, vv in v.items()})

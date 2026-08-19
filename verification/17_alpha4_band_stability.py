@@ -494,7 +494,7 @@ def main():
                  bbox=dict(fc='w', ec='0.6', alpha=0.9))
         if ip == 0:
             ax2.set_ylabel('effective multiple of $\\bar a_4$')
-            ax2.legend(fontsize=7.6, loc='upper right', framealpha=0.92)
+            ax2.legend(fontsize=7.6, loc='lower right', framealpha=0.92)
     fig.suptitle("Fig. 6 of Du et al. (2024) re-computed — stability lobes"
                  " with theoretical, mean, 0.3x and 2.9x milling force"
                  f" coefficient (2-mode model, down milling,"

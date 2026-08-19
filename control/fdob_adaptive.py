@@ -149,8 +149,18 @@ class AdaptiveFDOB:
         # --- estimation
         lev = 0.0
         for i, e in enumerate(self.est):
+            # Chaque estimateur retire les modes que les AUTRES suivent : sans
+            # cela, un mode ayant derive vers le bas de la sous-bande voisine
+            # y attire les moindres carres et le recentrage se fait a cote.
+            if len(self.est) > 1:
+                e.set_exclude([self.f_hat[j] for j in range(len(self.est))
+                               if j != i])
             f, _ = e(y)
-            self.f_hat[i] = f
+            # On ne recentre QUE sur un verrou etabli ; sinon on revient a la
+            # frequence nominale du mode. Recentrer sur une estimee errante
+            # est pire que ne pas recentrer du tout : cela deplace le
+            # passe-bande la ou il n'y a aucun mode.
+            self.f_hat[i] = f if e.locked else float(self.w0[i] / (2 * np.pi))
             lev = max(lev, e.level_slow)
         self.level = lev
 

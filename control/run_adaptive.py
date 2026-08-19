@@ -121,8 +121,11 @@ def main():
                                               freqs=C.F_NOMINAL), tg)
         print(f'\n  --- plaque {pname} : f = {np.round(plate.freq_n, 1)} Hz')
 
-        def mk_adapt(sim, adapt, supervise):
-            return AdaptiveFDOB(par, w0, z0, r0, C.FDOB_WC, sim.dt, f_tooth,
+        def mk_adapt(sim, adapt, supervise, alpha_max=None):
+            p = dict(par)
+            if alpha_max is not None:
+                p['alpha'] = alpha_max
+            return AdaptiveFDOB(p, w0, z0, r0, C.FDOB_WC, sim.dt, f_tooth,
                                 sl * var, C.OUST_WB, C.OUST_WH, C.OUST_N,
                                 C.ROLLOFF_HZ, C.ROLLOFF_ORDER,
                                 adapt=adapt, supervise=supervise)
@@ -132,7 +135,17 @@ def main():
             ss = tuple(d[f'{k}__{c}'] for c in 'ABCD')
             cfgs.append((k, (lambda ss_: lambda s: LTIController(ss_, s.dt))(ss)))
         cfgs.append(('fdob_fixe', lambda s: mk_adapt(s, False, False)))
-        cfgs.append(('fdob_supervise', lambda s: mk_adapt(s, True, True)))
+        cfgs.append(('fdob_sup', lambda s: mk_adapt(s, True, True)))
+        # alpha_max releve. Ce n'est PAS un parametre de plus : alpha etait
+        # borne a [0, 0.9] des l'optimisation, et l'optimiseur a retenu 0.33
+        # parce qu'a bandes FIXES alpha est permanent et que Ms <= 2 le
+        # plafonne (Ms gele vaut 1.96 a alpha = 0.33 et 5.30 a 0.85). Sous
+        # supervision alpha vaut ZERO tant qu'il n'y a pas de broutement :
+        # la contrainte de marge au repos ne le plafonne donc plus, et on
+        # mesure ce que vaut cette liberte. Le prix — Ms = 5.30 dans le
+        # regime engage — est rapporte tel quel, pas dissimule.
+        cfgs.append(('fdob_sup_alpha_haut',
+                     lambda s: mk_adapt(s, True, True, alpha_max=0.85)))
 
         for name, mk in cfgs:
             t0 = time.time()

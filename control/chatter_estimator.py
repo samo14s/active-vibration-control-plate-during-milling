@@ -150,6 +150,15 @@ class ChatterEstimator:
         self.combs = [Biquad(*notch(f, 0.005, self.fs))
                       for f in self.harmonics]
         self.bp = Biquad(*bandpass(band[0], band[1], self.fs))
+        # Encoches d'EXCLUSION, mises a jour en ligne : elles servent a
+        # retirer les modes que d'AUTRES estimateurs suivent. Sans elles, un
+        # mode voisin qui a derive vers le bas de la sous-bande tire les
+        # moindres carres vers le bord : mesure sur la plaque derivee, le
+        # second estimateur se verrouillait a 763 Hz — le bas de sa bande —
+        # au lieu de 1164 Hz, et le recentrage placait alors le passe-bande
+        # de l'observateur la ou il n'y a aucun mode.
+        self.excl = []
+        self.excl_f = []
         self.beta = float(np.exp(-1.0 / (tau * self.fs)))
         # Une SECONDE mesure de niveau, dix fois plus lente, sert de porte.
         # Mesure sur signal de coupe simule : en passe STABLE le niveau rapide
@@ -170,10 +179,35 @@ class ChatterEstimator:
         self.p_raw = self.p_flt = 0.0
         self.f_hat = f0
         self.level = 0.0
+        # Suivi de la DISPERSION de l'estimee. Un estimateur dont la
+        # sous-bande ne contient aucun broutement suit du bruit : sa sortie
+        # erre au lieu de se poser. Mesure sur la plaque derivee, ou seul le
+        # mode 1 broute : l'estimateur du mode 2 se posait a 760-910 Hz au
+        # lieu de 1164 Hz, avec une dispersion relative dix fois superieure a
+        # celle de l'estimateur du mode 1. On ne declare donc "verrouille"
+        # qu'une estimee dont l'ecart-type relatif est sous `lock_tol`.
+        self.f_bar = f0
+        self.f_var = 0.0
+        self.locked = False
+        self.lock_tol = 0.01
         self._i = 0
 
+    def set_exclude(self, freqs):
+        """Frequences a retirer du signal avant estimation (celles que les
+        autres estimateurs suivent). Les encoches ne sont refabriquees que si
+        la frequence a bouge de plus de 2 %."""
+        fs = [f for f in freqs if 0.5 * self.band[0] < f < 2 * self.band[1]]
+        if len(fs) != len(self.excl_f):
+            self.excl = [Biquad(*notch(f, 0.02, self.fs)) for f in fs]
+            self.excl_f = list(fs)
+            return
+        for i, f in enumerate(fs):
+            if abs(f / max(self.excl_f[i], 1e-9) - 1.0) > 0.02:
+                self.excl[i].set(*notch(f, 0.02, self.fs))
+                self.excl_f[i] = f
+
     def reset(self):
-        for b in self.combs:
+        for b in self.combs + self.excl:
             b.reset()
         self.bp.reset()
         self.y1 = self.y2 = 0.0
@@ -181,7 +215,9 @@ class ChatterEstimator:
         self.p_raw_g = self.p_flt_g = 0.0
         self.level_slow = 0.0
         self._first = True
-        self.f_hat = self.f_nom
+        self.f_hat = self.f_bar = self.f_nom
+        self.f_var = 0.0
+        self.locked = False
         self.P = 1.0e3
         self._i = 0
 
@@ -192,6 +228,8 @@ class ChatterEstimator:
             return self.f_hat, self.level
         v = float(y)
         for b in self.combs:
+            v = b(v)
+        for b in self.excl:
             v = b(v)
         v = self.bp(v)
         # niveaux efficaces lisses
@@ -233,12 +271,19 @@ class ChatterEstimator:
             f = float(np.arccos(c)) * self.fs / (2 * np.pi)
             if self.band[0] <= f <= self.band[1]:
                 self.f_hat = f
+                b = self.beta_g
+                self.f_bar = b * self.f_bar + (1 - b) * f
+                self.f_var = b * self.f_var + (1 - b) * (f - self.f_bar) ** 2
+                self.locked = (np.sqrt(self.f_var)
+                               < self.lock_tol * max(self.f_bar, 1e-9))
         else:
             # Pas de broutement : on RAMENE lentement le verrou vers la valeur
             # nominale au lieu de le laisser ou un transitoire l'avait mene.
             # Sans cela, une passe stable finit avec f_hat sur un bord de bande
             # et le superviseur recentrerait l'observateur LOIN des modes.
             self.f_hat += (1 - self.beta_g) * (self.f_nom - self.f_hat)
+            self.f_bar, self.f_var = self.f_hat, 0.0
+            self.locked = False
             self.P = 1.0e3
         self.y2, self.y1 = self.y1, v
         return self.f_hat, self.level

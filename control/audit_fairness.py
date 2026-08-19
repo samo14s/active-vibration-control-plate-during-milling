@@ -103,14 +103,19 @@ def main():
               f"   max Re(pole) = {i['max_re']:.2f} 1/s"
               f"   {'(faisable)' if i['feasible'] else '(NON FAISABLE)'}")
 
-    print("\n  5. dispersion sur les graines")
+    print("\n  5. dispersion sur les graines (DANS la convention retenue :"
+          " melanger les deux conventions comparerait des choses differentes)")
+    spreads = {}
     for k, r in rows.items():
         js = np.asarray(r['J_seeds'], float)
-        print(f"    {k:5s} : J par graine = {np.round(js, 4)}"
-              f"   etendue = {js.max() - js.min():.4f}")
+        vs = np.asarray(r['variants'], float)
+        keep = js[vs == r['variant']]
+        spreads[k] = float(np.ptp(keep)) if keep.size else np.nan
+        print(f"    {k:5s} : J par graine = {np.round(keep, 4)}"
+              f"   etendue = {spreads[k]:.4f}"
+              f"   (autre convention : {np.round(js[vs != r['variant']], 4)})")
     gap = rows['adrc']['J'] - rows['fopid']['J']
-    spread = max(np.ptp(rows['fopid']['J_seeds']),
-                 np.ptp(rows['adrc']['J_seeds']))
+    spread = max(spreads['fopid'], spreads['adrc'])
     print(f"    ecart entre structures = {gap:+.4f} ; plus grande dispersion"
           f" intra-structure = {spread:.4f}")
     print(f"    -> ecart {'SUPERIEUR' if abs(gap) > spread else 'INFERIEUR'}"

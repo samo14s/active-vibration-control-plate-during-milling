@@ -156,7 +156,15 @@ PSO = dict(n_particles=24, n_iter=24, w=0.72, c1=1.5, c2=1.5, v_max=0.25,
 BOUNDS_FOPID = dict(
     log_Kp=(2.0, 7.0), log_Ki=(2.0, 9.0), log_Kd=(0.0, 5.0),
     lam=(0.05, 1.0), mu=(0.05, 1.0))
+# Le boitier ADRC doit contenir un COIN DE FAIBLE AUTORITE, sinon la moitie de
+# son budget est morte d'avance. Meme a gains FOPID nuls, le terme b3 = w_o^3 de
+# l'observateur survit et donne |K|_inf >= w_o,min^2 / (3 b0,max). Avec les
+# anciennes bornes (w_o >= 1e3, b0_scale <= 5) ce plancher valait 1.97e4 V/m,
+# contre 1.8e2 V/m pour le boitier FOPID : un facteur 108. L'optimiseur le
+# confirmait en poussant b0_scale a 0.977 de son intervalle, c'est-a-dire en
+# cherchant a REDUIRE l'autorite qu'on lui imposait. Avec w_o >= 1e2 et
+# b0_scale <= 50 le plancher tombe a 2.0e1 V/m, donc sous celui du FOPID.
 BOUNDS_ADRC = dict(
     log_Kp=(3.0, 9.0), log_Ki=(3.0, 11.0), log_Kd=(0.0, 6.0),
     lam=(0.05, 1.0), mu=(0.05, 1.0),
-    log_wo=(3.0, 5.5), b0_scale=(0.2, 5.0))
+    log_wo=(2.0, 5.5), b0_scale=(0.2, 50.0))

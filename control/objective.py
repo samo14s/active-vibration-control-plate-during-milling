@@ -35,7 +35,39 @@ from plate_model import plant_vectors, plant_frf
 from fopid import ss_frf
 from closed_loop import period_maps, spectral_radius
 
-_F_CON = np.logspace(0.5, 4.1, 140)          # grille des contraintes [Hz]
+_F_LOG = np.logspace(0.5, 4.1, 140)          # fond logarithmique [Hz]
+
+
+def _con_grid(plate, poles=None, n_modes=None):
+    """Grille de frequences pour Ms et l'effort, RESOLUE sur les resonances.
+
+    Une grille logarithmique a 140 points a un pas de 6.1 %, alors que la
+    largeur a mi-puissance des modes vaut 2*zeta*f = 0.34 % a 1.12 %, et
+    qu'un pole de boucle fermee peut etre bien plus fin encore : le correcteur
+    ADRC-FOPID retenu laissait un pole a 2804 Hz avec zeta = 2.2e-4, soit
+    0.044 %, cent fois plus etroit qu'un pas de grille. Les pics de |S| et de
+    |K S P_f| n'etaient donc tout simplement pas echantillonnes : les deux
+    correcteurs etaient declares conformes (Ms = 1.79 et 1.87) alors que leurs
+    vrais maxima valaient 6.1 et 36.0, et l'effort de l'ADRC 2620 V/N contre
+    une limite de 450. La contrainte ne contraignait rien, et pas de la meme
+    facon pour les deux structures.
+
+    On ajoute donc des grappes serrees autour de chaque mode de la plaque ET
+    autour de chaque pole de boucle fermee peu amorti (dont on dispose deja :
+    le crible de stabilite nominale les calcule).
+    """
+    g = [_F_LOG]
+    n = C.N_MODES_OBJ if n_modes is None else n_modes
+    fs = [float(f) for f in np.asarray(plate.freq_n)[:n]]
+    if poles is not None:
+        for lam in np.atleast_1d(poles):
+            wi, si = abs(lam.imag), abs(lam.real)
+            if wi > 6.0 and si < 0.3 * wi:          # resonant, peu amorti
+                fs.append(wi / (2 * np.pi))
+    for f0 in fs:
+        if 3.0 < f0 < 2.0e4:
+            g.append(f0 * np.linspace(0.97, 1.03, 121))
+    return np.unique(np.concatenate(g))
 
 
 # ---------------------------------------------------------------------------
@@ -61,9 +93,10 @@ def nominal_poles(plate, ss, n_modes=None):
     return np.linalg.eigvals(A)
 
 
-def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None):
+def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None,
+                      poles=None):
     """(Ms, Vmax) : marge de module et effort maximal en V/N."""
-    f = _F_CON if f is None else np.asarray(f, float)
+    f = _con_grid(plate, poles, n_modes) if f is None else np.asarray(f, float)
     pos = C.POSITIONS_DESIGN if positions is None else positions
     n = C.N_MODES_OBJ if n_modes is None else n_modes
     K = ss_frf(ss, 2 * np.pi * f)
@@ -118,8 +151,9 @@ def _evaluate(plate, ss, rpm, probes, positions, m, detail):
         info['J'] = -1e3 - max(mre, 0.0)
         return (info['J'], info) if detail else info['J']
 
-    # -- crible 2/3 : marge de module et effort
-    Ms, V = frequency_metrics(plate, ss, pos)
+    # -- crible 2/3 : marge de module et effort, sur une grille resolue par
+    #    les poles de boucle fermee qu'on vient justement de calculer
+    Ms, V = frequency_metrics(plate, ss, pos, poles=ev)
     info['Ms'], info['V'] = Ms, V
     pen = 0.0
     if Ms > C.MS_MAX:

@@ -186,6 +186,32 @@ print('        max|delta alpha| / max|alpha| = %.2e  (primitives sin2/cos2, '
       'detection des tranches en z)' % (e_sum / ref_scale))
 print('        -> le module implante exactement les Eqs. (3)-(4) ; les deux formes')
 print('           algebriques des primitives coincident a la precision machine.')
+# test de robustesse du reperage des tranches engagees (enroulement helicoidal
+# sur plusieurs tours quand ap est grand : ap tan(eta)/R = 5.6 rad a ap = 40 mm)
+print('        test d enroulement (detection des intervalles engages), 313 instants :')
+print('        %-10s' % 'ap \\ ae' + ''.join('%-11s' % ('%.1f mm' % (a * 1e3))
+                                            for a in (0.1e-3, 1e-3, 5e-3, 9e-3)))
+worst_wrap = 0.0
+for ap_t in (0.3e-3, 2e-3, 10e-3, 40e-3):
+    line = '        %-10s' % ('%.1f mm' % (ap_t * 1e3))
+    for ae_t in (0.1e-3, 1e-3, 5e-3, 9e-3):
+        em = sc_ = 0.0
+        for tt2 in np.linspace(0.0, tau_S, 313):
+            m = MD.alpha34(tt2, Om_S, HP - ap_t, HP, ae_t)
+            rr = alpha34_from_integrals(*helical_analytic(tt2, Om_S, HP - ap_t, HP,
+                                                          ae_t, 'sum'))
+            em = max(em, abs(m[0] - rr[0]), abs(m[1] - rr[1]))
+            sc_ = max(sc_, abs(rr[0]), abs(rr[1]))
+        line += '%-11.1e' % (em / sc_)
+        worst_wrap = max(worst_wrap, em / sc_)
+    print(line)
+print('        -> ecart relatif maximal %.1e sur toute la grille (a ap = 40 mm la dent'
+      % worst_wrap)
+print('           s enroule de %.2f rad = %.2f pas de dent, donc jusqu a %d fenetres'
+      % (40e-3 * TE / R, 40e-3 * TE / R / (2 * np.pi / NT),
+         int(np.ceil(40e-3 * TE / R / (2 * np.pi / NT))) + 1))
+print('           d engagement simultanees sur une meme dent) :')
+print('           la logique de reperage modulo 2 pi du module est correcte.')
 
 # 3.2 quadrature numerique directe
 print('\n    (b) quadrature directe en tranches axiales dz sur [hp-ap, hp],')
@@ -346,44 +372,61 @@ print('     pic/moyenne ~ 1/duty = %.2f, a comparer a %.2f mesure.)'
 # ---------------------------------------------------------------------------
 fig, ax = plt.subplots(2, 2, figsize=(13.0, 9.2))
 
-# (a) alpha3, alpha4
+# (a) alpha3(t) et alpha4(t) sur une periode de dent
 tt = np.linspace(0.0, 1.0, NS, endpoint=False) + 0.5 / NS
-a0 = ax[0, 0]
 eng = r['a4'] != 0.0
-a0.fill_between(tt, -160, 40, where=eng, color='0.85', step='mid',
-                label='tooth engaged (%.2f %% duty)' % (100 * r['duty']))
-a0.plot(tt, r['a3'] / 1e3, lw=1.6, color='tab:blue', label=r'$\alpha_3(t)$')
-a0.plot(tt, r['a4'] / 1e3, lw=1.6, color='tab:red', label=r'$\alpha_4(t)$')
-a0.axhline(r['ab4'] / 1e3, ls='--', lw=1.0, color='tab:red',
-           label=r'$\bar\alpha_4$ = %.2f kN/m' % (r['ab4'] / 1e3))
-a0.axhline(r['ab3'] / 1e3, ls='--', lw=1.0, color='tab:blue',
-           label=r'$\bar\alpha_3$ = %.2f kN/m' % (r['ab3'] / 1e3))
+i0, i1 = int(np.argmax(eng)), int(NS - np.argmax(eng[::-1]))
+w0, w1 = tt[i0] - 0.03, tt[i1 - 1] + 0.03
+
+a0 = ax[0, 0]
+a0.fill_between(tt, -152, 34, where=eng, color='0.85', step='mid',
+                label='tooth engaged (%.2f %% duty cycle)' % (100 * r['duty']))
+a0.plot(tt, r['a3'] / 1e3, lw=1.7, color='tab:blue', label=r'$\alpha_3(t)$')
+a0.plot(tt, r['a4'] / 1e3, lw=1.7, color='tab:red', label=r'$\alpha_4(t)$')
+a0.axhline(r['ab3'] / 1e3, ls='--', lw=1.1, color='tab:blue',
+           label=r'$\bar\alpha_3$ = %+.2f kN/m' % (r['ab3'] / 1e3))
+a0.axhline(r['ab4'] / 1e3, ls='--', lw=1.1, color='tab:red',
+           label=r'$\bar\alpha_4$ = %+.2f kN/m' % (r['ab4'] / 1e3))
 a0.set_xlim(0, 1)
-a0.set_ylim(-160, 40)
+a0.set_ylim(-152, 34)
 a0.set_xlabel('time over one tooth period  $t/\\tau$   ($\\tau$ = %.4f ms)' % (r['tau'] * 1e3))
 a0.set_ylabel('milling force coefficient  [kN/m]')
 a0.set_title('(a) Eq. (3) coefficients, %.0f rpm, $a_p$ = %.2f mm, $a_e$ = %.2f mm (down milling)'
              % (RPM_S, AP * 1e3, AE * 1e3), fontsize=10)
-a0.legend(fontsize=8, loc='lower right')
+a0.legend(fontsize=8, loc='upper left')
 a0.grid(alpha=0.3)
+azi = a0.inset_axes([0.055, 0.07, 0.40, 0.44])
+azi.fill_between(tt, -152, 34, where=eng, color='0.85', step='mid')
+azi.plot(tt, r['a3'] / 1e3, lw=1.5, color='tab:blue')
+azi.plot(tt, r['a4'] / 1e3, lw=1.5, color='tab:red')
+azi.set_xlim(w0, w1)
+azi.set_ylim(-152, 34)
+azi.tick_params(labelsize=6.5)
+azi.set_title('zoom on the engagement pulse', fontsize=7.5)
+azi.grid(alpha=0.3)
 
-# (b) alpha4 / abar4
+# (b) alpha4 / abar4 face a la bande de l'Eq. (23)
 a1 = ax[0, 1]
-a1.plot(tt, rat, lw=1.6, color='tab:red')
-for lev, col, lab in ((0.3, 'tab:green', r'0.3 $\bar\alpha_4$ (Eq. 23 lower)'),
-                      (1.0, 'k', r'1.0 $\bar\alpha_4$ (average)'),
+a1.fill_between([0, 1], 0.3, 2.9, color='tab:purple', alpha=0.10,
+                label=r'Eq. (23) band  [0.3, 2.9] $\bar\alpha_4$')
+a1.plot(tt, rat, lw=1.7, color='tab:red', label=r'$\alpha_4(t)/\bar\alpha_4$')
+for lev, col, lab in ((0.3, 'tab:green', r'0.3 $\bar\alpha_4$  (lower)'),
+                      (1.0, 'k', r'1.0 $\bar\alpha_4$  (average)'),
                       (1.6, 'tab:orange', r'1.6 $\bar\alpha_4$ = $\alpha_{40}$'),
-                      (2.9, 'tab:purple', r'2.9 $\bar\alpha_4$ (Eq. 23 upper)')):
+                      (2.9, 'tab:purple', r'2.9 $\bar\alpha_4$  (upper)')):
     a1.axhline(lev, ls='--', lw=1.2, color=col, label=lab)
-a1.annotate('peak = %.2f $\\bar\\alpha_4$\n(%.1f x the 2.9 bound)' % (rat.max(), rat.max() / 2.9),
-            xy=(tt[np.argmax(rat)], rat.max()),
-            xytext=(0.35, 0.80 * rat.max()), fontsize=9,
+a1.annotate('peak = %.2f $\\bar\\alpha_4$\n= %.2f x the 2.9 bound' % (rat.max(), rat.max() / 2.9),
+            xy=(tt[int(np.argmax(rat))], rat.max()),
+            xytext=(0.22, 0.90 * rat.max()), fontsize=9,
             arrowprops=dict(arrowstyle='->', lw=1.0))
+a1.annotate('$\\alpha_4$ = 0 over %.1f %% of the period' % (100 * (1 - r['duty'])),
+            xy=(0.30, 0.0), xytext=(0.10, 1.9), fontsize=8.5,
+            arrowprops=dict(arrowstyle='->', lw=0.9))
 a1.set_xlim(0, 1)
-a1.set_ylim(-0.5, 1.15 * rat.max())
+a1.set_ylim(-0.6, 1.38 * rat.max())
 a1.set_xlabel('time over one tooth period  $t/\\tau$')
 a1.set_ylabel(r'$\alpha_4(t)\,/\,\bar\alpha_4$')
-a1.set_title('(b) instantaneous coefficient vs the Sec. 3.2 band [0.3, 2.9] $\\bar\\alpha_4$',
+a1.set_title('(b) instantaneous coefficient vs the Sec. 3.2 band  [0.3, 2.9] $\\bar\\alpha_4$',
              fontsize=10)
 a1.legend(fontsize=8, loc='upper right')
 a1.grid(alpha=0.3)
@@ -408,70 +451,76 @@ a2.grid(alpha=0.3, which='both')
 
 # (d) geometrie d'engagement
 a3ax = ax[1, 1]
+RMM = R * 1e3
+XR, YB = 1.62 * RMM, -1.58 * RMM
 
 
-def draw_geometry(axg, zoom=False):
+def draw_geometry(axg, lw_arc=3.0):
     th = np.linspace(0, 2 * np.pi, 721)
-    axg.plot(R * 1e3 * np.sin(th), R * 1e3 * np.cos(th), color='0.55', lw=1.0, ls='--')
-    ph = np.linspace(PHI_ST, PHI_EX, 200)
-    axg.plot(R * 1e3 * np.sin(ph), R * 1e3 * np.cos(ph), color='tab:red', lw=3.0,
-             solid_capstyle='round', zorder=5)
-    xin, yin = R * 1e3 * np.sin(PHI_ST), R * 1e3 * np.cos(PHI_ST)
-    xout, yout = R * 1e3 * np.sin(PHI_EX), R * 1e3 * np.cos(PHI_EX)
-    xr = 1.55 * R * 1e3
-    ybot = -1.35 * R * 1e3
-    # profil de la piece : surface usinee (y=-R) derriere, surface brute (y=-(R-ae)) devant
-    px = np.concatenate(([-xr, 0.0], R * 1e3 * np.sin(ph[::-1]), [xr]))
-    py = np.concatenate(([yout, yout], R * 1e3 * np.cos(ph[::-1]), [yin]))
-    axg.fill_between(px, ybot, py, color='tab:blue', alpha=0.16, zorder=0)
-    axg.plot(px, py, color='tab:blue', lw=1.4, zorder=4)
-    axg.plot([-xr, xr], [yin, yin], color='0.6', lw=0.8, ls=':')
-    axg.plot(xin, yin, 'o', color='tab:red', ms=6, zorder=6)
-    axg.plot(xout, yout, 's', color='tab:red', ms=6, zorder=6)
-    axg.set_xlim(-xr, xr)
-    axg.set_ylim(ybot, 1.25 * R * 1e3)
+    axg.plot(RMM * np.sin(th), RMM * np.cos(th), color='0.55', lw=1.0, ls='--')
+    ph = np.linspace(PHI_ST, PHI_EX, 300)
+    xi, yi = RMM * np.sin(PHI_ST), RMM * np.cos(PHI_ST)
+    xo, yo = RMM * np.sin(PHI_EX), RMM * np.cos(PHI_EX)
+    px = np.concatenate(([-XR, 0.0], RMM * np.sin(ph[::-1]), [XR]))
+    py = np.concatenate(([yo, yo], RMM * np.cos(ph[::-1]), [yi]))
+    axg.fill_between(px, YB, py, color='tab:blue', alpha=0.20, zorder=0)
+    axg.plot(px, py, color='tab:blue', lw=1.5, zorder=4)
+    axg.plot(RMM * np.sin(ph), RMM * np.cos(ph), color='tab:red', lw=lw_arc,
+             solid_capstyle='butt', zorder=5)
+    axg.plot([-XR, XR], [yi, yi], color='0.6', lw=0.8, ls=':', zorder=3)
+    axg.plot(xi, yi, 'o', color='tab:red', ms=6, zorder=6)
+    axg.plot(xo, yo, 's', color='tab:red', ms=6, zorder=6)
+    axg.set_xlim(-XR, XR)
+    axg.set_ylim(YB, 1.32 * RMM)
     axg.set_aspect('equal')
-    return xin, yin, xout, yout, xr, ybot
+    return xi, yi, xo, yo
 
 
-xin, yin, xout, yout, xr, ybot = draw_geometry(a3ax)
+xin, yin, xout, yout = draw_geometry(a3ax)
 a3ax.plot([0], [0], 'k+', ms=9)
-a3ax.annotate('', xy=(0, 0), xytext=(R * 1e3 * np.sin(2.35), R * 1e3 * np.cos(2.35)),
+a3ax.annotate('', xy=(0.0, 0.0), xytext=(RMM * np.sin(0.62), RMM * np.cos(0.62)),
               arrowprops=dict(arrowstyle='<-', lw=1.0, color='0.35'))
-a3ax.text(0.30 * R * 1e3, 0.30 * R * 1e3, '$R_T$ = %.1f mm' % (R * 1e3), fontsize=9, color='0.35')
-a3ax.annotate('', xy=(1.25 * R * 1e3, yout), xytext=(1.25 * R * 1e3, yin),
-              arrowprops=dict(arrowstyle='<->', lw=1.1, color='tab:green'))
-a3ax.text(1.30 * R * 1e3, 0.5 * (yin + yout), '$a_e$ = %.2f mm' % (AE * 1e3),
-          fontsize=9, color='tab:green', va='center')
-a3ax.annotate('feed  $X_T$', xy=(0.95 * xr, 0.85 * R * 1e3),
-              xytext=(0.20 * xr, 0.85 * R * 1e3), fontsize=9,
+a3ax.text(1.30, 2.35, '$R_T$ = %.1f mm' % RMM, fontsize=9, color='0.35')
+arc = np.linspace(0.75, 2.35, 80)
+a3ax.plot(0.42 * RMM * np.sin(arc), 0.42 * RMM * np.cos(arc), color='0.35', lw=1.0)
+a3ax.annotate('', xy=(0.42 * RMM * np.sin(2.35), 0.42 * RMM * np.cos(2.35)),
+              xytext=(0.42 * RMM * np.sin(2.22), 0.42 * RMM * np.cos(2.22)),
+              arrowprops=dict(arrowstyle='->', lw=1.1, color='0.35'))
+a3ax.text(3.05, -1.15, r'$\theta$ increases', fontsize=8, color='0.35')
+a3ax.text(0.30 * RMM, -0.80 * RMM,
+          'radial immersion $a_e$ = %.2f mm\n(= %.1f %% of $R_T$ — see zoom)' % (AE * 1e3, 100 * AE / R),
+          fontsize=8, color='tab:green', ha='center')
+a3ax.annotate('feed  $X_T$', xy=(0.98 * XR, 1.12 * RMM),
+              xytext=(0.28 * XR, 1.12 * RMM), fontsize=9,
               arrowprops=dict(arrowstyle='->', lw=1.3, color='k'))
-arc = np.linspace(0.9, 2.2, 60)
-a3ax.plot(0.55 * R * 1e3 * np.sin(arc), 0.55 * R * 1e3 * np.cos(arc), color='0.35', lw=1.0)
-a3ax.annotate('', xy=(0.55 * R * 1e3 * np.sin(2.2), 0.55 * R * 1e3 * np.cos(2.2)),
-              xytext=(0.55 * R * 1e3 * np.sin(2.1), 0.55 * R * 1e3 * np.cos(2.1)),
-              arrowprops=dict(arrowstyle='->', lw=1.0, color='0.35'))
-a3ax.text(-0.05 * R * 1e3, -0.72 * R * 1e3, r'$\theta$ increasing', fontsize=8, color='0.35',
-          ha='center')
+a3ax.text(-XR + 0.25, YB + 0.20,
+          'workpiece (plate) — machined wall at $R_T$, uncut wall at $R_T-a_e$',
+          fontsize=7.5, color='tab:blue', va='bottom')
 a3ax.set_xlabel('$X_T$  [mm]')
 a3ax.set_ylabel('$Y_T$  [mm]')
 a3ax.set_title('(d) down-milling engagement geometry, $a_e/R_T$ = %.3f' % (AE / R), fontsize=10)
-a3ax.text(-1.5 * R * 1e3, -1.28 * R * 1e3,
-          'workpiece (plate edge)\nmachined wall at $R_T$, uncut wall at $R_T-a_e$',
-          fontsize=8, color='tab:blue')
 
-axins = a3ax.inset_axes([0.56, 0.02, 0.42, 0.42])
-draw_geometry(axins)
-axins.set_xlim(-0.25, 1.35)
-axins.set_ylim(-5.06, -4.86)
+zb = (-0.55, -5.07, 2.10, 0.24)      # (x0, y0, dx, dy) region zoomee
+a3ax.add_patch(plt.Rectangle(zb[:2], zb[2], zb[3], fill=False, ec='0.35', lw=1.0, zorder=7))
+axins = a3ax.inset_axes([0.03, 0.635, 0.45, 0.30])
+draw_geometry(axins, lw_arc=2.4)
+axins.set_xlim(zb[0], zb[0] + zb[2])
+axins.set_ylim(zb[1], zb[1] + zb[3])
 axins.set_aspect('auto')
 axins.set_xticks([])
 axins.set_yticks([])
-axins.set_title('zoom on engagement arc\n'
-                r'$\varphi_{st}$ = %.2f$^\circ$, $\varphi_{ex}$ = %.1f$^\circ$'
-                % (np.rad2deg(PHI_ST), np.rad2deg(PHI_EX)), fontsize=7.5)
-for s in axins.spines.values():
-    s.set_color('0.4')
+axins.annotate('entry  $\\varphi_{st}$ = %.2f$^\\circ$\n($h$ = $f_z\\sin\\varphi$ max)'
+               % np.rad2deg(PHI_ST), xy=(xin, yin), xytext=(0.50, -5.045), fontsize=6.5,
+               arrowprops=dict(arrowstyle='->', lw=0.8))
+axins.annotate('exit  $\\varphi_{ex}$ = 180$^\\circ$\n($h$ = 0)',
+               xy=(xout, yout), xytext=(-0.50, -4.925), fontsize=6.5,
+               arrowprops=dict(arrowstyle='->', lw=0.8))
+axins.annotate('', xy=(1.28, yout), xytext=(1.28, yin),
+               arrowprops=dict(arrowstyle='<->', lw=1.2, color='tab:green'))
+axins.text(1.31, 0.5 * (yin + yout), '$a_e$', fontsize=8, color='tab:green', va='center')
+axins.set_title('zoom (vertical scale exaggerated)', fontsize=7.5)
+for sp_ in axins.spines.values():
+    sp_.set_color('0.35')
 
 fig.tight_layout()
 fig.savefig(FIGPATH, dpi=140)

@@ -84,9 +84,14 @@ assert PROTOCOL in ('A', 'B')
 N_MODES = 5                   # modele d'evaluation = verite (lobes, temporel)
 N_MODES_OBJ = 2 if PROTOCOL == 'A' else 5     # modele vu par l'optimiseur
 N_MODES_DESIGN = N_MODES_OBJ  # ce que le correcteur "connait" (b0 nominal)
-M_FLOQUET_PSO = 60            # sous-intervalles pendant l'optimisation
+M_FLOQUET_PSO = 40            # sous-intervalles pendant l'optimisation
 M_FLOQUET = 200               # sous-intervalles pour tous les resultats
-N_PERIOD = 20
+# Nombre de periodes de l'iteration de puissance : None = critere d'arret
+# ADAPTATIF (voir closed_loop.spectral_radius). Un nombre fixe et petit
+# sous-estime rho, donc SURESTIME la stabilite : a 20 periodes la boucle
+# ouverte a 4900 tr/min etait declaree stable jusqu'a 0.080 mm au lieu de
+# 0.045 mm. Ne remettre une valeur entiere que pour un diagnostic.
+N_PERIOD = None
 # Pas d'integration temporelle. Les correcteurs contiennent des poles
 # d'Oustaloup jusqu'a w_h = 2*pi*100 kHz : a n_sub = 164 (fs = 40 kHz) ces
 # dynamiques se replient et la simulation diverge avec des tensions de 700 kV
@@ -128,7 +133,15 @@ V_PER_N = 450.0               # effort : max |K S P_f| <= 450 V par newton
 # non sature dispose d'une autorite illimitee et toute comparaison perd son
 # sens : la borne fait donc partie du protocole d'equite.
 V_MAX = 150.0
-AP_PROBE = (0.5e-3, 1.0e-3, 2.0e-3)         # profondeurs sondes de l'objectif
+# Profondeurs sondes de l'objectif. Elles doivent ENCADRER la zone utile,
+# sinon le critere ne mesure plus la limite atteignable mais "qui est le moins
+# instable" a une profondeur que personne n'atteint. La zone utile est fixee
+# par le papier et par la plaque, pas par les correcteurs : la limite sans
+# commande vaut 0.033 mm a 4900 tr/min, la condition S du papier est a
+# 0.30 mm, et ses experiences montent a 0.6-0.8 mm sous commande (Fig. 18).
+# Le jeu (0.5, 1, 2) mm herite de la version pre-correction du modele, ou la
+# limite sans commande etait cinq fois plus haute.
+AP_PROBE = (0.15e-3, 0.30e-3, 0.60e-3)
 
 PSO = dict(n_particles=24, n_iter=24, w=0.72, c1=1.5, c2=1.5, v_max=0.25,
            seeds=(1, 2, 3))

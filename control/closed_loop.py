@@ -86,13 +86,32 @@ def period_maps(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
     return maps, tau
 
 
-def spectral_radius(maps, m, nx, n_period=40, seed=0):
-    """Rayon spectral de la monodromie (iteration de puissance)."""
+def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
+                    n_min=40, n_max=250):
+    """Rayon spectral de la monodromie (iteration de puissance ADAPTATIVE).
+
+    L'iteration de puissance converge a la vitesse |lambda_2/lambda_1| : un
+    nombre de periodes FIXE et trop petit sous-estime systematiquement rho,
+    donc SURESTIME la stabilite. Mesure directe sur ce modele (boucle ouverte,
+    4900 tr/min, a_p = 0.05 mm, m = 200) :
+
+        n_period      10       20       50      100      200
+        rho        0.8270   0.9207   1.0126   1.0173   1.0164
+
+    a 20 periodes le point est declare STABLE (rho < 1) alors qu'il ne l'est
+    pas. On itere donc jusqu'a stabilisation de l'estimateur : au moins n_min
+    periodes, puis arret quand la moyenne glissante des facteurs de croissance
+    ne bouge plus de plus de `tol` en relatif, plafond n_max. `n_period` reste
+    accepte pour forcer un nombre fixe (diagnostic).
+    """
     rng = np.random.default_rng(seed)
     Z = rng.standard_normal((m + 1, nx))
     Z /= np.linalg.norm(Z)
     g = []
-    for _ in range(n_period):
+    n_fixed = None if n_period is None else int(n_period)
+    limit_it = n_fixed if n_fixed is not None else n_max
+    prev = None
+    for it in range(limit_it):
         for P0, C_lo, C_hi in maps:
             new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
             Z = np.roll(Z, 1, axis=0)
@@ -102,11 +121,15 @@ def spectral_radius(maps, m, nx, n_period=40, seed=0):
             return np.inf
         if nz == 0.0:
             return 0.0
-        g.append(nz)
+        g.append(np.log(nz))
         Z /= nz
-    return float(np.exp(np.mean(np.log(np.array(g[n_period // 2:])))))
-
-
+        if n_fixed is None and it + 1 >= n_min and (it + 1) % 10 == 0:
+            cur = float(np.mean(g[len(g) // 2:]))
+            if prev is not None and abs(cur - prev) <= tol * max(abs(cur),
+                                                                1e-6):
+                break
+            prev = cur
+    return float(np.exp(np.mean(np.array(g[len(g) // 2:]))))
 def dominant_eig(maps, m, nx, q=6, n_period=60, seed=0):
     """Valeurs propres dominantes de la monodromie (iteration de sous-espace
     + projection de Rayleigh-Ritz orthonormee ; la phase donne la frequence
@@ -137,7 +160,7 @@ def dominant_eig(maps, m, nx, q=6, n_period=60, seed=0):
 
 
 def is_stable(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
-              coeff_mode='time', coeff_scale=1.0, n_period=40, ae=None):
+              coeff_mode='time', coeff_scale=1.0, n_period=None, ae=None):
     maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl, pd, n_modes, m,
                           coeff_mode, coeff_scale, ae)
     rho = spectral_radius(maps, m, maps[0][0].shape[0], n_period)

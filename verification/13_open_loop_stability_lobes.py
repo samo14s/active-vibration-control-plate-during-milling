@@ -74,10 +74,12 @@ SIGN = float(C.SIGN_SIM)                     # signe de reference du depot
 M_FLOQ = 100                                 # sous-intervalles par periode
 N_PERIOD = 30                                # periodes d'iteration de puissance
 AP_LO, AP_HI, N_BIS = 5.0e-6, 2.5e-3, 8      # bissection LOG sur a_p
-SPEEDS = np.arange(3000, 7001, 200)          # pas 200 tr/min -> 21 vitesses
+RPM_S, AP_S = 4900, 0.30e-3                  # condition S du papier
+# pas 200 tr/min + la vitesse exacte de la condition S (4900 n'est pas sur la
+# grille reguliere ; on l'ajoute pour lire a_p,lim(4900) sans interpolation)
+SPEEDS = np.array(sorted(set(list(range(3000, 7001, 200)) + [RPM_S])))
 POSITIONS = tuple(np.round(np.arange(0.0, 1.001, 0.125), 3))    # 9 positions
 POS_PAPER = (0.0, 0.25, 0.5, 0.75, 1.0)      # les 5 demandees explicitement
-RPM_S, AP_S = 4900, 0.30e-3                  # condition S du papier
 CALIBS = (('measured', F_MEASURED), ('theoretical', F_THEORETICAL))
 PAPER_PEAKS = (3600, 5400)
 M_STUDY = (40, 60, 100, 200, 300)            # etude de convergence a 4900
@@ -201,8 +203,8 @@ def main():
           f" [{AP_LO * 1e3:.3f}, {AP_HI * 1e3:.3f}] mm, {N_BIS} niveaux"
           f" -> resolution relative"
           f" {((AP_HI / AP_LO) ** (2.0 ** -N_BIS) - 1) * 100:.1f} %")
-    print(f"  Grille   : {SPEEDS[0]}-{SPEEDS[-1]} tr/min, PAS"
-          f" {SPEEDS[1] - SPEEDS[0]} tr/min ({len(SPEEDS)} vitesses)"
+    print(f"  Grille   : {SPEEDS[0]}-{SPEEDS[-1]} tr/min, PAS 200 tr/min"
+          f" + la vitesse {RPM_S} de la condition S ({len(SPEEDS)} vitesses)"
           f" x {len(POSITIONS)} positions x/l_P"
           f" ({POSITIONS[0]:.3f}..{POSITIONS[-1]:.3f} pas 0.125)"
           " x 2 calages x 2 signes")
@@ -307,7 +309,7 @@ def main():
     # --- (3) condition S ----------------------------------------------------
     print("\n  A3  papier : condition S (4900 tr/min, a_p = 0.300 mm) DIVERGE"
           " sans commande (Fig. 14a)")
-    j = int(np.argmin(np.abs(SPEEDS - RPM_S)))
+    j = int(np.flatnonzero(SPEEDS == RPM_S)[0])       # 4900 est sur la grille
     for cal, _ in CALIBS:
         ls = low[(cal, SIGN)][j]
         f = AP_S / ls if ls > 0 else np.inf

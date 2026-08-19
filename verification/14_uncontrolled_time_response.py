@@ -97,7 +97,7 @@ def hann_spectrum(t, y, fmax=3000.0, pad=8):
     return f[m], np.abs(Y[m]) * 1e6
 
 
-def envelope_growth(t, y, tau, lo=2e-6, hi=2e-3):
+def envelope_growth(t, y, tau, lo=10e-6, hi=1e-3):
     """Taux de croissance sigma [1/s] : maximum de |y| sur chaque periode de
     dent, regression lineaire de ln(enveloppe) dans la bande [lo, hi] (on
     ecarte le transitoire de demarrage et la fin ecretee par stop_um)."""
@@ -152,6 +152,29 @@ def floquet_modes(plate, rpm, ap, x_pos, m=120, n_modes=N_MODES, k=3):
     return out, tau
 
 
+def exact_rho(plate, ap, x_pos, rpm=RPM, m=40, n_modes=N_MODES):
+    """Rayon spectral EXACT (monodromie assemblee + eig complet). Sert de
+    reference : lti_floquet.spectral_radius est une iteration de puissance et
+    lti_floquet.is_stable la fige a n_period = 50, ce qui SOUS-ESTIME rho."""
+    tau = 60.0 / (N_TEETH * rpm)
+    D = plate.D_row(x_pos, plate.hp)[:n_modes]
+    _, a4 = alpha4_series(rpm, ap, plate.hp, m, midpoint=True)
+    Phi = sf.floquet_matrix(plate.omega_n[:n_modes], plate.zeta_modes[:n_modes],
+                            np.outer(D, D), SIGN * a4, tau, n=n_modes)
+    return float(np.max(np.abs(np.linalg.eigvals(Phi))))
+
+
+def exact_limit(plate, x_pos, L0, n_bisect=6):
+    """Raffinement EXACT de la limite de passe autour de l'estimation L0."""
+    lo, hi = 0.70 * L0, 1.10 * L0
+    if exact_rho(plate, lo, x_pos) > 1.0:
+        lo, hi = 0.40 * L0, lo
+    for _ in range(n_bisect):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if exact_rho(plate, mid, x_pos) <= 1.0 else (lo, mid)
+    return 0.5 * (lo + hi)
+
+
 def averaged_single_mode_limit(plate, x_pos, rpm, n_modes=N_MODES):
     """Limite de passe par la theorie MOYENNEE d'ordre 0, mode par mode :
         ap_lim = min_f  -1 / (2 (abar4/ap) Re G_i(f)).
@@ -165,17 +188,19 @@ def averaged_single_mode_limit(plate, x_pos, rpm, n_modes=N_MODES):
         ff = np.linspace(0.5 * plate.freq_n[i], 1.5 * plate.freq_n[i], 200001)
         w = 2 * np.pi * ff
         G = D[i]**2 / ((om[i]**2 - w**2) + 2j * z[i] * om[i] * w)
-        ap = -1.0 / (2 * kdir * np.real(G))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ap = -1.0 / (2 * kdir * np.real(G))
+        ap = np.where(np.isfinite(ap), ap, np.inf)
         m = ap > 0
         j = int(np.argmin(ap[m]))
         res.append((float(ap[m][j]), float(ff[m][j])))
     return res
 
 
-def run_case(plate, ap, T, n_sub):
+def run_case(plate, ap, T, n_sub, moving=True):
     sim = MillingSimulation(plate, RPM, ap, ae=AE, fz=FZ, sign=SIGN,
                             n_modes=N_MODES, n_sub=n_sub)
-    return sim.run(None, T=T, moving=True)
+    return sim.run(None, T=T, moving=moving, x0=0.0)
 
 
 # ------------------------------------------------- controle du protocole FFT
@@ -233,18 +258,30 @@ for name, _ in CALIBS:
     lims[name] = row
     print('    %-12s %8.4f mm %8.4f mm %8.4f mm  |  ~0.05 mm'
           % (name, row[0] * 1e3, row[1] * 1e3, row[2] * 1e3))
+print('    NB : lti_floquet.is_stable fige l\'iteration de puissance a'
+      ' n_period = 50 ;')
+print('    raffinement par la monodromie EXACTE (eig complet, m = 40) en x = 0 :')
+lims_ex = {}
+for name, _ in CALIBS:
+    L0 = lims[name][0]
+    Lx = exact_limit(plates[name], 0.0, L0)
+    lims_ex[name] = Lx
+    print('      %-12s %.4f mm (puissance) -> %.4f mm (exact), soit %+.1f %% ;'
+          ' rho_exact(L0) = %.4f'
+          % (name, L0 * 1e3, Lx * 1e3, 100 * (Lx / L0 - 1),
+             exact_rho(plates[name], L0, 0.0)))
+print('    => les limites du tableau sont optimistes de ~4 %, sans consequence')
+print('       sur les conclusions (a_p = 0.30 mm reste 7 a 8 fois la limite).')
 print('    => a_p = %.2f mm de la condition S est %.1f a %.1f fois la limite :'
       % (AP_S * 1e3, AP_S / max(lims["measured"]), AP_S / min(lims["measured"])))
 print('       la divergence annoncee par la Fig. 14(a) est bien reproduite.')
 print('    NOTE : le cas "stable" de l\'enonce (a_p = 0.05 mm) est en fait'
       ' AU-DESSUS')
 for name, _ in CALIBS:
-    _, r05 = lf.is_stable(plates[name], RPM, 0.05e-3, 0.0, None,
-                          n_modes=N_MODES, m=60)
-    _, r02 = lf.is_stable(plates[name], RPM, AP_STABLE, 0.0, None,
-                          n_modes=N_MODES, m=60)
-    print('       de la limite de ce modele : rho(0.05 mm) = %.4f, '
-          'rho(%.3f mm) = %.4f  [%s]'
+    r05 = exact_rho(plates[name], 0.05e-3, 0.0)
+    r02 = exact_rho(plates[name], AP_STABLE, 0.0)
+    print('       de la limite de ce modele : rho_exact(0.05 mm) = %.4f, '
+          'rho_exact(%.3f mm) = %.4f  [%s]'
           % (r05, AP_STABLE * 1e3, r02, name))
 print('       => le cas stable est pris a a_p = %.3f mm (rho < 1 partout).'
       % (AP_STABLE * 1e3))
@@ -260,7 +297,7 @@ for name, _ in CALIBS:
         print('    %-9s x=%3.0f  %s' % (name[:9], x * 1e3,
               '  '.join('%6.4f@%4.0f' % (a * 1e3, f) for a, f in r)))
 print('    -> a x = 0 (coin, la ou l\'outil se trouve pendant les 0.2 s de la')
-print('       Fig. 14a) les modes 1 et 2 sont a EGALITE a ~12 %% pres ; ailleurs')
+print('       Fig. 14a) les modes 1 et 2 sont a EGALITE a ~12 % pres ; ailleurs')
 print('       le mode 2 a un noeud et disparait. Le papier tranche pour le')
 print('       mode 2, ce modele tranche pour le mode 1.')
 
@@ -274,10 +311,12 @@ for name, _ in CALIBS:
         r = run_case(plates[name], AP_S, T_WINDOW, ns)
         t, y = r['t'], r['y_mill']
         sig, r2, tb, eb = envelope_growth(t, y, TAU)
+        sig_w, _, _, _ = envelope_growth(t, y, TAU, lo=2e-6, hi=2e-3)
         h = slice(t.size // 2, t.size)
         f, A = hann_spectrum(t[h], y[h], fmax=3000.0)
         fo, Ao = hann_spectrum(t[h], r['y_obs'][h], fmax=3000.0)
-        res[(name, ns)] = dict(r=r, sigma=sig, r2=r2, tb=tb, eb=eb,
+        res[(name, ns)] = dict(r=r, sigma=sig, sigma_wide=sig_w, r2=r2,
+                               tb=tb, eb=eb,
                                t50=first_crossing(t, y, 50e-6),
                                t5mm=first_crossing(t, y, 5e-3),
                                fpk=float(f[np.argmax(A)]),
@@ -315,7 +354,7 @@ for name, _ in CALIBS:
               % (name if key == 't5mm' else '', lab + ' [' + unit + ']',
                  va, vb, 100 * (vb / va - 1)))
 print('  ' + '-' * 75)
-print('  => pas de temps non critique : ecarts < 0.1 %% sur les trois'
+print('  => pas de temps non critique : ecarts < 0.1 % sur les trois'
       ' grandeurs.')
 
 # --------------------------------------------------------- Floquet vs temps
@@ -341,8 +380,41 @@ for name, _ in CALIBS:
           ' sigma = %6.1f 1/s, f = %6.1f Hz  (%+.1f %% / %+.2f %%)'
           % (name, d['sigma'], d['fpk'], s, fc,
              100 * (d['sigma'] / s - 1), 100 * (d['fpk'] / fc - 1)))
-print('  NOTE : sigma temporel legerement plus faible car l\'outil s\'eloigne'
-      ' du coin (rho decroit avec x).')
+print('  D\'ou vient l\'ecart de ~3 % sur sigma ? DEUX controles :')
+for name, _ in CALIBS:
+    rf = run_case(plates[name], AP_S, T_WINDOW, N_SUB, moving=False)
+    sf_, _, _, _ = envelope_growth(rf['t'], rf['y_mill'], TAU)
+    d = res[(name, N_SUB)]
+    print('    %-12s outil FIGE en x=0 : sigma = %6.2f 1/s contre %6.2f 1/s'
+          ' mobile (%+.2f %%)'
+          % (name, sf_, d['sigma'], 100 * (sf_ / d['sigma'] - 1)))
+    print('                 bande de regression large [2 um, 2 mm] :'
+          ' sigma = %6.2f 1/s (%+.1f %% / etroite)'
+          % (d['sigma_wide'], 100 * (d['sigma_wide'] / d['sigma'] - 1)))
+print('    => le deplacement de l\'outil ne pese que ~0.5 % ; le reste est le')
+print('       BIAIS PROPRE de l\'estimateur d\'enveloppe (le signal porte un')
+print('       peigne de raies, son enveloppe est modulee). sigma temporel est')
+print('       donc connu a environ +/-3 %, et compatible avec Floquet.')
+
+print('\n  Repliement : un multiplicateur ne fixe la frequence que MODULO'
+      ' 1/tau = %.0f Hz.' % FT)
+print('  Candidat de chaque multiplicateur le plus proche des 1135 Hz du'
+      ' papier :')
+for name, _ in CALIBS:
+    ev, tau = fl[name], TAU
+    for j, (rho, fc, sg) in enumerate(ev):
+        fpv = fc % FT
+        fpv = min(fpv, FT - fpv)
+        cand = [abs(sgn * fpv + k / tau) for sgn in (1, -1) for k in range(14)]
+        c = min(cand, key=lambda z: abs(z - F_C2_PAPER))
+        print('    %-12s rang %d (rho=%.4f) : candidat le plus proche ='
+              ' %7.1f Hz  (%+.1f %% de 1135)'
+              % (name if j == 0 else '', j + 1, rho, c,
+                 100 * (c / F_C2_PAPER - 1)))
+print('  => pour le calage theorique le multiplicateur de rang 2 admet le')
+print('     repliement 1125.8 Hz, a 0.8 % des 1135 Hz publies ; MAIS il est')
+print('     sous-dominant (rho = 1.068 contre 1.369) et la FFT temporelle,')
+print('     elle, ne souffre d\'aucun repliement : elle ne montre rien la.')
 
 # ---------------------------------------------- comparaison avec le papier
 print('\n  Table 4 — RAIE DOMINANTE contre le papier')
@@ -385,8 +457,10 @@ for name, _ in CALIBS:
 print('  ' + '-' * 75)
 
 # ------------------------------------------------------------- cas stable
-print('\n--- CAS STABLE, a_p = %.3f mm (%.0f %% de la limite), T = %.2f s ---'
-      % (AP_STABLE * 1e3, 100 * AP_STABLE / lims['measured'][0], T_STABLE))
+print('\n--- CAS STABLE, a_p = %.3f mm (%.0f %% de la limite EXACTE'
+      ' %.4f mm), T = %.2f s ---'
+      % (AP_STABLE * 1e3, 100 * AP_STABLE / lims_ex['measured'],
+         lims_ex['measured'] * 1e3, T_STABLE))
 stab = {}
 for name, _ in CALIBS:
     r = run_case(plates[name], AP_STABLE, T_STABLE, N_SUB)
@@ -425,35 +499,36 @@ for name, _ in CALIBS:
     d = res[(name, N_SUB)]
     r = d['r']
     a.plot(r['t'], 1e3 * r['y_mill'], lw=0.6, color=COL[name],
-           label='%s calib. (f1=%.0f, f2=%.0f Hz)'
-                 % (name, plates[name].freq_n[0], plates[name].freq_n[1]))
-    a.plot([d['t5mm']], [5.0], 'v', color=COL[name], ms=8)
-    a.annotate('5 mm at %.3f s' % d['t5mm'], (d['t5mm'], 5.0),
-               textcoords='offset points', xytext=(-6, 8), ha='right',
-               fontsize=8, color=COL[name])
+           label='%s calib. (f1=%.0f, f2=%.0f Hz) — 50 um at %.3f s,'
+                 ' 5 mm at %.3f s'
+                 % (name, plates[name].freq_n[0], plates[name].freq_n[1],
+                    d['t50'], d['t5mm']))
+    a.plot([d['t5mm']], [5.0], 'v', color=COL[name], ms=8, clip_on=False)
 a.axvspan(0, T_WINDOW, color='0.92', zorder=0)
 a.set_xlim(0, T_WINDOW)
+a.set_ylim(-6.2, 6.2)
 a.set_xlabel('time [s]')
 a.set_ylabel('displacement at cutting point [mm]')
 a.set_title('(a) uncontrolled response, condition S\n'
             '4900 rpm, $a_e$=0.1 mm, $a_p$=0.30 mm, $f_z$=0.02 mm/tooth'
             '  (paper Fig. 14a window = 0.2 s)', fontsize=9)
-a.legend(fontsize=7, loc='upper left')
+a.legend(fontsize=6.5, loc='upper left', framealpha=0.9)
 a.grid(alpha=0.3)
-ins = a.inset_axes([0.55, 0.13, 0.42, 0.40])
+ins = a.inset_axes([0.58, 0.14, 0.39, 0.36])
 for name, _ in CALIBS:
     d = res[(name, N_SUB)]
     m = d['eb'] > 1e-9
     ins.semilogy(d['tb'][m], 1e6 * d['eb'][m], '.', ms=3, color=COL[name])
     tt = np.linspace(0, d['t5mm'], 50)
+    mfit = (d['eb'] > 10e-6) & (d['eb'] < 1e-3)      # meme bande que le tableau
     ins.semilogy(tt, 1e6 * np.exp(np.polyval(
-        np.polyfit(d['tb'][(d['eb'] > 2e-6) & (d['eb'] < 2e-3)],
-                   np.log(d['eb'][(d['eb'] > 2e-6) & (d['eb'] < 2e-3)]), 1),
-        tt)), '-', lw=1.0, color=COL[name],
+        np.polyfit(d['tb'][mfit], np.log(d['eb'][mfit]), 1), tt)),
+        '-', lw=1.0, color=COL[name],
         label=r'$\sigma$=%.0f s$^{-1}$' % d['sigma'])
 ins.axhline(50, color='0.4', ls=':', lw=0.8)
 ins.set_xlabel('t [s]', fontsize=7)
-ins.set_ylabel('envelope [um]', fontsize=7)
+ins.set_title('envelope of |y| [um], one point per tooth period',
+              fontsize=6.5)
 ins.tick_params(labelsize=6)
 ins.legend(fontsize=6)
 ins.grid(alpha=0.3, which='both')
@@ -471,8 +546,9 @@ b.text(F_C2_PAPER, 3e2, ' paper $f_{c2}$=1135 Hz', fontsize=8, color='k')
 for name, _ in CALIBS:
     d = res[(name, N_SUB)]
     b.plot([d['fpk']], [d['apk']], 'o', color=COL[name], ms=5)
+    dy = 6 if name == 'measured' else -14
     b.annotate('%.0f Hz' % d['fpk'], (d['fpk'], d['apk']),
-               textcoords='offset points', xytext=(6, 4), fontsize=8,
+               textcoords='offset points', xytext=(9, dy), fontsize=8,
                color=COL[name])
 b.set_xlim(0, 1600)
 b.set_ylim(1e-1, 4e3)
@@ -488,7 +564,8 @@ b.grid(alpha=0.3, which='both')
 c = ax[1, 0]
 for name, _ in CALIBS:
     r = stab[name]['r']
-    c.plot(r['t'], 1e6 * r['y_mill'], lw=0.4, color=COL[name], label=name)
+    c.plot(r['t'], 1e6 * r['y_mill'], lw=0.4, color=COL[name], label=name,
+           alpha=0.65 if name == 'theoretical' else 1.0)
 c.axvspan(T_STABLE / 2, T_STABLE, color='0.92', zorder=0)
 c.text(0.75 * T_STABLE, 0.9 * 1e6 * max(stab[n]['maxall'] for n, _ in CALIBS),
        'FFT window', fontsize=7, ha='center', color='0.4')
@@ -497,8 +574,8 @@ c.set_xlabel('time [s]')
 c.set_ylabel('displacement at cutting point [um]')
 c.set_title('(c) stable case, $a_p$ = %.3f mm (%.0f %% of the computed limit'
             ' %.4f mm)\nbounded response — forced vibration regime'
-            % (AP_STABLE * 1e3, 100 * AP_STABLE / lims['measured'][0],
-               lims['measured'][0] * 1e3), fontsize=9)
+            % (AP_STABLE * 1e3, 100 * AP_STABLE / lims_ex['measured'],
+               lims_ex['measured'] * 1e3), fontsize=9)
 c.legend(fontsize=7, loc='upper right')
 c.grid(alpha=0.3)
 
@@ -506,7 +583,8 @@ c.grid(alpha=0.3)
 d_ax = ax[1, 1]
 for name, _ in CALIBS:
     d_ax.semilogy(stab[name]['f'], np.maximum(stab[name]['A'], 1e-6),
-                  lw=0.8, color=COL[name], label=name)
+                  lw=0.8, color=COL[name], label=name,
+                  alpha=0.75 if name == 'theoretical' else 1.0)
 for k in range(1, 7):
     d_ax.axvline(k * FT, color='0.6', ls=':', lw=0.8)
     d_ax.text(k * FT, 0.15, '%d$f_t$' % k, fontsize=6, ha='center', color='0.4')

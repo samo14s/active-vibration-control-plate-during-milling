@@ -50,6 +50,7 @@ import matplotlib                                               # noqa: E402
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt                                 # noqa: E402
 from matplotlib.colors import LogNorm                           # noqa: E402
+from matplotlib.lines import Line2D                             # noqa: E402
 from scipy.linalg import expm                                   # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -363,72 +364,85 @@ def main():
               f" {100 * np.mean([a in (0, len(POSITIONS) - 1) for a in arg[(cal, SIGN)]]):.0f} % des cas)")
 
     # ---------------------------------------------------------------- figure
-    fig = plt.figure(figsize=(15.4, 4.9))
+    fig = plt.figure(figsize=(16.2, 5.0))
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.06, 1.0, 1.16], wspace=.28,
+                          left=.035, right=.985, bottom=.13, top=.845)
     P = np.array(POSITIONS)
     X, Y = np.meshgrid(SPEEDS, P)
 
-    ax = fig.add_subplot(1, 3, 1, projection='3d')
+    ax = fig.add_subplot(gs[0, 0], projection='3d')
     Zm = grid[('measured', SIGN)].T * 1e3
     ax.plot_surface(X, Y, Zm, cmap='viridis', rstride=1, cstride=1,
                     edgecolor='k', linewidth=.15, antialiased=True, alpha=.96)
-    ax.set_xlabel('Spindle speed (rpm)', fontsize=8, labelpad=1)
-    ax.set_ylabel('Tool position $x/l_P$', fontsize=8, labelpad=1)
-    ax.set_zlabel('$a_{p,lim}$ (mm)', fontsize=8, labelpad=1)
-    ax.tick_params(labelsize=7)
-    ax.view_init(elev=27, azim=-125)
-    ax.set_title('(a) 3D stability surface, all positions\n'
-                 'measured calibration (paper Fig. 13a)', fontsize=9)
+    ax.set_xlabel('Spindle speed (rpm)', fontsize=8, labelpad=2)
+    ax.set_ylabel('Tool position $x/l_P$', fontsize=8, labelpad=0)
+    ax.set_zlabel('$a_{p,lim}$ (mm)', fontsize=8, labelpad=-1)
+    ax.tick_params(labelsize=7, pad=0)
+    ax.view_init(elev=28, azim=-127)
+    ax.set_box_aspect((1.35, 1.0, 0.75), zoom=1.06)
+    ax.set_title('(a) 3D stability surface over all positions\n'
+                 'measured calibration  —  paper Fig. 13(a)', fontsize=9.5)
 
-    ax2 = fig.add_subplot(1, 3, 2)
+    ax2 = fig.add_subplot(gs[0, 1])
     Zt = grid[('theoretical', SIGN)].T * 1e3
     pc = ax2.pcolormesh(SPEEDS, P, Zt, shading='nearest', cmap='viridis',
                         norm=LogNorm(vmin=max(Zt.min(), 1e-3), vmax=Zt.max()))
-    cs = ax2.contour(SPEEDS, P, Zt, levels=[0.1, 0.3], colors=['w', 'r'],
-                     linewidths=1.3)
-    ax2.clabel(cs, fmt='%.1f mm', fontsize=7)
-    ax2.axvline(RPM_S, color='r', ls='--', lw=1.2)
-    ax2.annotate('condition S\n(4900 rpm, $a_p$ = 0.30 mm)',
-                 (RPM_S, 0.5), textcoords='offset points', xytext=(7, 0),
-                 color='r', fontsize=7, va='center')
-    fig.colorbar(pc, ax=ax2, label='$a_{p,lim}$ (mm)')
+    ax2.contour(SPEEDS, P, Zt, levels=[0.1], colors='w', linewidths=1.3)
+    ax2.contour(SPEEDS, P, Zt, levels=[0.3], colors='r', linewidths=1.3)
+    ax2.axvline(RPM_S, color='r', ls='--', lw=1.3)
+    ax2.annotate('condition S\n4900 rpm', (RPM_S, 0.5), xytext=(6, 0),
+                 textcoords='offset points', rotation=90, ha='left',
+                 va='center', color='r', fontsize=7.6, weight='bold',
+                 bbox=dict(fc='w', ec='none', alpha=.8, pad=1.2))
+    cb = fig.colorbar(pc, ax=ax2, pad=.02)
+    cb.set_label('$a_{p,lim}$ (mm)', fontsize=9)
+    cb.ax.tick_params(labelsize=7.5)
+    ax2.legend(handles=[
+        Line2D([], [], color='w', lw=1.6, label='$a_{p,lim}$ = 0.1 mm'),
+        Line2D([], [], color='r', lw=1.6,
+               label='$a_{p,lim}$ = 0.3 mm ($=a_p$ of S)')],
+        fontsize=7.2, loc='lower left', framealpha=.85)
     ax2.set_xlabel('Spindle speed (rpm)')
     ax2.set_ylabel('Tool position $x/l_P$')
     ax2.set_title('(b) same map, theoretical calibration\n'
-                  '(the paper used its theoretical model for Fig. 13)',
-                  fontsize=9)
+                  '(the paper computed Fig. 13 with its theoretical model)',
+                  fontsize=9.5)
 
-    ax3 = fig.add_subplot(1, 3, 3)
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax3.semilogy(SPEEDS, low[('measured', other)] * 1e3, ':', lw=1.3,
+                 color='0.5', label=f'measured, opposite sign ({other:+.0f})')
     for cal, col in (('measured', '#1a3f8f'), ('theoretical', '#c0392b')):
-        ax3.semilogy(SPEEDS, low[(cal, SIGN)] * 1e3, '-o', ms=3.4, lw=1.6,
+        ax3.semilogy(SPEEDS, low[(cal, SIGN)] * 1e3, '-o', ms=3.6, lw=1.7,
                      color=col, label=f'{cal} calibration')
-        for s, a in peaks[cal][:2]:
-            ax3.annotate(f'{int(s)}', (s, a * 1e3),
-                         textcoords='offset points', xytext=(0, 7),
-                         ha='center', fontsize=7.5, color=col, weight='bold')
-    ax3.semilogy(SPEEDS, low[('measured', other)] * 1e3, ':', lw=1.2,
-                 color='0.45',
-                 label=f'measured, opposite sign ({other:+.0f})')
-    ax3.axhline(0.1, color='k', ls='--', lw=1.1,
-                label='0.1 mm (paper: limit below this at most speeds)')
+    for cal, col, off in (('measured', '#1a3f8f', (0, 9)),
+                          ('theoretical', '#c0392b', (13, -11))):
+        for sp_, a in peaks[cal][:2]:
+            ax3.annotate(f'{int(sp_)}', (sp_, a * 1e3), ha='center',
+                         textcoords='offset points', xytext=off,
+                         fontsize=8, color=col, weight='bold')
+    ax3.axhline(0.1, color='k', ls='--', lw=1.2)
+    ax3.annotate('0.1 mm — paper: limit is below this at most speeds',
+                 (3050, 0.104), fontsize=7.2, color='k', va='bottom')
     for p in PAPER_PEAKS:
         ax3.axvline(p, color='0.6', ls=':', lw=1.1)
-    ax3.plot([RPM_S], [AP_S * 1e3], 'r*', ms=15, mec='k', mew=.6, zorder=6,
-             label='condition S (4900 rpm, 0.30 mm)')
-    ax3.annotate('paper: "relatively larger"\naround 3600 and 5400 rpm',
-                 (0.5, 0.035), xycoords='axes fraction', ha='center',
-                 fontsize=7, color='0.3')
+    ax3.plot([RPM_S], [AP_S * 1e3], 'r*', ms=16, mec='k', mew=.6, zorder=6,
+             label='condition S (4900 rpm, $a_p$ = 0.30 mm)')
+    ax3.annotate('paper: limit "relatively larger"\naround 3600 and 5400 rpm',
+                 (0.50, 0.035), xycoords='axes fraction', ha='center',
+                 fontsize=7.4, color='0.3')
+    ax3.set_ylim(0.030, 3.0)
     ax3.set_xlabel('Spindle speed (rpm)')
     ax3.set_ylabel('lowest $a_{p,lim}$ over all positions (mm)')
-    ax3.set_title('(c) paper Fig. 13(b): lowest limit of all positions',
-                  fontsize=9)
+    ax3.set_title('(c) lowest limit of all positions  —  paper Fig. 13(b)',
+                  fontsize=9.5)
     ax3.grid(alpha=.3, which='both')
-    ax3.legend(fontsize=6.8, loc='upper left', ncol=1)
+    ax3.legend(fontsize=6.9, loc='upper center', ncol=2, framealpha=.92,
+               handlelength=1.8, columnspacing=1.0, borderpad=.4)
 
     fig.suptitle('Uncontrolled milling stability of the cantilever plate — '
                  'reproduction of Fig. 13 (down milling, $a_e$ = 0.1 mm, '
                  '5-mode Chebyshev-Ritz, full-discretisation Floquet, '
-                 f'sign = {SIGN:+.0f})', fontsize=10.5)
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+                 f'sign = {SIGN:+.0f})', fontsize=11)
     out = os.path.join(FIG, STEM + '.png')
     fig.savefig(out, dpi=140)
     plt.close(fig)

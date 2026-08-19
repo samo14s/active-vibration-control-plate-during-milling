@@ -212,10 +212,16 @@ def _ap_from_margins(probes, g):
             t = -g[k] / (g[k + 1] - g[k])
             return float(ap[k] + t * (ap[k + 1] - ap[k]))
     if g[-1] <= 0.0:                     # stable partout : extrapolation haute
+        # BORNEE. Sans borne, une pente quasi nulle envoie l'estimation a
+        # l'infini : un correcteur du protocole A, stable a toutes les sondes
+        # sur le modele reduit a deux modes, a produit J = 3.1e5 mm. Au-dela de
+        # 3 x la sonde la plus profonde on ne pretend plus discriminer — c'est
+        # a la bissection finale (cinq modes, m = 200) de le faire.
+        cap = 3.0 * ap[-1]
         if g[-1] > g[-2]:
             sl = (g[-1] - g[-2]) / (ap[-1] - ap[-2])
-            return float(ap[-1] - g[-1] / sl)
-        return float(ap[-1] * 2.0)
+            return float(min(ap[-1] - g[-1] / sl, cap))
+        return float(cap)
     return float(ap[0])
 
 

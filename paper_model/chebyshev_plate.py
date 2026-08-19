@@ -159,11 +159,18 @@ class ChebyshevPlate:
         f = lambda x: 1.0 - np.tanh(x) / x if x > 1e-12 else 0.0
         return float(f(Gam * hx) * f(Gam * hz)), float(Gam)
 
-    def add_piezo_patch(self, x1=0.0, x2=0.020, z1=0.0, z2=0.060,
+    def add_piezo_patch(self, x1=0.040, x2=0.100, z1=0.0, z2=0.020,
                         d31=175e-12, hPa=0.7e-3, EPe=63e9, nuPe=0.35,
                         rhoPe=7450.0, G_adh=1.0e9, t_adh=30e-6,
                         structural=True):
         """Colle le patch QDA60-20-0.7 (Tableau 2) :
+
+        Geometrie par defaut : coin bas DROIT, 60 mm le long de x, 20 mm le
+        long de z. Le papier ne dit pas comment la pastille est orientee et se
+        contredit sur le cote ; c'est la signature des zeros de la Fig. 12(b)
+        qui tranche — voir verification/19_patch_orientation.py, ou cette
+        geometrie est la SEULE des quatre admissibles a reproduire
+        l'occupation mesuree (1, 1, 0, 1).
 
         1. raidissement/masse composites ajoutes a K, M sur le rectangle du
            patch (rapports rK, rM de la section transformee, reduits par le

@@ -293,6 +293,12 @@ for nm, _ in ELEMS:
     print('    %-6s %12.5f %12.5f %16s %14s'
           % (nm, span, st['DD0'], txt, '%.1f %%' % (100 * span / amax)))
 print('    ' + SUB)
+rv11_pap = (T['D11_mid'] - T['D11_ends']) / (0.5 * (T['D11_mid'] + T['D11_ends']))
+print('    element (1,1), Fig. 7 DIGITISEE : (max-min)/DD10 = %.2f %%'
+      % (100 * rv11_pap))
+print('    element (1,1), modele           : (max-min)/DD10 = %.2f %%'
+      '   -> ecart %.2f%%'
+      % (100 * rv['(1,1)'][0], rel(rv['(1,1)'][0], rv11_pap)))
 print('    -> element (1,1) : %.2f%% de variation relative ;' % (100 * rv['(1,1)'][0]))
 print('       elements (1,2)=(2,1) : moyenne EXACTEMENT nulle, la variation')
 print('       relative est infinie (l element change de SIGNE le long de la passe) ;')
@@ -450,6 +456,7 @@ fig.suptitle('Fig. 7 reproduction — elements of $D_{Pr}^{T}D_{Pr}$ along the '
                 rel(dome_mod, dome_pap), zc[0] / bare.lp, sym11, cauchy),
              fontsize=9.6)
 fig.tight_layout(rect=(0, 0, 1, 0.90))
+fig.subplots_adjust(top=0.83)
 fig.savefig(FIGPATH, dpi=140)
 plt.close(fig)
 

@@ -44,7 +44,9 @@ RHO_ID, E_ID = 2700.0, 70.0e9               # jeu AL6061 "manuel" identifie
 ZETA = (0.0031, 0.0017, 0.0027, 0.0056, 0.0035)          # Tableau 4
 F_THEO = np.array([537.0, 1101.0, 2805.0, 3423.0, 4254.0])   # Tableau 4
 F_MEAS = np.array([540.0, 1068.0, 2787.0, 3351.0, 4122.0])   # Tableau 4
-PATCH = dict(x1=0.080, x2=0.100, z1=0.0, z2=0.060)       # coin bas droit
+PATCH = dict(x1=0.040, x2=0.100, z1=0.0, z2=0.020)   # coin bas droit, 60 x 20
+#   (geometrie retenue par verification/19_patch_orientation.py : la seule des
+#    quatre admissibles qui reproduit la signature de zeros de la Fig. 12b)
 KW0, KR0 = 1e12, 1e8                        # penalisation par defaut du depot
 
 P_LIST = [6, 8, 10, 12, 14, 16, 18]

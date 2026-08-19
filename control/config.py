@@ -41,10 +41,27 @@ AP_T2 = 0.5e-3
 RPM_T2 = 6100
 
 # --------------------------------------------- convention de couplage [P!]
-# Le papier est incoherent sur le signe (voir historique) ; SIGN_SIM = -1 est
-# la convention derivee de ses Eqs. (1)(2)(5)(10), celle qui place le
-# broutement pres du mode 2 (1121 Hz simule contre 1135 Hz publie).
-SIGN_SIM = -1.0
+# Le papier est incoherent : en partant de ses Eqs. (1)(2)(5)(10) on obtient
+# (K - a4 D^T D) q(t) + a4 D^T D q(t - tau), alors que ses Eqs. (12)-(13)
+# donnent les signes inverses. Le choix n'est pas cosmetique : il echange les
+# creux et les bosses des lobes, donc change d'un facteur ~10 la limite de
+# coupe A UNE VITESSE DONNEE — et c'est cette limite que le PSO maximise.
+#
+# verification/18_sign_convention.py tranche par trois preuves independantes
+# tirees du papier lui-meme (calage sur les frequences mesurees) :
+#
+#   P1  Fig. 13(b) annonce des maxima "autour de 3600 et 5400 tr/min" :
+#       Eq. (13) -> 5400 (0.407 mm) et 3600 (0.267 mm)   <- exact
+#       signe derive -> 5000 et 3400 tr/min              <- decale
+#   P2  Fig. 14(a) : la condition S (4900 tr/min, a_p = 0.30 mm) DIVERGE :
+#       Eq. (13) -> a_p,lim = 0.045 mm, divergence a 0.089 s   <- conforme
+#       signe derive -> a_p,lim = 0.435 mm, reponse STABLE a 2.3 um  <- non
+#   P3  Fig. 18 : voir le script (partiellement discriminant).
+#
+# => l'erreur de signe est dans les equations intermediaires du papier, pas
+#    dans son Eq. (13) ; on suit l'Eq. (13) telle que publiee, exactement
+#    comme la couche elements finis (simulation_base.FORCE_SIGN = +1).
+SIGN_SIM = +1.0
 
 # ------------------------------------------------------------ numerique
 # --- modele de synthese contre modele d'evaluation --------------------------

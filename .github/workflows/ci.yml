@@ -5,6 +5,12 @@ name: verification
 # se comptent en heures et n'ont pas leur place dans un CI de relecture. Le
 # tableau des durees mesurees et la raison de chaque exclusion sont plus bas.
 
+# Ces jobs executent du code du depot et installent depuis PyPI ; ils n'ecrivent
+# rien. On leur retire donc tout droit d'ecriture plutot que d'heriter du jeton
+# par defaut.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -34,6 +40,12 @@ jobs:
 
   verification-rapide:
     # Les scripts de verification dont la duree mesuree est <= 30 s.
+    #
+    # CE QUE CE JOB NE FAIT PAS. Aucun de ces seize scripts ne contient
+    # d'assertion : ils impriment des tableaux que l'on lit. Ce job attrape
+    # donc les PLANTAGES et les ruptures d'API, jamais une derive numerique —
+    # un resultat qui changerait de 20 % le laisserait vert. C'est le job
+    # `invariants` qui porte les verifications chiffrees, et lui seul.
     runs-on: ubuntu-latest
     env:
       OMP_NUM_THREADS: '1'
@@ -48,13 +60,14 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
 
-      # 01 et 02 lisent les .xlsx numerises par glob RELATIF, donc ils doivent
-      # tourner depuis le dossier qui les contient.
+      # 01 et 02 lisent les .xlsx numerises par glob relatif, mais ils font
+      # eux-memes os.chdir vers simulation/sim_kit des leur sixieme ligne. Le
+      # working-directory que ce job portait au depart etait donc redondant, et
+      # le commentaire qui le justifiait etait faux ; les deux sont retires.
       - name: 01-02 — donnees mesurees des Fig. 12(a) et 12(b)
-        working-directory: simulation/sim_kit
         run: |
-          python ../../verification/01_frf_vs_measured.py
-          python ../../verification/02_static_gain_and_cutting_coeffs.py
+          python verification/01_frf_vs_measured.py
+          python verification/02_static_gain_and_cutting_coeffs.py
 
       - name: 03-12 — modele, coefficients de coupe, FRF, D^T D
         run: |
@@ -97,7 +110,9 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Compilation de tous les modules
-        run: python -m compileall -q control paper_model verification tests
+        run: |
+          python -m compileall -q control paper_model verification tests
+          python -m compileall -q simulation
       # Les modules de control/ importent ceux de paper_model/ sans prefixe :
       # chaque script ajoute les deux dossiers a sys.path lui-meme. Un import
       # nu echoue donc si PYTHONPATH ne les contient pas — verifie en local
@@ -110,10 +125,18 @@ jobs:
           CALIB: measured
           PYTHONPATH: ${{ github.workspace }}/paper_model:${{ github.workspace }}/control
         run: |
+          # Les modules de bibliotheque ET les scripts d'entree. Sans ces
+          # derniers, renommer par exemple une fonction de simulate.py
+          # laisserait le CI vert pendant que run_compare.py casserait a
+          # l'import. Ils sont tous proteges par if __name__ == '__main__',
+          # donc les importer ne declenche aucun calcul.
           for m in config plate_model fopid adrc fdob fdob_adaptive \
                    chatter_estimator objective closed_loop simulate \
                    sim_controller pso chebyshev_plate milling_dynamics \
-                   lti_floquet stability_fdm time_domain; do
+                   lti_floquet stability_fdm time_domain \
+                   run_pso run_compare run_adaptive run_pso_time \
+                   run_eso_trace diagnose_adrc figures report_tables \
+                   analyse_fdob audit_fairness figure_supervisor; do
             echo "import $m"
             python -c "import $m" || exit 1
           done

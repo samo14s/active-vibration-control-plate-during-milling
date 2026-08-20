@@ -10,7 +10,7 @@ Chaque test correspond a un resultat annonce dans les rapports, avec la
 tolerance qui y est citee. Si l'un d'eux casse, ce n'est pas un detail
 d'implementation : c'est une conclusion du rapport qui ne tient plus.
 
-    python -m pytest tests/ -q          (ou : python tests/test_invariants.py)
+    python tests/test_invariants.py     (ou : python -m pytest tests/ -q)
 """
 import os
 import sys
@@ -78,18 +78,20 @@ def test_residues_change_sign_at_mode_four():
     plate = _plate()
     _, _, H, D_obs, _ = plant_vectors(plate, C.N_MODES)
     r = D_obs * H
+    # Sans cette garde, (r[3:] > 0).all() serait vrai par vacuite si le
+    # modele tombait a trois modes, et l'invariant cesserait silencieusement
+    # d'etre verifie.
+    assert len(r) >= 5, f'invariant non testable : {len(r)} modes seulement'
     assert (r[:3] < 0).all() and (r[3:] > 0).all(), f'residus {np.round(r, 4)}'
 
 
 # ------------------------------------------------------------------ ADRC
-def test_leso_identity():
+def test_leso_identity():  # noqa: D401
     """z3(s) = Q(s) [s^2 y - b0 u] EXACTEMENT (DIAGNOSTIC §2, 7.9e-15).
 
     Le maillon 2 de la chaine de perte supposee est INFIRME par cette
     identite : l'observateur etendu n'est pas en faute.
     """
-    plate = _plate()
-    _, _, _, _, sl = plant_vectors(plate, C.N_MODES)
     b0, wo = -40.72, 1.863e4
     core = adrc_fopid_ss(PAR['Kp'], PAR['Ki'], PAR['Kd'], PAR['lam'],
                          PAR['mu'], wo, b0, C.OUST_WB, C.OUST_WH, C.OUST_N,
@@ -111,7 +113,6 @@ def test_b0_is_a_global_gain():
 
     Maillon 3 INFIRME : b0 n'est pas un parametre de modele.
     """
-    plate = _plate()
     b0, wo = -40.72, 1.863e4
     k = [ss_frf(adrc_fopid_ss(PAR['Kp'], PAR['Ki'], PAR['Kd'], PAR['lam'],
                               PAR['mu'], wo, s * b0, C.OUST_WB, C.OUST_WH,
@@ -222,6 +223,12 @@ def _main():
         except AssertionError as e:
             bad += 1
             print(f'  ECHEC {f.__name__} : {e}')
+        except Exception as e:            # noqa: BLE001
+            # Ne rattraper qu'AssertionError coupait la boucle des qu'un test
+            # levait autre chose : les invariants suivants n'etaient alors
+            # jamais evalues et le total jamais imprime.
+            bad += 1
+            print(f'  ERREUR {f.__name__} : {type(e).__name__}: {e}')
     print(f'\n  {len(fs) - bad}/{len(fs)} invariants verifies')
     return 1 if bad else 0
 

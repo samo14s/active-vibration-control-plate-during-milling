@@ -414,6 +414,43 @@ def test_mu_bound_is_between_spectral_radius_and_sigma_max():
         assert d > 0.0
 
 
+def test_nmp_dob_is_a_superset_of_fopid_and_matches_its_closed_form():
+    """A alpha = 0 la structure redonne le FOPID EXACTEMENT, et sa realisation
+    verifie K = -(C + alpha W)/(1 - alpha V) avec W = Q P_min^-1, V = Q.
+
+    Meme paire de proprietes que pour l'observateur modal, et pour la meme
+    raison : sans la premiere, la structure ne CONTIENT pas le FOPID et son
+    ensemble est decale plutot que plus grand — c'est precisement le defaut
+    que le diagnostic avait impute a l'ADRC-FOPID. Sans la seconde, le montage
+    d'etat ne calcule pas ce que l'algebre annonce.
+    """
+    from nmp_dob import (Q_ORDER, _q_tf, frf_tf, inner_outer,
+                         nmp_dob_fopid_ss, plant_tf)
+    plate = _plate()
+    w, z, H, D_obs, sl = plant_vectors(plate, C.N_MODES)
+    res = D_obs * H
+    kw = dict(w=w, zeta=z, res=res, wb=C.OUST_WB, wh=C.OUST_WH, N=C.OUST_N,
+              sign_loop=sl)
+    Kf = ss_frf(fopid_ss(PAR['Kp'], PAR['Ki'], PAR['Kd'], PAR['lam'],
+                         PAR['mu'], C.OUST_WB, C.OUST_WH, C.OUST_N, sl), OM)
+    K0 = ss_frf(nmp_dob_fopid_ss(**PAR, wq=2 * np.pi * 3000, alpha=0.0, **kw),
+                OM)
+    err = float(np.max(np.abs(K0 + Kf) / np.abs(Kf)))
+    assert err < 1e-12, f'alpha = 0 ne redonne pas le FOPID : {err:.2e}'
+
+    wq, al = 2 * np.pi * 3000, 0.5
+    K = ss_frf(nmp_dob_fopid_ss(**PAR, wq=wq, alpha=al, **kw), OM)
+    num, den = plant_tf(w, z, res)
+    (nm, dm), _, _ = inner_outer(num, den)
+    qn, qd = _q_tf(wq, Q_ORDER)
+    V = frf_tf(qn, qd, OM)
+    W = frf_tf(np.convolve(qn, dm),
+               np.convolve(qd, np.trim_zeros(np.asarray(nm, float), 'f')), OM)
+    pred = -(Kf + al * W) / (1 - al * V)
+    err = float(np.max(np.abs(pred - K) / np.abs(K)))
+    assert err < 1e-9, f'forme fermee du NMP-DOB : {err:.2e}'
+
+
 def test_inner_outer_factorization_reconstructs_the_plant():
     """P = B . P_min avec |B| = 1 et P_min sans zero instable.
 

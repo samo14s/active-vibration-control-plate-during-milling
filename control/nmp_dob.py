@@ -151,3 +151,69 @@ def check_factorization(w, zeta, res, om=None):
         n_rhp_after=int(np.sum(zmin.real > 1e-9)),
         recon_err=float(np.max(np.abs(B * Pm - P) / np.maximum(np.abs(P),
                                                                1e-300))))
+
+
+def _q_tf(wq, r):
+    """Q(s) = (wq/(s+wq))^r."""
+    qn, qd = np.array([1.0]), np.array([1.0])
+    for _ in range(int(r)):
+        qn = np.convolve(qn, [float(wq)])
+        qd = np.convolve(qd, [1.0, float(wq)])
+    return qn, qd
+
+
+#: ordre du filtre Q. Il ne se choisit pas librement : W = Q.P_min^-1 doit
+#: etre STRICTEMENT propre pour qu'il n'y ait pas de boucle algebrique dans le
+#: montage (meme raison que Dv = Dw = 0 dans fdob.py). Avec P_min de degres
+#: (2n-2)/(2n), cela impose r > 2, donc r = 3 — exactement l'ordre du filtre
+#: implicite Q = (wo/(s+wo))^3 de l'observateur etendu de l'ADRC, ce qui rend
+#: les deux structures comparables filtre pour filtre.
+Q_ORDER = 3
+
+
+def nmp_dob_fopid_ss(Kp, Ki, Kd, lam, mu, wq, alpha, w, zeta, res,
+                     wb, wh, N, sign_loop=1.0):
+    """FOPID + observateur inversant P_min (partie a minimum de phase).
+
+    Meme montage que `fdob.fdob_fopid_ss`, a ceci pres que l'inversion porte
+    sur le procede COMPLET debarrasse de son seul facteur non inversible, au
+    lieu d'une somme d'inverses modaux.
+
+    Etats : [FOPID (Oustaloup), W = Q P_min^-1, V = Q].
+    """
+    from scipy.signal import tf2ss
+
+    from fopid import fopid_ss
+
+    Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(m, float))
+                      for m in fopid_ss(Kp, Ki, Kd, lam, mu, wb, wh, N,
+                                        sign_loop)]
+    num, den = plant_tf(w, zeta, res)
+    (nm, dm), _, _ = inner_outer(num, den)
+    qn, qd = _q_tf(wq, Q_ORDER)
+    nm = np.trim_zeros(np.asarray(nm, float), 'f')
+    # V = Q ; W = Q . P_min^-1 = (qn . dm) / (qd . nm)
+    Av, Bv, Cv, Dv = tf2ss(qn, qd)
+    Aw, Bw, Cw, Dw = tf2ss(np.convolve(qn, dm), np.convolve(qd, nm))
+    Av, Bv, Cv = np.atleast_2d(Av), np.atleast_2d(Bv), np.atleast_2d(Cv)
+    Aw, Bw, Cw = np.atleast_2d(Aw), np.atleast_2d(Bw), np.atleast_2d(Cw)
+    if abs(float(np.atleast_2d(Dw)[0, 0])) > 1e-12 or \
+            abs(float(np.atleast_2d(Dv)[0, 0])) > 1e-12:
+        raise ValueError('Q.P_min^-1 non strictement propre : boucle algebrique')
+    nc, nw, nv = Ac.shape[0], Aw.shape[0], Av.shape[0]
+    n = nc + nw + nv
+    u_row = np.zeros(n)
+    u_row[:nc] = Cc[0]
+    u_row[nc:nc + nw] = -alpha * Cw[0]
+    u_row[nc + nw:] = alpha * Cv[0]
+    d_u = -float(Dc[0, 0])
+    A = np.zeros((n, n))
+    B = np.zeros((n, 1))
+    A[:nc, :nc] = Ac
+    B[:nc, 0] = -Bc[:, 0]
+    A[nc:nc + nw, nc:nc + nw] = Aw
+    B[nc:nc + nw, 0] = Bw[:, 0]
+    A[nc + nw:, nc + nw:] = Av
+    A[nc + nw:, :] += Bv @ u_row.reshape(1, -1)
+    B[nc + nw:, 0] = Bv[:, 0] * d_u
+    return A, B, u_row.reshape(1, -1), np.array([[d_u]])

@@ -98,6 +98,22 @@ def main():
     # structures, sans quoi ce serait une faveur.
     extra = [int(v) for v in os.environ['EXTRA_SEEDS'].split(',')] \
         if os.environ.get('EXTRA_SEEDS') else None
+    # UN SEUL FIL BLAS PAR PROCESSUS, imperatif si l'on lance plusieurs
+    # optimisations en parallele. Les matrices d'etat de ce depot font 16 a 66
+    # lignes : a cette taille le multi-fil de BLAS coute plus qu'il ne
+    # rapporte, et quatre processus ouvrant chacun sept fils sur quatre coeurs
+    # passent leur temps a se disputer le processeur. MESURE, une evaluation
+    # complete de l'objectif (3 profondeurs x 6 positions, m = 24, 5 modes) :
+    #
+    #     structure   par defaut   un fil    rapport
+    #     fopid         8.155 s    0.433 s     19 x
+    #     fdob          9.359 s    0.893 s     10 x
+    #
+    # A regler AVANT d'importer numpy — apres, la bibliotheque a deja fixe sa
+    # reserve de fils :
+    #
+    #     export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+    #
     # OUT_TAG : ecrire dans un fichier SEPARE. Sans cela, deux optimisations
     # lancees en parallele — une par coeur libre — reliraient le meme .npz et
     # la derniere a finir ecraserait le travail de l'autre. Chaque processus

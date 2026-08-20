@@ -47,6 +47,17 @@ BONUS : les valeurs propres sortent COMPLEXES, donc avec leur phase. La
 frequence de broutement en boucle fermee se lit sur le meme calcul, sans le
 detour par une iteration de sous-espace separee.
 
+LE COUT MONTE QUAND ON APPROCHE DU BUT, et c'est inherent a la methode.
+Arnoldi converge d'autant plus vite que le multiplicateur dominant est
+SEPARE des suivants. Loin de la frontiere de stabilite il l'est largement ;
+au voisinage de l'optimum plusieurs multiplicateurs se pressent autour de
+|mu| = 1 et ARPACK redemarre davantage. Mesure sur le FDOB a cinq modes
+vises (56 etats), cout d'Arnoldi par point : 0.035 s sur des tirages au
+hasard, 0.123 s a l'optimum stocke — et l'evaluation complete passe de 1.7 s
+a 6.7 s. Estimer la duree d'une campagne sur un echantillon aleatoire la
+sous-estime donc d'un facteur quatre, parce que l'essaim passe justement sa
+vie a se rapprocher de la region chere.
+
 Le decalage de l'historique se fait par TAMPON CIRCULAIRE et non par np.roll :
 `roll` recopie les (m+1)*nx elements a chaque sous-intervalle, soit un cout en
 m^2 par periode (1.7 million de recopies par periode a m = 200, nx = 42) pour

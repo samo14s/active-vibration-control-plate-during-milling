@@ -59,12 +59,13 @@ def stored():
 
 def main():
     n_lhs = int(sys.argv[1]) if len(sys.argv) > 1 else 400
-    cap = 3.0 * C.AP_PROBE[-1]
+    # J sort de `evaluate` en MILLIMETRES, AP_PROBE est en metres.
+    cap = 3.0 * C.AP_PROBE[-1] * 1e3
     plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
     st = stored()
     print('=' * 78)
     print(f' STRUCTURES QUI SATURENT LE PLAFOND DE L OBJECTIF'
-          f' ({cap * 1e3:.3f} mm)')
+          f' ({cap:.3f} mm)')
     print('=' * 78)
     sat = [k for k, v in st.items()
            if 'J' in v and float(v['J']) >= cap - 1e-9]

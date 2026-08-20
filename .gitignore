@@ -227,3 +227,9 @@ report/rapport_final.html
 # reviendrait a stocker deux fois la meme chose, et a produire un commit par
 # structure au fil d'une campagne.
 results/lobes_*.npz
+
+# Partiels de robustesse (KINDS/OUT_TAG de control/robustness_new.py). Meme
+# raison que le cache des fossoles : `--merge` les reunit dans
+# results/robust_new_B.npz, qui lui est suivi. Le motif exige le tiret bas,
+# donc il ne recouvre PAS le fichier fusionne lui-meme.
+results/robust_new_?_*.npz

@@ -414,6 +414,52 @@ def test_mu_bound_is_between_spectral_radius_and_sigma_max():
         assert d > 0.0
 
 
+def test_gamma_search_is_not_fooled_by_infeasibility_holes():
+    """La recherche de gamma trouve un gamma aussi bon qu'un BALAYAGE direct.
+
+    L'invariant qui manquait. La faisabilite en gamma est monotone EN THEORIE
+    — si un gamma passe, tous les plus grands passent — mais elle ne l'est pas
+    numeriquement : les deux Riccati echouent par endroits AU MILIEU de la
+    region faisable, en trous larges d'un facteur cinq. Une bissection, qui
+    n'est valide que sous la monotonie, sonde un trou, conclut "infaisable" et
+    perd definitivement toute la region des gamma plus petits. Elle rend alors
+    un correcteur bien plus faible que celui qui existe, SANS AUCUN SIGNE
+    EXTERIEUR — c'est ce qui a invalide une campagne d'optimisation entiere.
+
+    Ce test compare donc le gamma rendu a celui d'un balayage exhaustif
+    grossier, qui ne suppose aucune monotonie. Si quelqu'un revient un jour a
+    une bissection, ce test tombe.
+    """
+    from hinf import (HinfFailure, augment, bandpass_weight, central,
+                      lower_lft, plant_ss, scale_problem, synthesize)
+    plate = _plate()
+    w, z, H, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
+    P0 = plant_ss(w, z, D_obs * H)
+    for kw, f0 in ((5166.0, 1151.0), (5200.0, 1151.0), (1e4, 543.0)):
+        P = augment(P0, bandpass_weight(kw, f0, 0.03969), 2.202, 1.152e-6)
+        Ps, alpha, beta = scale_problem(P)
+        # Balayage direct : aucune hypothese de monotonie.
+        best_scan = np.inf
+        for lg in np.linspace(-8, 2, 60):
+            g = 10.0 ** lg
+            try:
+                K = central(*Ps, g)
+                ev = np.linalg.eigvals(lower_lft(P, K)[0])
+                if np.all(np.isfinite(ev)) and ev.real.max() < 0:
+                    best_scan = min(best_scan, g)
+            except HinfFailure:
+                pass
+        if not np.isfinite(best_scan):
+            continue                      # rien de faisable : rien a comparer
+        got = synthesize(P)[1] / (alpha * beta)
+        # Le balayage a 60 points sur 10 decades a un pas de 1.47 ; on tolere
+        # le double, ce qui laisse passer la discretisation mais pas un
+        # optimiseur qui aurait rate toute une region.
+        assert got <= 3.0 * best_scan, (
+            f'kw = {kw} : gamma rendu {got:.4g} contre {best_scan:.4g} '
+            f'trouve par balayage — facteur {got / best_scan:.1f}')
+
+
 def test_nmp_dob_is_a_superset_of_fopid_and_matches_its_closed_form():
     """A alpha = 0 la structure redonne le FOPID EXACTEMENT, et sa realisation
     verifie K = -(C + alpha W)/(1 - alpha V) avec W = Q P_min^-1, V = Q.

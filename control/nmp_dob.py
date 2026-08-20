@@ -246,9 +246,20 @@ def _real_factors(roots, tol=1e-9):
         i += 2
     if i < real.size:
         fac.append(np.array([1.0, -real[i]]))
-    if sum(len(f) - 1 for f in fac) != roots.size:
+    # CONTROLE REEL DE CONJUGAISON. La version precedente ne verifiait que le
+    # DEGRE total : un jeu comme {a+bi, c-di} avec a != c a le bon compte de
+    # racines a partie imaginaire positive et negative, passait le controle,
+    # et etait silencieusement remplace par la factorisation conjuguee — donc
+    # par d'autres racines que celles demandees. Le message annoncait un
+    # controle qui n'avait pas lieu.
+    neg = np.sort_complex(roots[~is_real][roots[~is_real].imag < 0.0])
+    if (cplx.size != neg.size
+            or not np.allclose(np.sort_complex(np.conj(cplx)), neg,
+                               rtol=1e-7, atol=tol * float(np.max(scale)))):
         raise ValueError('racines complexes non conjuguees : factorisation '
                          'reelle impossible')
+    if sum(len(f) - 1 for f in fac) != roots.size:
+        raise ValueError('degre perdu dans la factorisation reelle')
     return fac
 
 
@@ -297,9 +308,20 @@ def _sections(zeros, poles):
 def _balanced_tf_ss(num, den):
     """(A, B, C, D) d'une section, EQUILIBREE (similitude diagonale).
 
-    `permute=False` n'est pas un detail : avec la permutation, `matrix_balance`
-    rend un T qui n'est plus diagonal et l'inverse par 1/diag(T) fabrique des
-    inf puis des NaN.
+    `permute=False` est une PRECAUTION, pas la reparation d'une panne
+    observee — et la version precedente de ce texte affirmait le contraire.
+    Elle disait qu'avec la permutation `matrix_balance` rend un T non
+    diagonal dont 1/diag(T) fabrique des inf puis des NaN. Verifie sur
+    TOUTES les matrices que ce code lui passe reellement (les six sections
+    plus la cascade 11x11) : avec `permute=True` le T rendu est
+    EXACTEMENT diagonal, max|T - diag(T)| = 0, aucun zero sur la diagonale,
+    et le chemin complet reproduit la fonction de transfert de W a 1.5e-12
+    sans un seul NaN. `fdob._tf` laisse d'ailleurs la permutation active avec
+    le meme idiome 1/diag(T).
+
+    La precaution reste justifiee — scipy PEUT rendre T = P.D, et rien
+    n'oblige les matrices futures a ressembler a celles-ci — mais c'est une
+    precaution qu'il faut appeler par son nom.
     """
     A, B, C, D = tf2ss(np.asarray(num, float), np.asarray(den, float))
     A = np.atleast_2d(A)
@@ -324,6 +346,17 @@ def _cascade_ss(zeros, poles, gain):
                 np.array([[float(gain)]]))
     a = np.array([abs(np.polyval(n, 1j * _wchar(d))
                       / np.polyval(d, 1j * _wchar(d))) for n, d in sec])
+    # a_i s'annule si le numerateur d'une section s'evanouit a la pulsation
+    # caracteristique de son denominateur — une paire de zeros PUREMENT
+    # imaginaires de meme module. Inatteignable ici (les zeros de W sont les
+    # poles du procede, tous amortis), mais une division par zero silencieuse
+    # remplirait la cascade de NaN sans rien signaler. De meme, un gain nul
+    # eteindrait toutes les sections par np.sign(0) = 0.
+    if not np.all(a > 0.0):
+        raise ValueError('section a gain nul a sa pulsation caracteristique : '
+                         'repartition du gain impossible')
+    if gain == 0.0:
+        raise ValueError('gain nul : la cascade serait identiquement nulle')
     g = (abs(gain) * np.prod(a)) ** (1.0 / m) / a
     g[0] *= np.sign(gain)
     out = None
@@ -341,8 +374,16 @@ def _cascade_ss(zeros, poles, gain):
 def _w_ss(nm, dm, wq, r=Q_ORDER):
     """W = Q . P_min^-1 en cascade : zeros = POLES de P_min, poles = ZEROS de
     P_min plus les r poles de Q en -wq."""
+    # LES DEUX polynomes sont rognes de leurs zeros de tete, et c'est une
+    # correction. `np.roots` les ignore de lui-meme, mais `dm[0]` non : un
+    # seul zero en tete de dm mettait le gain a zero, et de la tout le
+    # systeme — max|H| = 0 au lieu de 6.87e8, SANS exception ni avertissement.
+    # Inatteignable depuis nmp_dob_fopid_ss (dm sort de `inner_outer`, donc
+    # monique) mais atteignable par `stable_inverse_ss`, qui est publique.
     nm = np.trim_zeros(np.asarray(nm, float), 'f')
-    dm = np.asarray(dm, float)
+    dm = np.trim_zeros(np.asarray(dm, float), 'f')
+    if nm.size == 0 or dm.size == 0:
+        raise ValueError('numerateur ou denominateur identiquement nul')
     zeros = np.roots(dm)
     poles = np.concatenate([np.roots(nm), np.full(int(r), -float(wq))])
     gain = float(wq) ** int(r) * dm[0] / nm[0]

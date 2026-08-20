@@ -340,6 +340,15 @@ BOUNDS_SMC = dict(log_lam=(2.0, 5.0), log_ks=(-1.0, 3.0), log_phi=(-8.0, -1.0))
 # ajoutent un observateur a l'epine dorsale FOPID sont ainsi comparables a
 # dimension egale.
 #
+# UNE PRECISION SUR L'INCLUSION. « La structure contient le FOPID a alpha = 0 »
+# est vrai A TRAVERS L'ENUMERATION DES SIGNES, pas variante par variante : a
+# alpha = 0 cette structure rend MOINS le FOPID construit avec le meme
+# argument de signe, si bien que reproduire un optimum FOPID de
+# sign_variant = +1 demande ici sign_variant = -1 (avec +1 le point alpha = 0
+# est nominalement instable). Le PSO enumere les deux conventions, donc
+# l'inclusion tient pour l'optimisation ; elle ne tient pas pour une lecture
+# variante par variante.
+#
 # `wq` est la coupure du filtre Q. Sa borne haute n'est pas libre : au-dela de
 # la bande d'Oustaloup le filtre ne fait plus que de l'amplification de bruit,
 # et au-dela du zero instable (2459 Hz) il tente d'inverser ce qui, meme

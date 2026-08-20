@@ -427,6 +427,44 @@ def test_the_three_floquet_engines_agree():
                  f'{r:.9f} contre {ref:.9f} (monodromie assemblee)')
 
 
+def test_w_realization_survives_leading_zeros_and_rejects_bad_roots():
+    """Deux pieges du realisateur en cascade, tous deux mesures.
+
+    1. UN ZERO DE TETE dans le denominateur eteignait tout. `np.roots` ignore
+       les zeros de tete ; `dm[0]` non. Le gain valait alors zero, puis
+       np.sign(0) = 0 eteignait chaque section : la reponse tombait a
+       IDENTIQUEMENT ZERO (max|H| = 0 au lieu de 6.87e8) sans exception ni
+       avertissement. Inatteignable depuis nmp_dob_fopid_ss, ou dm sort de
+       `inner_outer` donc monique — mais `stable_inverse_ss` est publique et
+       ne promet rien de tel a son appelant.
+
+    2. LE CONTROLE DE CONJUGAISON n'existait pas. `_real_factors` ne
+       verifiait que le DEGRE total, si bien qu'un jeu comme {a+bi, c-di}
+       avec a != c passait et etait silencieusement remplace par la
+       factorisation conjuguee — donc par d'autres racines que celles
+       demandees. Le message d'erreur annoncait pourtant ce controle.
+    """
+    import nmp_dob
+    plate = _plate()
+    n = 5
+    D_obs = plate.D_row(plate.lp, plate.hp)[:n]
+    res = D_obs * np.asarray(plate.H_Pe_modal, float)[:n]
+    num, den = nmp_dob.plant_tf(plate.omega_n[:n], plate.zeta_modes[:n], res)
+    (nm, dm), _, _ = nmp_dob.inner_outer(num, den)
+    wq = 2 * np.pi * 3000.0
+    ref = ss_frf(nmp_dob._w_ss(nm, dm, wq), OM)
+    for pad in (1, 2):
+        got = ss_frf(nmp_dob._w_ss(nm, np.r_[np.zeros(pad), dm], wq), OM)
+        e = np.max(np.abs(got - ref)) / np.max(np.abs(ref))
+        assert e < 1e-12, f'{pad} zero(s) de tete : ecart {e:.3e}'
+    import pytest
+    with pytest.raises(ValueError):
+        nmp_dob._real_factors(np.array([1.0 + 2.0j, 3.0 - 4.0j]))
+    # ... et le controle ne doit pas refuser un jeu legitime
+    f = nmp_dob._real_factors(np.array([1.0 + 2.0j, 1.0 - 2.0j, -5.0]))
+    assert sum(len(x) - 1 for x in f) == 3
+
+
 def test_step_integrals_agree_on_both_paths():
     """Les deux chemins de J1 et J2 donnent la meme chose quand A est
     inversible, et le chemin augmente REPOND encore quand elle ne l'est pas.

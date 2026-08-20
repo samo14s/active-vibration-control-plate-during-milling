@@ -29,9 +29,10 @@ Z = (I - g^-2 Y X)^-1 :
     K : xdot = (A + g^-2 B1 B1' X + B2 F + Z L C2) x - Z L y
         u    = F x
 
-POURQUOI LES HYPOTHESES SIMPLIFIEES TIENNENT ICI SANS AUCUN LOOP-SHIFT. Elles
-ne sont pas supposees : elles sont IMPOSEES par la forme des ponderations, et
-ce choix de forme est celui que la physique demandait de toute facon.
+POURQUOI ELLES TIENNENT ICI SANS DECALAGE DE BOUCLE — TANT QU'ON RESTE EN
+SENSIBILITE MIXTE. Elles ne sont pas supposees : elles sont IMPOSEES par la
+forme des ponderations, et ce choix de forme est celui que la physique
+demandait de toute facon.
 
   * `D11 = 0` — le seul chemin direct w -> z passerait par le bruit de mesure
     vu par W1. On prend donc W1 STRICTEMENT PROPRE. Et la forme strictement
@@ -51,6 +52,15 @@ ce choix de forme est celui que la physique demandait de toute facon.
 
 Rien de tout cela n'est verifie sur parole : `assumptions()` les mesure et
 `synthesize()` refuse de rendre un correcteur si l'une tombe.
+
+MAIS LA MU-SYNTHESE LES CASSE, ET C'EST VOULU. Le canal d'incertitude du
+papier, z_Delta = W_Pau u, fait intervenir une ponderation BIPROPRE
+(D = r_Pau = 4e-7), donc D12'C1 cesse d'etre nul. Interdire les ponderations
+biproprres reviendrait a interdire celles du papier — exactement celles qu'on
+veut comparer. `central()` porte donc le DECALAGE DE BOUCLE general
+(Ax = A - B2 D12'C1, Qx = C1'(I - D12 D12')C1, et F = -(D12'C1 + B2'X)), qui
+se reduit a l'identite quand le produit est deja nul. Le cas simple reste donc
+verifie a l'octet pres par les memes invariants qu'avant.
 
 CE QUI EST VERIFIE, ET COMMENT. Un solveur H-infini faux est indetectable a
 l'oeil : il rend une matrice d'etat plausible qui ne fait pas ce qu'elle
@@ -214,7 +224,7 @@ def augment(plant, W1, w2, eps_n, extra_z=None):
     return A, B1, B2, C1, C2, D12, D21
 
 
-def assumptions(A, B1, B2, C1, C2, D12, D21, tol=1e-9):
+def assumptions(A, B1, B2, C1, C2, D12, D21, tol=1e-9, shifted=False):
     """Mesure les hypotheses au lieu de les supposer. Rend (ok, rapport)."""
     rep = {}
     rep['D12_rank'] = int(np.linalg.matrix_rank(D12, tol=1e-10))
@@ -222,9 +232,14 @@ def assumptions(A, B1, B2, C1, C2, D12, D21, tol=1e-9):
     rep['D12tC1'] = float(np.max(np.abs(D12.T @ C1)))
     rep['B1D21t'] = float(np.max(np.abs(B1 @ D21.T)))
     ok = (rep['D12_rank'] == D12.shape[1]
-          and rep['D21_rank'] == D21.shape[0]
-          and rep['D12tC1'] <= tol * max(1.0, float(np.max(np.abs(C1))))
-          and rep['B1D21t'] <= tol * max(1.0, float(np.max(np.abs(B1)))))
+          and rep['D21_rank'] == D21.shape[0])
+    if not shifted:
+        # Sans decalage de boucle, les deux produits croises doivent etre nuls.
+        # Avec (`shifted=True`, cas des ponderations biproprres du papier),
+        # `central` les absorbe et seuls les rangs comptent.
+        ok = (ok
+              and rep['D12tC1'] <= tol * max(1.0, float(np.max(np.abs(C1))))
+              and rep['B1D21t'] <= tol * max(1.0, float(np.max(np.abs(B1)))))
     return ok, rep
 
 
@@ -330,12 +345,26 @@ def central(A, B1, B2, C1, C2, D12, D21, gamma):
     B2n, C2n, D12n, D21n, s12, s21 = _normalize(B2, C2, D12, D21)
     g2 = float(gamma) ** 2
     n = A.shape[0]
+    # --- DECALAGE DE BOUCLE (loop-shift).
+    # Tant que la ponderation de commande est un scalaire, D12'C1 = 0 et ces
+    # deux lignes ne font rien. Mais des qu'on ajoute le canal d'incertitude
+    # du PAPIER, z_Delta = W_Pau u, le terme cesse d'etre nul : W_Pau est
+    # BIPROPRE (D = r = 4e-7), donc D12 gagne une composante en regard d'une
+    # ligne de C1 qui, elle, n'est pas nulle. Plutot que d'interdire les
+    # ponderations biproprres — c'est-a-dire d'interdire celles du papier — on
+    # ecrit le decalage general.
+    DC = D12n.T @ C1                                    # (1, n)
+    Ax = A - B2n @ DC
+    Qx = C1.T @ C1 - DC.T @ DC                          # C1'(I - D12 D12')C1
+    BD = B1 @ D21n.T                                    # (n, 1)
+    Ay = A - BD @ C2n
+    Qy = B1 @ B1.T - BD @ BD.T                          # B1(I - D21'D21)B1'
     # S indefinie dans les deux cas : c'est la signature du probleme H-infini.
     Sx = B2n @ B2n.T - (B1 @ B1.T) / g2
     Sy = C2n.T @ C2n - (C1.T @ C1) / g2
     try:
-        X = care(A, Sx, C1.T @ C1)
-        Y = care(A.T, Sy, B1 @ B1.T)
+        X = care(Ax, Sx, Qx)
+        Y = care(Ay.T, Sy, Qy)
     except (np.linalg.LinAlgError, ValueError) as e:
         raise HinfFailure(f'Riccati insoluble a gamma = {gamma:.4g} : {e}')
     if not (np.all(np.isfinite(X)) and np.all(np.isfinite(Y))):
@@ -347,8 +376,8 @@ def central(A, B1, B2, C1, C2, D12, D21, gamma):
     rho = float(np.max(np.abs(np.linalg.eigvals(X @ Y))))
     if rho >= g2:
         raise HinfFailure(f'rho(XY) = {rho:.4g} >= gamma^2 = {g2:.4g}')
-    F = -B2n.T @ X
-    L = -Y @ C2n.T
+    F = -(DC + B2n.T @ X)
+    L = -(BD + Y @ C2n.T)
     Z = np.linalg.inv(np.eye(n) - (Y @ X) / g2)
     Ak = A + (B1 @ B1.T @ X) / g2 + B2n @ F + Z @ L @ C2n
     Bk = -Z @ L
@@ -392,25 +421,36 @@ def hinf_norm(ss, w=None):
     return out
 
 
-def synthesize(P, g_hi=1e6, g_lo=None, tol=1e-3, n_iter=60, check=True):
+def synthesize(P, g_hi=None, g_lo=None, tol=1e-3, n_iter=60, check=True,
+               shifted=False):
     """Iteration sur gamma (bissection) -> (K, gamma) au mieux atteignable.
 
     `check` mesure la norme obtenue par balayage et la compare a gamma : c'est
     la garde qui distingue "les Riccati ont converge" de "le correcteur fait
     ce qu'il promet".
     """
-    ok, rep = assumptions(*P)
+    ok, rep = assumptions(*P, shifted=shifted)
     if not ok:
         raise HinfFailure(f'hypotheses simplifiees violees : {rep}')
     Ps, alpha, beta = scale_problem(P)
-    # gamma est cherche DANS les grandeurs mises a l'echelle ; il revient a la
-    # fin par gamma = alpha.beta.gamma'.
+    # GAMMA EST CHERCHE DANS LES GRANDEURS MISES A L'ECHELLE, et les bornes
+    # aussi. Une premiere version divisait la borne de l'appelant par
+    # alpha.beta : quand ce produit etait grand, la recherche demarrait a un
+    # gamma minuscule, donc B1B1'/gamma^2 explosait — |S| a atteint 4e18 et le
+    # conditionnement du hamiltonien 8e30. La decomposition de Schur classait
+    # alors 10 valeurs propres du bon cote pour un probleme d'ordre 8, alors
+    # que le spectre etait parfaitement partage 8/8 et qu'aucune valeur propre
+    # n'approchait l'axe : un echec purement numerique, sur un probleme sain.
+    #
+    # Apres `scale_problem` les gains valent O(1), donc ces bornes-ci sont des
+    # nombres PURS et n'ont plus a etre traduites.
     lo = 1e-9 if g_lo is None else float(g_lo) / (alpha * beta)
-    hi = float(g_hi) / (alpha * beta)
+    hi = 1e6 if g_hi is None else float(g_hi) / (alpha * beta)
+    hi = min(max(hi, 1e-6), 1e8) if g_hi is not None else 1e6
     try:
         K_hi = central(*Ps, hi)
     except HinfFailure as e:
-        raise HinfFailure(f'infaisable meme a gamma = {g_hi:.3g} : {e}')
+        raise HinfFailure(f'infaisable meme a gamma\' = {hi:.3g} : {e}')
     best = (K_hi, hi)
     for _ in range(n_iter):
         if hi - lo <= tol * max(1e-12, hi):

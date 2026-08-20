@@ -351,6 +351,69 @@ def test_hinf_reaches_the_gamma_it_claims():
     assert ev.real.max() < 0, f'boucle fermee instable : {ev.real.max():.3g}'
 
 
+# ----------------------------------------------------------------- mu-synthese
+def test_d_scaling_is_exact_for_a_dynamic_scale():
+    """Inserer D sur z_Delta et D^-1 sur w_Delta multiplie EXACTEMENT la ligne
+    par D(jw) et divise la colonne par D(jw).
+
+    C'est le coeur de l'iteration D-K, et le piege est precis : `w_Delta`
+    n'entre pas dans l'etat, il s'AJOUTE A LA SORTIE. Toute sa voie passe donc
+    par le terme direct, et l'etat de D^-1 doit etre reinjecte dans C2. Sans
+    cela la mise a l'echelle reste exacte pour un D CONSTANT — ou D^-1 n'a pas
+    d'etat — et fausse de 85 % des que D devient dynamique, c'est-a-dire dans
+    tous les cas qui servent a quelque chose. Un D-K silencieusement faux
+    rendrait des bornes mu sans aucun rapport avec la realite.
+    """
+    from hinf import plant_ss, bandpass_weight
+    from musyn import augment_mu, _scale_channel, _frf
+    P = augment_mu(plant_ss(np.array([2 * np.pi * 543.0]), np.array([0.02]),
+                            np.array([3.0])),
+                   bandpass_weight(50.0, 543.0, 0.3), 1.0, 1e-3)
+
+    def openmap(Q):
+        A, B1, B2, C1, C2, D12, D21 = Q
+        B = np.hstack([B1, B2])
+        Cc = np.vstack([C1, C2])
+        D = np.block([[np.zeros((C1.shape[0], B1.shape[1])), D12],
+                      [D21, np.zeros((1, 1))]])
+        return (A, B, Cc, D)
+
+    om = 2 * np.pi * np.logspace(1, 4, 60)
+    G0 = _frf(openmap(P), om)
+    for k, a, b in ((3.0, 1.0, 1.0),
+                    (2.0, 2 * np.pi * 300.0, 2 * np.pi * 2000.0),
+                    (0.4, 2 * np.pi * 5000.0, 2 * np.pi * 200.0)):
+        Dss = (np.array([[-b]]), np.array([[1.0]]),
+               np.array([[k * (a - b)]]), np.array([[k]]))
+        Dj = k * (1j * om + a) / (1j * om + b)
+        G1 = _frf(openmap(_scale_channel(P, Dss)), om)
+        E = np.array(G0, copy=True)
+        E[:, 0, :] *= Dj[:, None]
+        E[:, :, 0] /= Dj[:, None]
+        err = float(np.max(np.abs(G1 - E)) / np.max(np.abs(E)))
+        assert err < 1e-10, f'mise a l echelle D = {k}(s+{a:.3g})/(s+{b:.3g})' \
+                            f' fausse de {err:.2e}'
+
+
+def test_mu_bound_is_between_spectral_radius_and_sigma_max():
+    """rho(M) <= mu(M) <= sigma_max(M) — l'encadrement qui definit mu.
+
+    Deux reperes independants du code qui calcule la borne. Si la section
+    doree se trompait de sens, ou si le bloc mis a l'echelle n'etait pas le
+    bon, l'un des deux cotes tomberait.
+    """
+    from musyn import mu_upper
+    rng = np.random.default_rng(11)
+    for _ in range(20):
+        M = rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3))
+        mu, d = mu_upper(M, n_a=1)
+        rho = float(np.max(np.abs(np.linalg.eigvals(M))))
+        sig = float(np.linalg.svd(M, compute_uv=False)[0])
+        assert rho <= mu + 1e-9, f'mu = {mu:.6g} sous rho = {rho:.6g}'
+        assert mu <= sig + 1e-9, f'mu = {mu:.6g} au-dessus de sigma = {sig:.6g}'
+        assert d > 0.0
+
+
 def _main():
     fs = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     bad = 0

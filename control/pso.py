@@ -25,6 +25,7 @@ from adrc import adrc_fopid_ss, b0_nominal
 from fdob import fdob_fopid_ss, target_modes
 from hinf import HinfFailure, augment, bandpass_weight, plant_ss, synthesize
 from musyn import augment_mu, dk_iterate
+from nonlinear import mpc_lti_ss, smc_lti_ss
 from classical import LqgFailure, dvf_ss, lqg_ss, vpa_ss
 from nmp_dob import nmp_dob_fopid_ss
 from plate_model import plant_vectors
@@ -58,7 +59,7 @@ class Design:
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
             self.tw, self.tz, self.tr = target_modes(plate, self.targets)
-        if kind in ('hinf', 'musyn', 'lqg'):
+        if kind in ('hinf', 'musyn', 'lqg', 'mpc'):
             # Ces trois-la se synthetisent SUR le modele : elles ont besoin du
             # procede lui-meme, pas seulement de son signe de boucle.
             w, zt, Hv, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
@@ -66,7 +67,8 @@ class Design:
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
                   fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
                   musyn=C.BOUNDS_MU, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
-                  lqg=C.BOUNDS_LQG, nmpdob=C.BOUNDS_NMPDOB)[kind]
+                  lqg=C.BOUNDS_LQG, nmpdob=C.BOUNDS_NMPDOB,
+                  mpc=C.BOUNDS_MPC, smc=C.BOUNDS_SMC)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -99,6 +101,13 @@ class Design:
             return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
                         w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
                         f_w=p['f_w'])
+        if self.kind == 'mpc':
+            return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
+                        w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
+                        f_w=p['f_w'], horizon=10.0 ** p['log_T'])
+        if self.kind == 'smc':
+            return dict(lam=10.0 ** p['log_lam'], k_s=10.0 ** p['log_ks'],
+                        phi=10.0 ** p['log_phi'])
         out = dict(Kp=10.0 ** p['log_Kp'], Ki=10.0 ** p['log_Ki'],
                    Kd=10.0 ** p['log_Kd'], lam=p['lam'], mu=p['mu'])
         if self.kind == 'adrc':
@@ -130,6 +139,21 @@ class Design:
             core = vpa_ss([p['g1'], p['g2']], [p['f1'], p['f2']],
                           [p['z1'], p['z2']],
                           self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        if self.kind == 'smc':
+            # Le filtre de lissage commun est DEJA dans cette realisation :
+            # le PD seul est impropre. Meme filtre, memes parametres, applique
+            # une seule fois — d'ou l'absence de `series` ici.
+            return smc_lti_ss(p['lam'], p['k_s'], p['phi'], C.ROLLOFF_HZ,
+                              C.ROLLOFF_ORDER,
+                              self.sign_loop * self.sign_variant)
+        if self.kind == 'mpc':
+            try:
+                K = mpc_lti_ss(self.plant, **p)
+            except (LqgFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
             return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind == 'lqg':
             try:

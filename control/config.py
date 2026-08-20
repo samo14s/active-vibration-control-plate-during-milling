@@ -306,6 +306,32 @@ BOUNDS_LQG = dict(
     log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
     log_v=(-6.0, 2.0), f_w=(350.0, 1500.0))
 
+# MPC explicite : rigoureusement les memes cinq ponderations que le LQG, plus
+# l'HORIZON — c'est la condition pour que l'ecart mesure entre les deux porte
+# sur l'horizon et sur rien d'autre. La borne basse (10 us) est bien en deca
+# de la periode du mode le plus haut (0.24 ms a 4122 Hz), donc d'un correcteur
+# vraiment myope ; la borne haute (100 ms) est le regime ou la Riccati a
+# horizon fini a deja rejoint l'equation algebrique — mesure : ecart relatif
+# au gain LQR de 0.38 a 1 ms, 0.16 a 10 ms, 0.030 a 100 ms. Laisser
+# l'optimiseur atteindre ce bord est voulu : si le meilleur MPC est le LQG,
+# c'est un resultat, pas un echec de reglage.
+BOUNDS_MPC = dict(
+    log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
+    log_v=(-6.0, 2.0), f_w=(350.0, 1500.0), log_T=(-5.0, -1.0))
+
+# Mode glissant a couche limite. Seuls K_s/phi et lambda entrent dans la loi
+# LINEAIRE de l'interieur de la couche (u = -(K_s/phi)(ydot + lambda y)) ;
+# K_s et phi sont neanmoins laisses separes parce qu'ils se separent hors de
+# la couche, ou K_s est l'autorite maximale et phi la largeur de la zone
+# lineaire — et c'est le critere TEMPOREL qui les distingue.
+#   lambda : pente de la surface, soit la pulsation de coupure du glissement.
+#            De 100 a 1e5 rad/s encadre les cinq modes (3.4e3 a 2.6e4 rad/s).
+#   K_s    : autorite, en volts. Bornee par V_MAX cote simulation.
+#   phi    : largeur de la couche limite, en unites de la surface s
+#            (m/s + lambda*m). Une couche trop fine ramene le broutement de
+#            commande, une couche trop large annule le mode glissant.
+BOUNDS_SMC = dict(log_lam=(2.0, 5.0), log_ks=(-1.0, 3.0), log_phi=(-8.0, -1.0))
+
 
 # Boitier de l'observateur conscient du zero instable (control/nmp_dob.py).
 # Memes bornes de gains que le FOPID — la structure le CONTIENT a alpha = 0,

@@ -26,6 +26,7 @@ from fdob import fdob_fopid_ss, target_modes
 from hinf import HinfFailure, augment, bandpass_weight, plant_ss, synthesize
 from musyn import augment_mu, dk_iterate
 from classical import LqgFailure, dvf_ss, lqg_ss, vpa_ss
+from nmp_dob import nmp_dob_fopid_ss
 from plate_model import plant_vectors
 
 
@@ -65,7 +66,7 @@ class Design:
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
                   fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
                   musyn=C.BOUNDS_MU, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
-                  lqg=C.BOUNDS_LQG)[kind]
+                  lqg=C.BOUNDS_LQG, nmpdob=C.BOUNDS_NMPDOB)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -99,6 +100,9 @@ class Design:
             out['b0'] = p['b0_scale'] * self.b0_nom
         elif self.kind == 'fdob':
             out['zeta_q'] = 10.0 ** p['log_zq']
+            out['alpha'] = p['alpha']
+        elif self.kind == 'nmpdob':
+            out['wq'] = 10.0 ** p['log_wq']
             out['alpha'] = p['alpha']
         return out
 
@@ -141,6 +145,16 @@ class Design:
                     FloatingPointError):
                 return None
             core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        if self.kind == 'nmpdob':
+            # Le procede vu par l'observateur est le modele de SYNTHESE complet :
+            # la factorisation a besoin de tous les modes, c'est meme son objet.
+            w, zt, Hv, D_obs, _ = plant_vectors(self.plate, C.N_MODES_DESIGN)
+            core = nmp_dob_fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'],
+                                    p['mu'], p['wq'], p['alpha'], w, zt,
+                                    D_obs * Hv, C.OUST_WB, C.OUST_WH,
+                                    C.OUST_N,
+                                    self.sign_loop * self.sign_variant)
             return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind == 'fopid':
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],

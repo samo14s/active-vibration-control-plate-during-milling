@@ -310,3 +310,20 @@ BOUNDS_VPA = dict(
 BOUNDS_LQG = dict(
     log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
     log_v=(-6.0, 2.0), f_w=(350.0, 1500.0))
+
+
+# Boitier de l'observateur conscient du zero instable (control/nmp_dob.py).
+# Memes bornes de gains que le FOPID — la structure le CONTIENT a alpha = 0,
+# donc lui donner d'autres bornes casserait cette inclusion. Sept parametres,
+# comme l'ADRC-FOPID et comme l'observateur modal : les trois structures qui
+# ajoutent un observateur a l'epine dorsale FOPID sont ainsi comparables a
+# dimension egale.
+#
+# `wq` est la coupure du filtre Q. Sa borne haute n'est pas libre : au-dela de
+# la bande d'Oustaloup le filtre ne fait plus que de l'amplification de bruit,
+# et au-dela du zero instable (2459 Hz) il tente d'inverser ce qui, meme
+# apres factorisation, ne rend rien d'utile.
+BOUNDS_NMPDOB = dict(
+    log_Kp=(2.0, 7.0), log_Ki=(2.0, 9.0), log_Kd=(0.0, 5.0),
+    lam=(0.05, 1.0), mu=(0.05, 1.0),
+    log_wq=(2.5, 4.6), alpha=(0.0, 0.9))

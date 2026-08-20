@@ -1,0 +1,6 @@
+# Versions utilisees pour produire tous les resultats du depot.
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.1
+openpyxl==3.1.5      # lecture des .xlsx numerises des Fig. 12(a) et 12(b)
+pytest==8.4.2        # facultatif : "pytest tests/" comme alternative a l execution directe

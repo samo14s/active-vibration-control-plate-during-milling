@@ -135,6 +135,7 @@ jobs:
                    sim_controller pso chebyshev_plate milling_dynamics \
                    lti_floquet stability_fdm time_domain step_integrals \
                    hinf musyn classical nmp_dob nonlinear merge_pso \
+                   robustness_new \
                    run_pso run_compare run_adaptive run_pso_time \
                    run_eso_trace diagnose_adrc figures report_tables \
                    analyse_fdob audit_fairness figure_supervisor; do

@@ -18,8 +18,12 @@ contient exactement ce que run_compare aurait produit, par le meme appel a
     PROTOCOL=B KINDS=fopid,adrc python run_lobes.py
     PROTOCOL=B python run_lobes.py            (toutes celles qu'on trouve)
 
-Le fichier de cache porte le nom de la structure, donc deux processus n'en
-ecrivent jamais un seul en meme temps.
+Le fichier de cache porte le nom de la structure. Cela NE SUFFIT PAS a
+garantir qu'un seul processus l'ecrit : rien n'empeche de confier des listes
+qui se recouvrent a deux processus, et deux `np.savez_compressed` simultanes
+sur le meme chemin le laisseraient tronque. `compute` prend donc un VERROU
+`mkdir`, atomique sur un systeme de fichiers POSIX. (Cette phrase affirmait
+auparavant que le nommage suffisait — il ne suffisait pas.)
 """
 import glob
 import os
@@ -59,6 +63,23 @@ def load_cache(kind):
 
 
 def compute(kind, ss):
+    """Calcule et met en cache. VERROU ATOMIQUE : plusieurs processus peuvent
+    se voir confier des listes qui se recouvrent, et deux d'entre eux ecrivant
+    le meme .npz en meme temps le laisseraient tronque. `mkdir` est atomique
+    sur un systeme de fichiers POSIX ; celui qui echoue passe son chemin."""
+    lock = cache_path(kind) + '.lock'
+    try:
+        os.mkdir(lock)
+    except FileExistsError:
+        print(f'  {kind:16s} deja en cours dans un autre processus')
+        return
+    try:
+        _compute(kind, ss)
+    finally:
+        os.rmdir(lock)
+
+
+def _compute(kind, ss):
     t0 = time.time()
     lob = np.array([limits(plate_g, ss, rpm, hi=4.0e-3).min()
                     for rpm in SPEEDS])

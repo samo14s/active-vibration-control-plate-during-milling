@@ -276,7 +276,7 @@ def test_floquet_spectrum_matches_the_assembled_monodromy_on_the_real_plate():
     Trois structures reelles, deux profondeurs, et la monodromie assemblee
     comme unique reference.
     """
-    from closed_loop import period_maps, spectral_radius
+    from closed_loop import period_maps, spectral_radius, dominant_eig
     from fopid import series, rolloff_ss
     plate = _plate()
     n = 5
@@ -301,11 +301,21 @@ def test_floquet_spectrum_matches_the_assembled_monodromy_on_the_real_plate():
             maps, _ = period_maps(plate, C.RPM_DESIGN, ap, 0.5 * plate.lp,
                                   ctrl=ss, pd=None, n_modes=n, m=m)
             nx = maps[0][0].shape[0]
-            ref = float(np.max(np.abs(np.linalg.eigvals(
-                _exact_monodromy(maps, m, nx)))))
+            mu = np.linalg.eigvals(_exact_monodromy(maps, m, nx))
+            lam = mu[int(np.argmax(np.abs(mu)))]
+            ref = float(abs(lam))
             got = spectral_radius(maps, m, nx)
             assert abs(got - ref) < 1e-8 * max(1.0, ref), \
                 f'{kind} a a_p = {ap * 1e3:.2f} mm : {got:.9f} vs {ref:.9f}'
+            # ... et la PHASE, qui donne la frequence de broutement en boucle
+            # fermee. En valeur absolue : d'une paire conjuguee, argmax(|.|)
+            # peut rendre l'un ou l'autre membre, et `chatter_freq` prend
+            # justement |arg|.
+            ev = dominant_eig(maps, m, nx)
+            got_l = ev[int(np.argmax(np.abs(ev)))]
+            assert abs(abs(np.angle(got_l)) - abs(np.angle(lam))) < 1e-7, \
+                (f'{kind} a a_p = {ap * 1e3:.2f} mm : phase '
+                 f'{np.angle(got_l):.9f} contre {np.angle(lam):.9f}')
 
 
 def test_nmp_dob_reduces_to_the_fopid_at_alpha_zero():

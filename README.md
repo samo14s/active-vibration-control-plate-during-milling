@@ -12,12 +12,19 @@
 |---|---|---|---|
 | ما هو النموذج المستعمل في المقالة، وهل نُقل بأمانة؟ | `MODELE_PAPIER.md` | `paper_model/` + `verification/09..20` | `figures/verification/` |
 | أيّهما أفضل بين FOPID و ADRC‑FOPID، بمقارنة عادلة؟ | `COMPARAISON_ADRC_FOPID.md` | `control/` | `figures/comparison/` |
+| وكيف تقف الاثنتا عشرة بنية بعضها من بعض؟ | `COMPARAISON_ETENDUE.md` | `control/` | `figures/comparison/` |
 | **لماذا** يخسر ADRC‑FOPID — أيّ عنصر يجب تغييره رياضيًّا؟ | `DIAGNOSTIC_ADRC.md` | `control/diagnose_adrc.py` | `figures/comparison/` |
 | هل يفوز البديل الذي يصفه التشخيص؟ | `OBSERVATEUR_MODAL.md` | `control/fdob*.py` | `figures/comparison/` |
 | تدقيق النموذج بعناصر منتهية (عمل سابق) | `VERIFICATION.md` | `simulation/` + `verification/01..08` | — |
 
 وكلّ ذلك مجموعًا في تقرير واحد: **`report/rapport_final.pdf`** (55 صفحة، خمسة أجزاء،
 30 شكلًا مُدمَجًا).
+
+> ⚠️ **تصحيح جارٍ يمسّ كلّ رقم مشتقّ من فلوكيه.** المقدِّر الذي أنتج كلّ `J`
+> وكلّ `a_p,lim` في هذا المستودع كان يعطي أنصاف أقطار طيفية خاطئة، دائمًا في
+> اتّجاه التفاؤل. الشرح الكامل والقياس في `COMPARAISON_ETENDUE.md` §4، والحملة
+> تُعاد كاملةً الآن. ما يأتي من الاستجابة الترددية أو من القيم الذاتية مباشرةً،
+> وأشكال الورقة في الحلقة المفتوحة، لا يتأثّر.
 
 ## الخلاصة
 

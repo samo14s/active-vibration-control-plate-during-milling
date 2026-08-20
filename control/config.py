@@ -86,19 +86,14 @@ N_MODES_OBJ = 2 if PROTOCOL == 'A' else 5     # modele vu par l'optimiseur
 N_MODES_DESIGN = N_MODES_OBJ  # ce que le correcteur "connait" (b0 nominal)
 M_FLOQUET_PSO = 24            # sous-intervalles pendant l'optimisation
 M_FLOQUET = 200               # sous-intervalles pour tous les resultats
-# Nombre de periodes de l'iteration de puissance : None = critere d'arret
-# ADAPTATIF (voir closed_loop.spectral_radius). Un nombre fixe et petit
-# sous-estime rho, donc SURESTIME la stabilite : a 20 periodes la boucle
-# ouverte a 4900 tr/min etait declaree stable jusqu'a 0.080 mm au lieu de
-# 0.045 mm. Ne remettre une valeur entiere que pour un diagnostic.
-N_PERIOD = None
-# Tolerance de l'iteration de puissance PENDANT l'optimisation. Le classement
-# n'a pas besoin de la precision des resultats finals : n_min = 30 et
-# tol = 3e-3 coutent 25 % de moins et laissent rho a mieux que 0.3 %. Les
-# resultats publies (limites, lobes, robustesse) utilisent le reglage strict.
-N_PERIOD_MIN_PSO = 30
-N_PERIOD_TOL_PSO = 5e-3
-N_PERIOD_MAX_PSO = 150
+# Le rayon spectral de la monodromie est desormais obtenu par Arnoldi
+# (paper_model/monodromy.py) : il est EXACT a 1e-15 pres, donc il n'y a plus
+# ni nombre de periodes, ni tolerance, ni reglage degrade pour l'optimisation.
+# Les quatre constantes N_PERIOD, N_PERIOD_MIN_PSO, N_PERIOD_TOL_PSO et
+# N_PERIOD_MAX_PSO qui vivaient ici reglaient une iteration de puissance qui
+# rendait des valeurs fausses (0.79107 pour un exact de 0.967392) et dont
+# aucun reglage ne pouvait detecter l'erreur ; elles ont ete supprimees plutot
+# que conservees inertes.
 # Pas d'integration temporelle. Les correcteurs contiennent des poles
 # d'Oustaloup jusqu'a w_h = 2*pi*100 kHz : a n_sub = 164 (fs = 40 kHz) ces
 # dynamiques se replient et la simulation diverge avec des tensions de 700 kV

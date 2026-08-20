@@ -115,16 +115,20 @@ def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None,
     return Ms, v
 
 
-def floquet_margin(plate, ss, rpm, ap, x_pos, m=None, n_period=None):
-    """log(rho) de la monodromie pour un correcteur LTI donne."""
+def floquet_margin(plate, ss, rpm, ap, x_pos, m=None):
+    """log(rho) de la monodromie pour un correcteur LTI donne.
+
+    Le calcul est le MEME pendant l'optimisation et pour les resultats
+    publies : Arnoldi rend le spectre exact, il n'y a donc plus de reglage
+    "economique" a degrader (les anciens C.N_PERIOD_* n'ont plus d'objet).
+    Seul C.M_FLOQUET_PSO < C.M_FLOQUET distingue encore les deux regimes, et
+    c'est une finesse de DISCRETISATION, pas une precision d'estimateur.
+    """
     m = C.M_FLOQUET_PSO if m is None else m
-    npd = C.N_PERIOD if n_period is None else n_period
     maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl=ss, pd=None,
                           n_modes=C.N_MODES_OBJ, m=m, coeff_mode='time',
                           coeff_scale=C.SIGN_SIM, ae=C.AE)
-    rho = spectral_radius(maps, m, maps[0][0].shape[0], npd,
-                          tol=C.N_PERIOD_TOL_PSO, n_min=C.N_PERIOD_MIN_PSO,
-                          n_max=C.N_PERIOD_MAX_PSO)
+    rho = spectral_radius(maps, m, maps[0][0].shape[0])
     if not np.isfinite(rho):        # divergence violente : borne haute graduee
         return 50.0
     return float(np.clip(np.log(max(rho, 1e-300)), -50.0, 50.0))
@@ -252,7 +256,7 @@ def limits(plate, ss, rpm, positions=None, m=None, n_modes=None,
     from closed_loop import limit
     pos = C.POSITIONS if positions is None else positions
     kw = dict(n_modes=C.N_MODES if n_modes is None else n_modes,
-              m=C.M_FLOQUET if m is None else m, n_period=C.N_PERIOD,
+              m=C.M_FLOQUET if m is None else m,
               coeff_mode='time', coeff_scale=C.SIGN_SIM, ae=C.AE)
     return np.array([limit(plate, rpm, fr * plate.lp, ctrl=ss, pd=None,
                            lo=lo, hi=hi, rtol=rtol, **kw) for fr in pos])

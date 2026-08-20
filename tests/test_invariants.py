@@ -251,10 +251,88 @@ def test_dominant_eigs_matches_the_assembled_monodromy():
         maps = _random_maps(seed, nx)
         mu = np.linalg.eigvals(_exact_monodromy(maps, m, nx))
         ref = mu[int(np.argmax(np.abs(mu)))]
-        ev = dominant_eigs(maps, m, nx, q=4, n_period=60)
+        ev = dominant_eigs(maps, m, nx, q=4)
         got = ev[int(np.argmax(np.abs(ev)))]
         assert abs(got - ref) < 1e-9 * max(1.0, abs(ref)), \
             f'graine {seed} : obtenu {got:+.6f}, attendu {ref:+.6f}'
+
+
+def test_floquet_spectrum_matches_the_assembled_monodromy_on_the_real_plate():
+    """Le rayon spectral rendu par le depot est CELUI de la monodromie.
+
+    Le test precedent verifie cette identite sur des applications aleatoires,
+    donc sur une monodromie bien conditionnee. Ce n'est pas le regime dans
+    lequel le depot travaille : sur la vraie plaque en boucle fermee la
+    monodromie est tres NON NORMALE (conditionnement de la base propre
+    1.35e29 sur le FDOB), et c'est exactement la que l'iteration de puissance
+    qui a longtemps vecu ici echouait — en rendant, selon la graine,
+    0.79107 / 0.91421 / 0.90243 pour des valeurs exactes de
+    0.967392 / 0.959809 / 0.939341.
+
+    L'erreur allait TOUJOURS dans le meme sens : rho sous-estime, donc coupe
+    declaree plus stable qu'elle ne l'est, donc a_p,lim surestimee. Un test
+    sur des matrices aleatoires ne pouvait pas la voir ; celui-ci la voit.
+
+    Trois structures reelles, deux profondeurs, et la monodromie assemblee
+    comme unique reference.
+    """
+    from closed_loop import period_maps, spectral_radius
+    npz = os.path.join(ROOT, 'results', 'pso_B.npz')
+    if not os.path.exists(npz):
+        import pytest
+        pytest.skip('results/pso_B.npz absent')
+    plate = _plate()
+    d = np.load(npz, allow_pickle=True)
+    m = 12                                   # petit : la reference est en O(dim^3)
+    for kind in ('fopid', 'adrc', 'fdob'):
+        if f'{kind}__A' not in d.files:
+            continue
+        ss = tuple(d[f'{kind}__{k}'] for k in 'ABCD')
+        for ap in (0.10e-3, 0.20e-3):
+            maps, _ = period_maps(plate, C.RPM_DESIGN, ap, 0.5 * plate.lp,
+                                  ctrl=ss, pd=None, n_modes=5, m=m)
+            nx = maps[0][0].shape[0]
+            ref = float(np.max(np.abs(np.linalg.eigvals(
+                _exact_monodromy(maps, m, nx)))))
+            got = spectral_radius(maps, m, nx)
+            assert abs(got - ref) < 1e-8 * max(1.0, ref), \
+                f'{kind} a a_p = {ap * 1e3:.2f} mm : {got:.9f} vs {ref:.9f}'
+
+
+def test_controller_realizations_are_conditioned():
+    """Les correcteurs assembles ne portent pas de forme compagne brute.
+
+    LE POINT AVEUGLE QUE CE TEST COMBLE. Tous les invariants de reponse
+    frequentielle de ce fichier (zeros a droite, phase minimale du modele
+    reduit, identite du LESO, superset FOPID) passent a l'identique sur une
+    realisation d'etat INUTILISABLE : ss_frf resout (jw I - A) x = B, et un
+    solve est insensible a une mise a l'echelle des etats. Le defaut de
+    nmp_dob est passe entre les mailles pour cette raison exacte — la
+    fonction de transfert etait bonne a 1e-15 et la matrice d'etat avait un
+    conditionnement de 2.5e70, ce que Floquet lisait comme J = 0.0000.
+
+    Floquet, lui, prend A telle quelle et l'exponentie. Il faut donc un
+    invariant sur la MATRICE, pas sur la reponse.
+    """
+    from scipy.signal import tf2ss
+    import nmp_dob
+    plate = _plate()
+    n = 5
+    D_obs = plate.D_row(plate.lp, plate.hp)[:n]
+    res = D_obs * np.asarray(plate.H_Pe_modal, float)[:n]
+    num, den = nmp_dob.plant_tf(plate.omega_n[:n], plate.zeta_modes[:n], res)
+    (nm, dm), _, _ = nmp_dob.inner_outer(num, den)
+    wq = 2 * np.pi * 3000.0
+    A = nmp_dob._w_ss(nm, dm, wq, nmp_dob.Q_ORDER)[0]
+    c = np.linalg.cond(A)
+    assert c < 1e6, f'realisation de W : conditionnement {c:.3e}'
+    # ... et la forme compagne que cette cascade remplace, pour que le test
+    # echoue si quelqu'un revient en arriere.
+    bad = np.linalg.cond(tf2ss(np.convolve(np.r_[wq ** nmp_dob.Q_ORDER], dm),
+                               np.convolve(
+                                   np.poly([-wq] * nmp_dob.Q_ORDER), nm))[0])
+    assert bad > 1e30, ('la forme compagne n\'est plus pathologique : '
+                        f'{bad:.3e} — l\'invariant a perdu son objet')
 
 
 def test_step_integrals_agree_on_both_paths():

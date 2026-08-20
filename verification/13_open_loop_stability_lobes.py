@@ -72,7 +72,6 @@ N_MODES = C.N_MODES                          # 5
 AE = C.AE                                    # 0.1 mm
 SIGN = float(C.SIGN_SIM)                     # signe de reference du depot
 M_FLOQ = 100                                 # sous-intervalles par periode
-N_PERIOD = 30                                # periodes d'iteration de puissance
 AP_LO, AP_HI, N_BIS = 5.0e-6, 2.5e-3, 8      # bissection LOG sur a_p
 RPM_S, AP_S = 4900, 0.30e-3                  # condition S du papier
 # pas 200 tr/min + la vitesse exacte de la condition S (4900 n'est pas sur la
@@ -122,9 +121,9 @@ def fast_period_maps(plate, rpm, ap, x_pos, sign, n_modes, m, ae):
     return out, tau
 
 
-def stable(plate, rpm, ap, x_pos, sign, m=M_FLOQ, n_period=N_PERIOD):
+def stable(plate, rpm, ap, x_pos, sign, m=M_FLOQ):
     maps, _ = fast_period_maps(plate, rpm, ap, x_pos, sign, N_MODES, m, AE)
-    return spectral_radius(maps, m, maps[0][0].shape[0], n_period) <= 1.0
+    return spectral_radius(maps, m, maps[0][0].shape[0]) <= 1.0
 
 
 def ap_limit(plate, rpm, x_pos, sign, m=M_FLOQ, lo=AP_LO, hi=AP_HI,
@@ -197,8 +196,8 @@ def main():
           f" {C.FZ * 1e3:.3f} mm/dent, 3 dents, D = 10 mm, helice 35 deg")
     print(f"  Floquet  : discretisation complete, m = {M_FLOQ}"
           f" sous-intervalles/periode de dent"
-          f" (C.M_FLOQUET = {C.M_FLOQUET} en production), n_period ="
-          f" {N_PERIOD}")
+          f" (C.M_FLOQUET = {C.M_FLOQUET} en production) ;"
+          " spectre par Arnoldi (paper_model/monodromy.py)")
     print(f"  Recherche: bissection LOG de a_p dans"
           f" [{AP_LO * 1e3:.3f}, {AP_HI * 1e3:.3f}] mm, {N_BIS} niveaux"
           f" -> resolution relative"
@@ -229,7 +228,7 @@ def main():
     lref = repo_limit(plate_m, RPM_S, 0.5 * plate_m.lp, ctrl=None, pd=None,
                       lo=AP_LO, hi=AP_HI, tol=2e-5, n_modes=N_MODES,
                       m=M_FLOQ, coeff_mode='time', coeff_scale=SIGN,
-                      n_period=N_PERIOD, ae=AE)
+                      ae=AE)
     lfast = ap_limit(plate_m, RPM_S, 0.5 * plate_m.lp, SIGN)
     print(f"\n  [controle 1] cartes de periode rapides vs"
           f" closed_loop.period_maps : ecart max = {d:.3e}")

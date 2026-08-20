@@ -136,26 +136,60 @@ def main():
     # pour chaque paire, combien de graines de l'une depassent la MEILLEURE
     # graine de l'autre — un test qui ne suppose rien sur la distribution.
     print("\n  5bis. combien de graines de X depassent la meilleure de Y")
-    for a in kinds:
-        ja = np.asarray(rows[a]['J_seeds'])[
-            np.asarray(rows[a]['variants']) == rows[a]['variant']]
-        for b in kinds:
-            if a == b:
-                continue
-            jb = np.asarray(rows[b]['J_seeds'])[
-                np.asarray(rows[b]['variants']) == rows[b]['variant']]
-            n = int((ja > jb.max()).sum())
-            # Sous l'hypothese nulle d'echangeabilite (memes tirages, meme
-            # loi), la probabilite que les n meilleures valeurs de
-            # l'echantillon groupe appartiennent TOUTES au groupe a vaut
-            # C(na, n) / C(na + nb, n). C'est un test de rang exact, sans
-            # aucune hypothese de distribution — ce qui est indispensable
-            # ici, les J n'ayant aucune raison d'etre gaussiens.
-            na, nb = len(ja), len(jb)
-            pval = (comb(na, n) / comb(na + nb, n)) if n else 1.0
-            print(f"    {a:10s} : {n}/{na} graines au-dessus du meilleur"
-                  f" {b} ({jb.max():+.4f})"
-                  + (f"   p = {pval:.4f}" if n else ""))
+    # AVEC CORRECTION DE MULTIPLICITE, et ce n'est pas un ornement : a douze
+    # structures il y a 66 paires, donc a p < 0.05 on attend TROIS paires
+    # declarees separables par le seul hasard. Sans correction, la liste des
+    # "differences significatives" contiendrait du bruit, et comme le bruit
+    # tombe n'importe ou il tomberait aussi sur des paires interessantes.
+    #
+    # Holm-Bonferroni : on trie les p, on compare le k-ieme a alpha/(m-k+1),
+    # et on s'arrete au premier echec. Uniformement plus puissant que
+    # Bonferroni simple, et valide sans hypothese d'independance — ce qui
+    # importe ici, les paires partageant leurs echantillons.
+    #
+    # On n'imprime pas les 66 paires : les comparaisons qui portent une
+    # information sont celles des VOISINS DANS LE CLASSEMENT (une structure
+    # est-elle vraiment devant celle qui la suit ?) et celles de chacune
+    # contre la MEILLEURE. Le reste se deduit par transitivite du classement.
+    def seeds_of(k):
+        j = np.asarray(rows[k]['J_seeds'], float)
+        v = np.asarray(rows[k]['variants'], float)
+        return j[v == rows[k]['variant']]
+
+    def rank_p(a, b):
+        """P(les n meilleures de l'echantillon groupe soient toutes de a)."""
+        ja, jb = seeds_of(a), seeds_of(b)
+        if ja.size == 0 or jb.size == 0:
+            return 0, 0, 1.0
+        n = int((ja > jb.max()).sum())
+        na, nb = len(ja), len(jb)
+        return n, na, (comb(na, n) / comb(na + nb, n)) if n else 1.0
+
+    order = sorted(kinds, key=lambda k: -rows[k]['J'])
+    pairs = [(order[i], order[i + 1]) for i in range(len(order) - 1)]
+    pairs += [(order[0], k) for k in order[2:]]
+    seen_p = set()
+    tests = []
+    for a, b in pairs:
+        if (a, b) in seen_p:
+            continue
+        seen_p.add((a, b))
+        n, na, pv = rank_p(a, b)
+        tests.append((a, b, n, na, pv))
+    m_tests = len(tests)
+    tests.sort(key=lambda t: t[4])
+    alpha, still = 0.05, True
+    print(f"    {m_tests} comparaisons retenues (voisins du classement + "
+          f"chacune contre la meilleure) ; Holm a alpha = {alpha}")
+    for i, (a, b, n, na, pv) in enumerate(tests):
+        thr = alpha / (m_tests - i)
+        ok = still and pv <= thr
+        if not ok:
+            still = False
+        print(f"    {a:10s} > {b:10s} : {n}/{na} graines au-dessus du"
+              f" meilleur de l autre, p = {pv:.4f}"
+              f"   seuil Holm {thr:.5f}   -> "
+              f"{'SEPARABLE' if ok else 'non separable'}")
 
     best = max(kinds, key=lambda k: rows[k]['J'])
     spread = max(v for v in spreads.values() if np.isfinite(v))

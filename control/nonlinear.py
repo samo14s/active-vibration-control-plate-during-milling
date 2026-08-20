@@ -198,12 +198,28 @@ def sampled_cost(A, B, Cz, q, r, dt, n_quad=24):
 
 
 class MPC:
-    """MPC explicite + estimateur de Kalman, interface temporelle du depot."""
+    """MPC explicite discret + estimateur de Kalman, interface temporelle.
+
+    MEME procede augmente et MEME ponderation passe-bande que `mpc_lti_ss`,
+    et meme filtre de Kalman. La seule difference est la NATURE du cout : ici
+    le gain vient de la Riccati a horizon fini du probleme ECHANTILLONNE
+    (cout sampled-data exact, quadrature de Gauss-Legendre dans
+    `sampled_cost`), la-bas de son equivalent en temps continu.
+
+    C'est ce qui rend l'ecart entre les deux colonnes interpretable : il
+    mesure le passage au cout echantillonne, et non deux reglages sans
+    rapport. Avant cette correction la classe penalisait la sortie BRUTE,
+    sans ponderation, et les deux formes n'etaient pas la meme loi a la
+    discretisation pres — elles etaient deux lois differentes.
+    """
 
     def __init__(self, plant, horizon, q, r, v_meas, dt, w_proc=1.0,
-                 sign_variant=1.0, v_max=None):
-        A, B, Cc, _ = [np.atleast_2d(np.asarray(m, float)) for m in plant]
-        self.K = mpc_gain(A, B, Cc, horizon, q, r, dt) * float(sign_variant)
+                 f_w=None, zeta_w=0.5, sign_variant=1.0, v_max=None):
+        if f_w is None:
+            raise ValueError('f_w est obligatoire : sans lui cette loi ne '
+                             'ponderait pas la meme sortie que mpc_lti_ss')
+        A, B, Cc, Cz = _weighted_plant(plant, f_w, zeta_w)
+        self.K = mpc_gain(A, B, Cz, horizon, q, r, dt) * float(sign_variant)
         Y = solve_continuous_are(A.T, Cc.T, float(w_proc) * (B @ B.T),
                                  float(v_meas) * np.eye(1))
         L = (Y @ Cc.T) / float(v_meas)
@@ -304,16 +320,19 @@ def finite_horizon_gain(A, B, Q, R, T, n_max=4096):
     raise ValueError('Riccati a horizon fini non finie')
 
 
-def mpc_lti_ss(plant, q, r, w_proc, v_meas, f_w, horizon, zeta_w=0.5):
-    """MPC explicite sans contrainte active, en representation d'etat y -> u.
+def _weighted_plant(plant, f_w, zeta_w=0.5):
+    """Procede augmente de la ponderation passe-bande, equilibre.
 
-    Rigoureusement la meme construction que `classical.lqg_ss` — meme
-    ponderation passe-bande sur la sortie, meme filtre de Kalman — a une seule
-    difference : le gain vient d'une Riccati a HORIZON FINI et non de
-    l'equation algebrique. C'est la condition pour que la comparaison
-    LQG/MPC mesure l'horizon et rien d'autre.
+    UNE SEULE definition, partagee par `mpc_lti_ss` et par la classe `MPC`.
+    Elle etait dupliquee — ou plutot elle ne l'etait PAS : la forme continue
+    ponderait la sortie par un passe-bande et la forme temporelle penalisait
+    la sortie BRUTE, sans ponderation. Les deux n'etaient donc pas la meme
+    loi a la discretisation pres, elles etaient deux lois differentes, et
+    l'ecart mesure entre elles n'aurait rien dit sur le bloqueur.
+
+    Retourne (A, B, C, Cz) : C la mesure, Cz la sortie PENALISEE.
     """
-    from classical import _bandpass, LqgFailure
+    from classical import _bandpass
     from ss_balance import balance
     Ap, Bp, Cp, _ = [np.atleast_2d(np.asarray(m, float)) for m in plant]
     Aw, Bw, Cw, _ = _bandpass(f_w, zeta_w)
@@ -329,13 +348,25 @@ def mpc_lti_ss(plant, q, r, w_proc, v_meas, f_w, horizon, zeta_w=0.5):
     C[0, :npp] = Cp
     Cz = np.zeros((1, n))
     Cz[0, npp:] = Cw
-    # EQUILIBRAGE DU SYSTEME AUGMENTE, avant de former le hamiltonien. La
-    # plaque apporte des w^2 de l'ordre de 1e9 et la ponderation des termes
-    # d'ordre 1 : le hamiltonien assemble tel quel a un conditionnement qui
-    # rend X non inversible et la Riccati a horizon fini echoue alors qu'elle
-    # existe. Meme remede qu'en H-infini, et sans consequence sur le resultat :
-    # le correcteur est rendu dans ces coordonnees-la, qui lui sont semblables.
-    A, (B, L0), (C, Cz), _ = balance(A, [B, np.zeros((n, 1))], [C, Cz])
+    # EQUILIBRAGE avant tout hamiltonien : la plaque apporte des w^2 de
+    # l'ordre de 1e9 et la ponderation des termes d'ordre 1 ; assemble tel
+    # quel, le hamiltonien rend X non inversible et la Riccati a horizon fini
+    # echoue alors qu'elle existe.
+    A, (B, _z), (C, Cz), _ = balance(A, [B, np.zeros((n, 1))], [C, Cz])
+    return A, B, C, Cz
+
+
+def mpc_lti_ss(plant, q, r, w_proc, v_meas, f_w, horizon, zeta_w=0.5):
+    """MPC explicite sans contrainte active, en representation d'etat y -> u.
+
+    Rigoureusement la meme construction que `classical.lqg_ss` — meme
+    ponderation passe-bande sur la sortie, meme filtre de Kalman — a une seule
+    difference : le gain vient d'une Riccati a HORIZON FINI et non de
+    l'equation algebrique. C'est la condition pour que la comparaison
+    LQG/MPC mesure l'horizon et rien d'autre.
+    """
+    from classical import LqgFailure
+    A, B, C, Cz = _weighted_plant(plant, f_w, zeta_w)
     try:
         K = finite_horizon_gain(A, B, float(q) * (Cz.T @ Cz),
                                 float(r) * np.eye(1), horizon)

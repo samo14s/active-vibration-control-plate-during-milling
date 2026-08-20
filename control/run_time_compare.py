@@ -24,9 +24,19 @@ NON LINEAIRE que Floquet ne peut pas voir :
   non-linearite coute ou rapporte.
 
   MPC. Sa loi explicite sans contrainte active EST lineaire, et
-  `nonlinear.mpc_lti_ss` la rend exactement. La classe `MPC` en donne la
-  version discrete, avec estimateur echantillonne — l'ecart entre les deux
-  mesure le bloqueur, pas la structure.
+  `nonlinear.mpc_lti_ss` la rend exactement. La classe `MPC` resout le MEME
+  probleme — meme procede augmente, meme ponderation passe-bande, meme filtre
+  de Kalman — mais avec le cout du probleme ECHANTILLONNE (sampled-data
+  exact) au lieu de son equivalent continu. L'ecart entre les deux colonnes
+  mesure donc ce passage-la.
+
+  Cette phrase disait auparavant que l'ecart « mesure le bloqueur, pas la
+  structure ». C'ETAIT FAUX : la classe penalisait la sortie BRUTE, sans
+  ponderation, la ou la forme continue penalise la sortie filtree. Les deux
+  n'etaient pas la meme loi a la discretisation pres, elles etaient deux lois
+  differentes, et leur ecart n'aurait rien mesure d'interpretable. Le procede
+  pondere vit desormais dans `nonlinear._weighted_plant`, appele par les
+  deux.
 
 Toutes les autres passent par `LTIController`, donc echantillonnees et
 saturees comme les deux precedentes : personne n'est mesure dans un regime
@@ -158,7 +168,8 @@ def main():
             # decriraient pas le meme horizon physique.
             n = max(1, int(round(p['horizon'] / s.dt)))
             return MPC(P, n, p['q'], p['r'], p['v_meas'], s.dt,
-                       w_proc=p['w_proc'], sign_variant=var, v_max=C.V_MAX)
+                       w_proc=p['w_proc'], f_w=p['f_w'], sign_variant=var,
+                       v_max=C.V_MAX)
         cfgs.append(('mpc_discret', mk_mpc, 'discret'))
 
     for name, mk, form in cfgs:

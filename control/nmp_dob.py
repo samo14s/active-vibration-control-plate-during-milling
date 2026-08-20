@@ -44,7 +44,10 @@ part vaut-elle quelque chose sur cette plaque ? Le protocole y repondra, et
 la reponse peut tres bien etre non.
 """
 import numpy as np
+from scipy.linalg import matrix_balance
 from scipy.signal import tf2ss, tf2zpk, zpk2tf
+
+from fopid import series
 
 
 def plant_tf(w, zeta, res):
@@ -171,6 +174,156 @@ def _q_tf(wq, r):
 Q_ORDER = 3
 
 
+# ---------------------------------------------------------------------------
+# POURQUOI W = Q.P_min^-1 EST REALISE EN CASCADE, ET NON PAR tf2ss
+# ----------------------------------------------------------------
+# La version precedente formait W en CONVOLUANT les polynomes puis appelait
+# `tf2ss` dessus. Le denominateur obtenu est de DEGRE 11 et ses coefficients
+# s'etalent sur 6.5e45 (le numerateur sur 4.7e40) : la forme compagne les
+# recopie tels quels dans une meme matrice, dont le conditionnement en norme 2
+# vaut alors 2.5e70 — trente ordres de grandeur au-dela de 1/eps.
+#
+# Le piege est que cette matrice reste TRES BONNE en frequentiel : la reponse
+# rendue par (A, B, C, D) collait encore a 1.3e-12 pres a la fraction
+# rationnelle, parce que `ss_frf` resout (jw I - A) x = B et n'est donc pas
+# sensible a l'echelle. Tous les controles frequentiels passaient, et la
+# structure rendait a alpha = 0 exactement la fonction de transfert du FOPID
+# stocke (accord a 1e-15, memes Ms = 1.97 et V = 153 V/N).
+#
+# Ce qui ne passait pas est le calcul de FLOQUET, qui travaille sur la
+# MATRICE D'ETAT et non sur la reponse : a alpha = 0 il rendait J = +0.0000
+# la ou le FOPID stocke, de fonction de transfert IDENTIQUE, vaut J = +0.2479.
+# Les etats de W ne sont pourtant pas observes quand alpha = 0 — mais ils
+# restent dans la matrice augmentee, et leur echelle y detruit tout.
+#
+# C'est la meme faute que celle deja corrigee dans `fopid.frac_ss` (forme
+# modale au lieu de la forme compagne de `zpk2ss`) et dans `fdob._tf`
+# (equilibrage), et elle se corrige ici de la meme facon : on ne forme JAMAIS
+# le polynome de degre 11. On factorise W en sections d'ordre <= 2 — ou la
+# forme compagne est inoffensive, ses coefficients etant w et w^2 — et on les
+# met en SERIE. Le gain global, qui vaut wq^3/k et atteint 1e12, est reparti
+# entre les sections au lieu d'etre porte par une seule.
+# ---------------------------------------------------------------------------
+def _real_factors(roots, tol=1e-9):
+    """Racines -> facteurs moniques REELS de degre 1 ou 2.
+
+    Chaque paire conjuguee donne son trinome s^2 - 2Re(r)s + |r|^2 ; les
+    racines reelles sont appariees deux a deux par module croissant (une
+    section d'ordre 2 par paire), la derniere restant seule si leur nombre est
+    impair.
+    """
+    roots = np.asarray(roots, complex)
+    scale = np.maximum(np.abs(roots), 1.0)
+    is_real = np.abs(roots.imag) <= tol * scale
+    real = np.sort(roots[is_real].real)
+    cplx = roots[~is_real]
+    cplx = cplx[cplx.imag > 0.0]
+    fac = [np.array([1.0, -2.0 * r.real, float(abs(r) ** 2)]) for r in cplx]
+    real = real[np.argsort(np.abs(real))]
+    i = 0
+    while i + 1 < real.size:
+        fac.append(np.polymul([1.0, -real[i]], [1.0, -real[i + 1]]))
+        i += 2
+    if i < real.size:
+        fac.append(np.array([1.0, -real[i]]))
+    if sum(len(f) - 1 for f in fac) != roots.size:
+        raise ValueError('racines complexes non conjuguees : factorisation '
+                         'reelle impossible')
+    return fac
+
+
+def _wchar(fac):
+    """Pulsation caracteristique d'un facteur monique : |prod racines|^(1/deg)."""
+    d = len(fac) - 1
+    return abs(fac[-1]) ** (1.0 / d)
+
+
+def _sections(zeros, poles):
+    """Appariement zeros/poles en sections PROPRES d'ordre <= 2.
+
+    On apparie par pulsation caracteristique croissante et a degre egal quand
+    c'est possible : chaque section garde ainsi un gain d'ordre 1 dans sa
+    propre bande, ce qui est la condition pour que le gain global se reparte
+    sans qu'aucune section ne porte un facteur d'echelle enorme.
+    """
+    zf = sorted(_real_factors(zeros), key=_wchar)
+    pf = sorted(_real_factors(poles), key=_wchar)
+    used = [False] * len(zf)
+    sec = []
+    for d in pf:
+        pick = None
+        for same in (True, False):
+            for k, n in enumerate(zf):
+                if used[k]:
+                    continue
+                if (len(n) == len(d)) if same else (len(n) < len(d)):
+                    pick = k
+                    break
+            if pick is not None:
+                break
+        if pick is None:
+            sec.append((np.array([1.0]), d))
+        else:
+            used[pick] = True
+            sec.append((zf[pick], d))
+    if not all(used):
+        raise ValueError('appariement zeros/poles impossible : W n\'est pas '
+                         'propre section par section')
+    return sec
+
+
+def _balanced_tf_ss(num, den):
+    """(A, B, C, D) d'une section, EQUILIBREE (similitude diagonale).
+
+    `permute=False` n'est pas un detail : avec la permutation, `matrix_balance`
+    rend un T qui n'est plus diagonal et l'inverse par 1/diag(T) fabrique des
+    inf puis des NaN.
+    """
+    A, B, C, D = tf2ss(np.asarray(num, float), np.asarray(den, float))
+    A = np.atleast_2d(A)
+    B = np.atleast_2d(B).reshape(-1, 1)
+    C = np.atleast_2d(C).reshape(1, -1)
+    Ab, T = matrix_balance(A, permute=False, separate=False)
+    Ti = np.diag(1.0 / np.diag(T))
+    return Ab, Ti @ B, C @ T, np.atleast_2d(D).reshape(1, 1)
+
+
+def _cascade_ss(zeros, poles, gain):
+    """Realisation en CASCADE de la fonction gain.prod(s-z)/prod(s-p).
+
+    Le gain global est REPARTI : chaque section est normalisee a son propre
+    module a SA pulsation caracteristique, puis toutes recoivent le meme
+    facteur, de sorte qu'aucune ne porte seule wq^3/k (~1e12 ici).
+    """
+    sec = _sections(zeros, poles)
+    m = len(sec)
+    a = np.array([abs(np.polyval(n, 1j * _wchar(d)) / np.polyval(d, 1j * _wchar(d)))
+                  for n, d in sec])
+    g = (abs(gain) * np.prod(a)) ** (1.0 / m) / a
+    g[0] *= np.sign(gain)
+    out = None
+    for (n, d), gi in zip(sec, g):
+        blk = _balanced_tf_ss(gi * np.asarray(n, float), d)
+        out = blk if out is None else series(out, blk)
+    A, B, C, D = out
+    # Equilibrage FINAL : la mise en serie recree du couplage B_i C_j entre
+    # sections d'echelles differentes (conditionnement ~1e16 sans lui). Une
+    # similitude diagonale ne change pas la fonction de transfert.
+    Ab, T = matrix_balance(A, permute=False, separate=False)
+    return Ab, np.diag(1.0 / np.diag(T)) @ B, C @ T, D
+
+
+def _w_ss(nm, dm, wq, r=Q_ORDER):
+    """W = Q . P_min^-1 en cascade : zeros = POLES de P_min, poles = ZEROS de
+    P_min plus les r poles de Q en -wq."""
+    nm = np.trim_zeros(np.asarray(nm, float), 'f')
+    dm = np.asarray(dm, float)
+    zeros = np.roots(dm)
+    poles = np.concatenate([np.roots(nm), np.full(int(r), -float(wq))])
+    gain = float(wq) ** int(r) * dm[0] / nm[0]
+    return _cascade_ss(zeros, poles, gain)
+
+
 def nmp_dob_fopid_ss(Kp, Ki, Kd, lam, mu, wq, alpha, w, zeta, res,
                      wb, wh, N, sign_loop=1.0):
     """FOPID + observateur inversant P_min (partie a minimum de phase).
@@ -181,8 +334,6 @@ def nmp_dob_fopid_ss(Kp, Ki, Kd, lam, mu, wq, alpha, w, zeta, res,
 
     Etats : [FOPID (Oustaloup), W = Q P_min^-1, V = Q].
     """
-    from scipy.signal import tf2ss
-
     from fopid import fopid_ss
 
     Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(m, float))
@@ -194,7 +345,8 @@ def nmp_dob_fopid_ss(Kp, Ki, Kd, lam, mu, wq, alpha, w, zeta, res,
     nm = np.trim_zeros(np.asarray(nm, float), 'f')
     # V = Q ; W = Q . P_min^-1 = (qn . dm) / (qd . nm)
     Av, Bv, Cv, Dv = tf2ss(qn, qd)
-    Aw, Bw, Cw, Dw = tf2ss(np.convolve(qn, dm), np.convolve(qd, nm))
+    # W n'est PAS forme comme un polynome : voir la note ci-dessus.
+    Aw, Bw, Cw, Dw = _w_ss(nm, dm, wq, Q_ORDER)
     Av, Bv, Cv = np.atleast_2d(Av), np.atleast_2d(Bv), np.atleast_2d(Cv)
     Aw, Bw, Cw = np.atleast_2d(Aw), np.atleast_2d(Bw), np.atleast_2d(Cw)
     if abs(float(np.atleast_2d(Dw)[0, 0])) > 1e-12 or \

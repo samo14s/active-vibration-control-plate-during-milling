@@ -385,6 +385,48 @@ def test_controller_realizations_are_conditioned():
                         f'{bad:.3e} — l\'invariant a perdu son objet')
 
 
+def test_the_three_floquet_engines_agree():
+    """Les TROIS moteurs de Floquet du depot rendent le meme rayon spectral.
+
+    Ils existent pour de bonnes raisons — `stability_fdm` assemble la
+    monodromie et n'accepte pas de correcteur, `lti_floquet` ne retarde que
+    les positions, `closed_loop` retarde l'etat augmente complet — mais rien
+    ne verifiait qu'ils decrivent le MEME systeme quand leurs hypotheses
+    coincident, c'est-a-dire en boucle ouverte.
+
+    Ce n'est pas une precaution abstraite : le remplacement de l'iteration de
+    puissance par Arnoldi a touche deux des trois (le troisieme diagonalise
+    la monodromie assemblee, donc sert ici de reference exacte). Un moteur
+    qui derive des deux autres ne se verrait autrement qu'a travers un
+    resultat publie.
+    """
+    import closed_loop as CL
+    import lti_floquet as LF
+    from stability_fdm import floquet_matrix, spectral_radius_and_freq
+    from milling_dynamics import alpha4_series, N_TEETH
+    plate = _plate()
+    n = 2
+    for rpm, ap in ((4900, 0.05e-3), (5500, 0.30e-3), (4300, 0.15e-3)):
+        m = 30
+        tau = 60.0 / (N_TEETH * rpm)
+        x = 0.5 * plate.lp
+        D = plate.D_row(x, plate.hp)[:n]
+        _, a4 = alpha4_series(rpm, ap, plate.hp, m, midpoint=True)
+        Phi = floquet_matrix(plate.omega_n[:n], plate.zeta_modes[:n],
+                             np.outer(D, D), C.SIGN_SIM * a4, tau, n)
+        ref = spectral_radius_and_freq(Phi, tau)[0]
+        got = []
+        for eng, kw in ((CL, dict(pd=None)), (LF, {})):
+            maps, _ = eng.period_maps(plate, rpm, ap, x, ctrl=None,
+                                      n_modes=n, m=m, coeff_mode='time',
+                                      coeff_scale=C.SIGN_SIM, **kw)
+            got.append(eng.spectral_radius(maps, m, maps[0][0].shape[0]))
+        for name, r in zip(('closed_loop', 'lti_floquet'), got):
+            assert abs(r - ref) < 1e-8 * max(1.0, ref), \
+                (f'{name} a {rpm} tr/min, a_p = {ap * 1e3:.2f} mm : '
+                 f'{r:.9f} contre {ref:.9f} (monodromie assemblee)')
+
+
 def test_step_integrals_agree_on_both_paths():
     """Les deux chemins de J1 et J2 donnent la meme chose quand A est
     inversible, et le chemin augmente REPOND encore quand elle ne l'est pas.

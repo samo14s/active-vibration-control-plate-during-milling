@@ -18,7 +18,10 @@ prix quand on vise les cinq.
 
 CE QUE CETTE STRUCTURE FAIT A LA PLACE. La factorisation interieure-exterieure
 
-    P(s) = B(s) . P_min(s),     B(s) = (z - s)/(z + s),   |B(jw)| = 1
+    P(s) = B(s) . P_min(s),     B(s) = (s - z)/(s + z),   |B(jw)| = 1
+
+(l'orientation n'est pas indifferente : avec (z-s)/(z+s), pourtant la
+convention la plus courante, on obtient B.P_min = -P — voir `inner_outer`)
 
 separe le procede en une partie TOUT-PASSE, qui porte le zero instable et rien
 d'autre, et une partie a MINIMUM DE PHASE qui porte tout le reste. B ne change

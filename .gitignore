@@ -219,3 +219,11 @@ __marimo__/
 
 # rapport : le HTML intermediaire (7.7 Mo, images en base64) est regenerable
 report/rapport_final.html
+
+# Cache des fossoles (control/run_lobes.py). CE N'EST PAS UN RESULTAT : son
+# contenu finit tel quel dans results/compare_B.npz, qui lui est suivi. Le
+# cache existe pour que les vingt et une bissections par structure puissent
+# etre calculees EN PARALLELE et ne soient jamais refaites ; le versionner
+# reviendrait a stocker deux fois la meme chose, et a produire un commit par
+# structure au fil d'une campagne.
+results/lobes_*.npz

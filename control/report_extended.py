@@ -75,6 +75,7 @@ def main():
     cp = load(f'compare_{C.PROTOCOL}.npz')
     rb = load(f'robust_new_{C.PROTOCOL}.npz')
     tc = load(f'time_compare_{C.PROTOCOL}.npz')
+    rp = load(f'robust_poles_{C.PROTOCOL}.npz')
     if ps is None:
         print('  results/pso_*.npz absent — rien a rapporter')
         return 1
@@ -89,6 +90,21 @@ def main():
             col = M[:, j]
             worst[nme] = float(np.min(col))
             nom[nme] = float(col[0])       # ligne 0 = modele de synthese
+
+    # --- POURQUOI un zero est un zero --------------------------------------
+    # `limit` rend 0.0 aussi bien quand la boucle est INSTABLE a profondeur
+    # nulle que quand la limite est simplement sous la borne basse de la
+    # bissection (5 um). Les deux ne disent pas la meme chose, et la campagne
+    # contient les deux : a -10 % de raideur, LQG et MPC sont instables
+    # (max Re = +7.68 et +40.06) tandis que NMP-DOB est STABLE a -0.140 et
+    # seulement trop bas pour etre mesure. `robust_poles.py` tranche par un
+    # probleme de valeurs propres, independant de la bissection.
+    unstable = {}
+    if rp is not None and 'kinds' in rp:
+        pk = [str(x) for x in np.asarray(rp['kinds']).ravel()]
+        R = np.asarray(rp['max_re'], float)
+        for j, nme in enumerate(pk):
+            unstable[nme] = bool(np.any(R[:, j] > 0.0))
 
     # --- etalon temporel ---------------------------------------------------
     tlim = {}
@@ -143,7 +159,8 @@ def main():
             # est instable A PROFONDEUR NULLE, donc que la structure ne tient
             # pas du tout sous cette perturbation. Ecrire « 0.000 » dans une
             # colonne de millimetres invite a le lire comme un petit nombre.
-            ('غير مستقرّ' if k in worst and worst[k] <= 0.0
+            ('**غير مستقرّ**' if unstable.get(k)
+             else '< 0.005' if k in worst and worst[k] <= 0.0
              else cell(worst.get(k, None) and worst[k] * 1e3)),
             ret,
             cell(tlim.get(k, None) and tlim[k] * 1e3),
@@ -160,12 +177,19 @@ def main():
               f' ({cap:.3f} mm) : الهدف يعلن أنه لا يميّز فوقه،'
               ' فالترتيب داخل هذه المجموعة تقرّره المناصفة النهائية وحدها'
               ' (`audit_cap.py` يقيس كم يتفرّق المتعادلون).')
-    dead = [k for k in kinds if k in worst and worst[k] <= 0.0]
+    dead = [k for k in kinds if unstable.get(k)]
+    tiny = [k for k in kinds
+            if k in worst and worst[k] <= 0.0 and not unstable.get(k)]
     if dead:
-        print(f'\n> **{", ".join(LAB[k] for k in dead)}** : الحدّ يساوي صفرًا في'
-              ' حالة اضطراب واحدة على الأقلّ — أي أن الحلقة **غير مستقرّة عند'
-              ' عمق قطع صفر**، لا أن حدّها صغير. البنية تسقط بالكامل تحت ذلك'
-              ' الاضطراب.')
+        print(f'\n> **{", ".join(LAB[k] for k in dead)}** : **غير مستقرّ عند عمق'
+              ' قطع صفر** تحت حالة اضطراب واحدة على الأقلّ — تحقّقٌ مستقلّ'
+              ' بأقطاب الحلقة المغلقة، لا بالمناصفة. البنية لا تمسك الصفيحة'
+              ' أصلًا، قطعتْ أو لم تقطع.')
+    if tiny:
+        print(f'\n> **{", ".join(LAB[k] for k in tiny)}** : الحدّ **دون 0.005 mm**'
+              ' (الحدّ الأدنى للمناصفة) في حالة واحدة على الأقلّ، لكن الحلقة'
+              ' **مستقرّة** هناك. هذا ليس انهيارًا بل حدٌّ أصغر من أن يُقاس'
+              ' بهذا البروتوكول.')
     if worst:
         flip = [k for k in kinds
                 if k in worst and k in pos and pos[k] > 0

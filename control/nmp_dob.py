@@ -112,18 +112,17 @@ def stable_inverse_ss(num, den, wc, order=None):
     Q(s) = (wc/(s+wc))^r avec r = deg(den) - deg(num). C'est le meme role que
     joue Q dans un observateur de perturbation classique, a ceci pres qu'ici
     l'inverse existe vraiment.
+
+    La realisation passe par `_w_ss` (cascade de sections d'ordre <= 2) et non
+    par `tf2ss` sur le produit des polynomes : meme objet, meme piege, meme
+    remede que dans `nmp_dob_fopid_ss` — voir la note qui precede
+    `_real_factors`.
     """
     num = np.trim_zeros(np.asarray(num, float), 'f')
     den = np.asarray(den, float)
     r = len(den) - len(num) if order is None else int(order)
     r = max(r, 0)
-    qn, qd = np.array([1.0]), np.array([1.0])
-    for _ in range(r):
-        qn = np.convolve(qn, [float(wc)])
-        qd = np.convolve(qd, [1.0, float(wc)])
-    inv_n = np.convolve(den, qn)
-    inv_d = np.convolve(num, qd)
-    return tf2ss(inv_n, inv_d)
+    return _w_ss(num, den, wc, r)
 
 
 def frf_tf(num, den, om):
@@ -203,6 +202,20 @@ Q_ORDER = 3
 # forme compagne est inoffensive, ses coefficients etant w et w^2 — et on les
 # met en SERIE. Le gain global, qui vaut wq^3/k et atteint 1e12, est reparti
 # entre les sections au lieu d'etre porte par une seule.
+#
+# MESURE APRES CORRECTION (wq = 2 pi 3000, cinq modes) : conditionnement de la
+# matrice d'etat de W 2.5e70 -> 66.9 (au pire 3.9e3 sur toute la bande de wq
+# autorisee), ecart de reponse frequentielle a la fraction rationnelle
+# 2.3e-12 sur 2 pi [1, 25000] Hz, et a alpha = 0 l'objectif rend J = 0.2473
+# la ou le FOPID stocke vaut 0.2479 — au lieu de 0.0000.
+#
+# Le reste de l'ecart (5.8e-4 mm) n'est PAS de la realisation : `evaluate`
+# depend du NOMBRE D'ETATS par l'iteration de puissance de
+# `closed_loop.spectral_radius`, dont le vecteur initial aleatoire et l'arret
+# adaptatif changent avec nx. Mesure de controle : ajouter au FOPID STOCKE
+# 14 etats totalement decouples et non observes (donc de meme fonction de
+# transfert) deplace deja J de 2.3e-4. A n_period fixe et converge (1200), les
+# deux systemes rendent le meme log rho a 1e-8 pres a la premiere sonde.
 # ---------------------------------------------------------------------------
 def _real_factors(roots, tol=1e-9):
     """Racines -> facteurs moniques REELS de degre 1 ou 2.
@@ -233,7 +246,8 @@ def _real_factors(roots, tol=1e-9):
 
 
 def _wchar(fac):
-    """Pulsation caracteristique d'un facteur monique : |prod racines|^(1/deg)."""
+    """Pulsation caracteristique d'un facteur monique :
+    |produit des racines|^(1/degre)."""
     d = len(fac) - 1
     return abs(fac[-1]) ** (1.0 / d)
 
@@ -267,8 +281,9 @@ def _sections(zeros, poles):
             used[pick] = True
             sec.append((zf[pick], d))
     if not all(used):
-        raise ValueError('appariement zeros/poles impossible : W n\'est pas '
-                         'propre section par section')
+        raise ValueError('appariement zeros/poles impossible : la fonction '
+                         'de transfert est IMPROPRE (plus de zeros que de '
+                         'poles), elle n\'a pas de representation d\'etat')
     return sec
 
 
@@ -297,8 +312,11 @@ def _cascade_ss(zeros, poles, gain):
     """
     sec = _sections(zeros, poles)
     m = len(sec)
-    a = np.array([abs(np.polyval(n, 1j * _wchar(d)) / np.polyval(d, 1j * _wchar(d)))
-                  for n, d in sec])
+    if m == 0:                                   # gain pur : aucun etat
+        return (np.zeros((0, 0)), np.zeros((0, 1)), np.zeros((1, 0)),
+                np.array([[float(gain)]]))
+    a = np.array([abs(np.polyval(n, 1j * _wchar(d))
+                      / np.polyval(d, 1j * _wchar(d))) for n, d in sec])
     g = (abs(gain) * np.prod(a)) ** (1.0 / m) / a
     g[0] *= np.sign(gain)
     out = None

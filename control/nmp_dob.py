@@ -208,16 +208,21 @@ Q_ORDER = 3
 # MESURE APRES CORRECTION (wq = 2 pi 3000, cinq modes) : conditionnement de la
 # matrice d'etat de W 2.5e70 -> 66.9 (au pire 3.9e3 sur toute la bande de wq
 # autorisee), ecart de reponse frequentielle a la fraction rationnelle
-# 2.3e-12 sur 2 pi [1, 25000] Hz, et a alpha = 0 l'objectif rend J = 0.2473
-# la ou le FOPID stocke vaut 0.2479 — au lieu de 0.0000.
+# 2.3e-12 sur 2 pi [1, 25000] Hz.
 #
-# Le reste de l'ecart (5.8e-4 mm) n'est PAS de la realisation : `evaluate`
-# depend du NOMBRE D'ETATS par l'iteration de puissance de
-# `closed_loop.spectral_radius`, dont le vecteur initial aleatoire et l'arret
-# adaptatif changent avec nx. Mesure de controle : ajouter au FOPID STOCKE
-# 14 etats totalement decouples et non observes (donc de meme fonction de
-# transfert) deplace deja J de 2.3e-4. A n_period fixe et converge (1200), les
-# deux systemes rendent le meme log rho a 1e-8 pres a la premiere sonde.
+# CONTROLE D'IDENTITE, A alpha = 0. La structure se reduit alors exactement au
+# FOPID : meme fonction de transfert, mais 30 etats au lieu de 16. Mesure
+# actuelle : ecart de reponse frequentielle 3.4e-16, et J identique a 5.1e-15
+# (0.197083130 des deux cotes). C'est le controle le plus severe disponible sur
+# cette structure, et il porte AUSSI sur l'estimateur : un objectif qui depend
+# du nombre d'etats ne peut pas passer ce test.
+#
+# Il ne le passait pas. Tant que le rayon spectral venait d'une iteration de
+# puissance, le meme controle rendait 0.2473 contre 0.2479 — 5.8e-4 d'ecart,
+# qu'on pouvait attribuer a la realisation alors qu'il venait de l'estimateur :
+# ajouter au FOPID 14 etats decouples et NON OBSERVES, donc de fonction de
+# transfert rigoureusement identique, deplacait deja J de 2.3e-4. Le passage a
+# Arnoldi (paper_model/monodromy.py) a supprime cette dependance.
 # ---------------------------------------------------------------------------
 def _real_factors(roots, tol=1e-9):
     """Racines -> facteurs moniques REELS de degre 1 ou 2.

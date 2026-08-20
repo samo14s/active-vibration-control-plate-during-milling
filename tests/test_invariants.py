@@ -308,6 +308,47 @@ def test_floquet_spectrum_matches_the_assembled_monodromy_on_the_real_plate():
                 f'{kind} a a_p = {ap * 1e3:.2f} mm : {got:.9f} vs {ref:.9f}'
 
 
+def test_nmp_dob_reduces_to_the_fopid_at_alpha_zero():
+    """A alpha = 0 le NMP-DOB EST le FOPID — meme note, 30 etats contre 16.
+
+    C'est le controle le plus severe disponible sur cette structure, et il
+    porte sur DEUX choses a la fois : la realisation (une cascade de sections
+    d'ordre <= 2 au lieu d'un polynome de degre 11) et l'ESTIMATEUR de
+    Floquet. Un objectif qui depend du nombre d'etats ne peut pas le passer.
+
+    Il ne le passait pas : avec l'iteration de puissance, ajouter au FOPID
+    quatorze etats decouples et non observes — donc de fonction de transfert
+    rigoureusement identique — deplacait deja J de 2.3e-4, et ce controle-ci
+    rendait 5.8e-4 d'ecart. Les deux causes possibles etaient indiscernables ;
+    l'ecart mesure aujourd'hui est de 5e-15.
+    """
+    import objective as OB
+    import nmp_dob
+    from fopid import series, rolloff_ss
+    plate = _plate()
+    n = 5
+    D_obs = plate.D_row(plate.lp, plate.hp)[:n]
+    res = D_obs * np.asarray(plate.H_Pe_modal, float)[:n]
+    ro = rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER)
+    a = series(fopid_ss(PAR['Kp'], PAR['Ki'], PAR['Kd'], PAR['lam'],
+                        PAR['mu'], C.OUST_WB, C.OUST_WH, C.OUST_N, -1.0), ro)
+    b = series(nmp_dob.nmp_dob_fopid_ss(
+        PAR['Kp'], PAR['Ki'], PAR['Kd'], PAR['lam'], PAR['mu'],
+        2 * np.pi * 3000.0, 0.0, plate.omega_n[:n], plate.zeta_modes[:n],
+        res, C.OUST_WB, C.OUST_WH, C.OUST_N, -1.0), ro)
+    # la structure rend MOINS le FOPID pour un meme argument de signe
+    b = (b[0], b[1], -b[2], -b[3])
+    err = (np.max(np.abs(ss_frf(b, OM) - ss_frf(a, OM)))
+           / np.max(np.abs(ss_frf(a, OM))))
+    assert err < 1e-12, f'les deux transferts different de {err:.2e}'
+    assert b[0].shape[0] > a[0].shape[0] + 8, \
+        'le controle perd son objet si les deux ont le meme nombre d\'etats'
+    ja = OB.evaluate(plate, a, C.RPM_DESIGN)
+    jb = OB.evaluate(plate, b, C.RPM_DESIGN)
+    assert abs(jb - ja) < 1e-9 * max(1.0, abs(ja)), \
+        f'J = {ja:.9f} (16 etats) contre {jb:.9f} ({b[0].shape[0]} etats)'
+
+
 def test_controller_realizations_are_conditioned():
     """Les correcteurs assembles ne portent pas de forme compagne brute.
 

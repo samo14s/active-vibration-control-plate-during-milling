@@ -126,6 +126,8 @@ def main():
         r = ps[k]
         ret = ('—' if k not in worst or nom.get(k, 0.0) <= 0.0
                else f'{100 * worst[k] / nom[k]:.0f} %')
+        if k in worst and worst[k] <= 0.0 and nom.get(k, 0.0) > 0.0:
+            ret = '**0 %**'
         print('| ' + ' | '.join([
             LAB[k],
             cell(int(r['n_par'])) if 'n_par' in r else '—',
@@ -136,7 +138,13 @@ def main():
             cell(float(r['V']), '{:.0f}') if 'V' in r else '—',
             cell(pos.get(k, None) and pos[k] * 1e3),
             cell(lob.get(k, None) and lob[k] * 1e3),
-            cell(worst.get(k, None) and worst[k] * 1e3),
+            # UN ZERO N'EST PAS UNE PETITE VALEUR. Quand la bissection rend
+            # zero, ce n'est pas que la limite est basse : c'est que la boucle
+            # est instable A PROFONDEUR NULLE, donc que la structure ne tient
+            # pas du tout sous cette perturbation. Ecrire « 0.000 » dans une
+            # colonne de millimetres invite a le lire comme un petit nombre.
+            ('غير مستقرّ' if k in worst and worst[k] <= 0.0
+             else cell(worst.get(k, None) and worst[k] * 1e3)),
             ret,
             cell(tlim.get(k, None) and tlim[k] * 1e3),
         ]) + ' |')
@@ -152,6 +160,12 @@ def main():
               f' ({cap:.3f} mm) : الهدف يعلن أنه لا يميّز فوقه،'
               ' فالترتيب داخل هذه المجموعة تقرّره المناصفة النهائية وحدها'
               ' (`audit_cap.py` يقيس كم يتفرّق المتعادلون).')
+    dead = [k for k in kinds if k in worst and worst[k] <= 0.0]
+    if dead:
+        print(f'\n> **{", ".join(LAB[k] for k in dead)}** : الحدّ يساوي صفرًا في'
+              ' حالة اضطراب واحدة على الأقلّ — أي أن الحلقة **غير مستقرّة عند'
+              ' عمق قطع صفر**، لا أن حدّها صغير. البنية تسقط بالكامل تحت ذلك'
+              ' الاضطراب.')
     if worst:
         flip = [k for k in kinds
                 if k in worst and k in pos and pos[k] > 0

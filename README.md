@@ -117,9 +117,17 @@ python3 verification/10_cutting_force_coefficients.py
 python3 verification/20_reduction_and_uncertainty.py
 
 # 2) المقارنة العادلة : بروتوكولان (A تصميم على نمطين، B تصميم على خمسة)
+# السلسلة كاملةً بأمر واحد — وفيها فتيل BLAS واحد لكل عملية وملفّ خرج
+# لكل هيكل، وهما الفخّان اللذان يُنسيان :
+bash control/refresh_all.sh          # الأمثلة ثم التقييم ثم الأشكال
+SKIP_PSO=1 bash control/refresh_all.sh   # المصبّ وحده، على حملة موجودة
+
+# أو خطوةً خطوة :
 cd control
-PROTOCOL=B python3 run_pso.py        # تحسين المتحكّمات بشروط متطابقة   (~50 د)
-PROTOCOL=B python3 run_compare.py    # التقييم الكامل على نموذج الخمسة أنماط (~2 س)
+PROTOCOL=B python3 run_pso.py        # تحسين المتحكّمات بشروط متطابقة
+PROTOCOL=B python3 run_compare.py    # التقييم الكامل على نموذج الخمسة أنماط
+PROTOCOL=B python3 run_time_compare.py # المعيار الزمني للاثني عشر جميعًا
+PROTOCOL=B python3 robustness_new.py # سبع حالات اضطراب
 PROTOCOL=B python3 audit_fairness.py # تدقيق بروتوكول الإنصاف نفسه
 PROTOCOL=B python3 run_eso_trace.py  # قياس آليّة ADRC داخل المحاكاة
 
@@ -134,7 +142,14 @@ python3 figures.py --cross           # شكل المقارنة بين البرو
 cd .. && python3 report/build_pdf.py # التقرير الموحّد بصيغتَي HTML و PDF
 ```
 
-السكربتات المُعلَّمة بمدّة هي الثقيلة؛ ما عداها يُنجَز في ثوانٍ أو دقائق. ونتائج كلّ
+**فتيل BLAS واحد لكل عملية، وإلّا فالحساب أبطأ بعشرين ضعفًا.** مصفوفات الحالة هنا
+من 16 إلى 66 سطرًا، وعند هذا الحجم تكلفة التفتيل تفوق فائدتها، وأربع عمليات تفتح
+كلٌّ منها سبعة فيوط على أربعة أنوية تتنازع المعالج. قياسًا على تقييم كامل للهدف:
+‎8.155 s‎ افتراضيًّا مقابل ‎0.433 s‎ بفتيل واحد (FOPID)، و‎9.359 s‎ مقابل ‎0.893 s‎
+(FDOB). `refresh_all.sh` يضبط ذلك وحده؛ يدويًّا:
+`export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`.
+
+السكربتات الثقيلة هي الأمثلة والتقييم الكامل؛ ما عداها يُنجَز في ثوانٍ أو دقائق. ونتائج كلّ
 حساب ثقيل محفوظة في `results/*.npz`، فالأشكال والتقرير يُعاد إنتاجها بلا إعادة حساب.
 
 ## حدود الصلاحية

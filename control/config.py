@@ -245,3 +245,41 @@ BOUNDS_FDOB = dict(
 FDOB_MODES = os.environ.get('FDOB_MODES', '12')
 FDOB_TARGETS = tuple(int(c) - 1 for c in FDOB_MODES)
 FDOB_WC = 2 * np.pi * 8000.0      # = coupure d'anti-repliement, non ajustee
+
+
+# ---------------------------------------------------------------------------
+# Boitiers des structures de SYNTHESE MODELE (control/hinf.py, control/musyn.py)
+#
+# Ces deux-la ne se reglent pas par des gains mais par des PONDERATIONS : c'est
+# la nature meme de la synthese H-infini et mu. Le protocole d'equite ne dit
+# pas "les memes parametres pour tous" — il serait alors impossible de comparer
+# des structures differentes — mais "le meme budget de recherche, les memes
+# graines, les memes contraintes, la meme fonction objectif". Chaque structure
+# cherche donc sur SES propres poignees.
+#
+# Cinq parametres, exactement comme le FOPID. Ce n'est pas un hasard qu'on
+# s'autorise : c'est une contrainte qu'on s'impose, pour que l'ecart mesure ne
+# puisse pas etre attribue a une dimension de recherche plus riche.
+#
+#   kw    gain de la ponderation de performance (passe-bande)
+#   f_w   centre de la bande — LIBRE entre les deux modes de broutement et
+#         au-dela : l'optimiseur decide s'il vaut mieux viser un mode ou
+#         couvrir les deux
+#   zw    largeur relative de la bande
+#   w2    ponderation de l'effort de commande (scalaire : voir hinf.py, c'est
+#         ce qui donne D12'C1 = 0 sans decalage de boucle)
+#   eps   ponderation du bruit de mesure
+BOUNDS_HINF = dict(
+    log_kw=(0.0, 8.0), f_w=(350.0, 1500.0), log_zw=(-1.5, 0.3),
+    log_w2=(-4.0, 2.0), log_eps=(-6.0, -1.0))
+
+# La mu-synthese partage EXACTEMENT le meme boitier : la ponderation
+# d'incertitude, elle, n'est pas reglee — c'est celle du papier (Eqs. 18-19),
+# figee. La difference entre les deux structures est donc uniquement
+# l'iteration D-K, ce qui est precisement ce qu'on veut mesurer.
+BOUNDS_MU = dict(BOUNDS_HINF)
+
+#: nombre de tours D-K. Fixe, hors PSO, pour la meme raison que les reglages du
+#: superviseur de l'observateur modal : on mesure ce qu'apporte D-K, sans le
+#: melanger a un gain d'optimisation.
+N_DK = 3

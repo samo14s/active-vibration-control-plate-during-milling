@@ -133,6 +133,16 @@ def floquet_margin(plate, ss, rpm, ap, x_pos, m=None, n_period=None):
 # ---------------------------------------------------------------------------
 def evaluate(plate, ss, rpm=None, probes=None, positions=None, m=None,
              detail=False):
+    if ss is None:
+        # `Design.build` rend None quand la SYNTHESE echoue — cas propre aux
+        # structures H-infini et mu, ou il existe des ponderations pour
+        # lesquelles aucun correcteur n'atteint le gamma demande. On le note
+        # comme un echec au meme titre qu'un correcteur nominalement instable,
+        # plutot que de le contourner : c'est une propriete de la structure,
+        # et l'escamoter fausserait la comparaison en sa faveur.
+        info = dict(feasible=False, reason='synthese impossible', Ms=np.nan,
+                    V=np.nan, J=-1e4, max_re=np.nan)
+        return (info['J'], info) if detail else info['J']
     try:
         return _evaluate(plate, ss, rpm, probes, positions, m, detail)
     except (np.linalg.LinAlgError, ValueError, FloatingPointError):

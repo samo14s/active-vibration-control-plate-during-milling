@@ -23,6 +23,9 @@ import config as C
 from fopid import fopid_ss, rolloff_ss, series
 from adrc import adrc_fopid_ss, b0_nominal
 from fdob import fdob_fopid_ss, target_modes
+from hinf import HinfFailure, augment, bandpass_weight, plant_ss, synthesize
+from musyn import augment_mu, dk_iterate
+from plate_model import plant_vectors
 
 
 # ---------------------------------------------------------------------------
@@ -53,8 +56,14 @@ class Design:
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
             self.tw, self.tz, self.tr = target_modes(plate, self.targets)
+        if kind in ('hinf', 'musyn'):
+            # Ces deux-la se synthetisent SUR le modele : elles ont besoin du
+            # procede lui-meme, pas seulement de son signe de boucle.
+            w, zt, Hv, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
+            self.plant = plant_ss(w, zt, D_obs * Hv)
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
-                  fdob=C.BOUNDS_FDOB)[kind]
+                  fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
+                  musyn=C.BOUNDS_MU)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -64,6 +73,13 @@ class Design:
         """[0,1]^n -> dictionnaire de parametres physiques."""
         v = self.lo + np.clip(np.asarray(u, float), 0.0, 1.0) * (self.hi - self.lo)
         p = dict(zip(self.names, v))
+        if self.kind in ('hinf', 'musyn'):
+            # Boitier de PONDERATIONS, pas de gains : ces structures n'ont
+            # aucune cle Kp/Ki/Kd/lam/mu, donc on sort AVANT de construire le
+            # dictionnaire commun — le construire d'abord leverait KeyError.
+            return dict(kw=10.0 ** p['log_kw'], f_w=p['f_w'],
+                        zw=10.0 ** p['log_zw'], w2=10.0 ** p['log_w2'],
+                        eps=10.0 ** p['log_eps'])
         out = dict(Kp=10.0 ** p['log_Kp'], Ki=10.0 ** p['log_Ki'],
                    Kd=10.0 ** p['log_Kd'], lam=p['lam'], mu=p['mu'])
         if self.kind == 'adrc':
@@ -75,7 +91,30 @@ class Design:
         return out
 
     def build(self, u):
+        """Correcteur, ou None si la SYNTHESE elle-meme echoue.
+
+        Le None n'est pas un detail d'implementation. Une synthese H-infini
+        n'aboutit pas pour toute ponderation : il existe des reglages ou aucun
+        correcteur n'atteint le gamma demande. C'est une propriete REELLE de
+        la structure, et la compter comme un echec plutot que la contourner
+        fait partie de l'equite — au meme titre qu'un FOPID nominalement
+        instable est compte comme un echec. Le taux d'echec est rapporte.
+        """
         p = self.decode(u)
+        if self.kind in ('hinf', 'musyn'):
+            W1 = bandpass_weight(p['kw'], p['f_w'], p['zw'])
+            try:
+                if self.kind == 'hinf':
+                    Pg = augment(self.plant, W1, p['w2'], p['eps'])
+                    K, _ = synthesize(Pg)
+                else:
+                    Pg = augment_mu(self.plant, W1, p['w2'], p['eps'])
+                    K, _, _ = dk_iterate(Pg, n_dk=C.N_DK)
+            except (HinfFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind == 'fopid':
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
                             C.OUST_WB, C.OUST_WH, C.OUST_N,
@@ -95,7 +134,8 @@ class Design:
         return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
 
     def order(self, u):
-        return self.build(u)[0].shape[0]
+        ss = self.build(u)
+        return -1 if ss is None else ss[0].shape[0]
 
 
 # ---------------------------------------------------------------------------

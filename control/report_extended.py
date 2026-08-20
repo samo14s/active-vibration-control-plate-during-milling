@@ -113,6 +113,27 @@ def main():
                           np.asarray(tc['limits'], float).ravel()):
             tlim[nme] = float(v)
 
+    # --- CE QUE FLOQUET NE PEUT PAS VOIR -----------------------------------
+    # Floquet teste la stabilite HOMOGENE du systeme linearise. Il ne sait ni
+    # que la force de coupe excite la plaque, ni que l'actionneur ecrete a
+    # +/-V_MAX, ni qu'une boucle saturee est une boucle ouverte. Une structure
+    # peut donc avoir la meilleure marge de Floquet et diverger en simulation
+    # parce qu'elle achete cette marge avec un gain que le forcage reel fait
+    # saturer. Mesure a la condition S du papier (a_p = 0.30 mm) : le FDOB a
+    # une limite de Floquet SUPERIEURE au FOPID (0.222 contre 0.197 mm) et
+    # diverge la ou le FOPID tient avec 8.3 V sans une seule saturation.
+    umax, nsat, ydiv = {}, {}, {}
+    if cp is not None:
+        for key in cp:
+            if not key.startswith('time_S_') or key.endswith('meta'):
+                continue
+            k = key[len('time_S_'):]
+            rec = cp[key]
+            if 'max_u' in rec:
+                umax[k] = float(rec['max_u'])
+                nsat[k] = float(rec.get('n_saturated', 0.0))
+                ydiv[k] = bool(rec.get('diverged', False))
+
     # --- fossoles et position ---------------------------------------------
     lob, pos = {}, {}
     if cp is not None:
@@ -134,7 +155,8 @@ def main():
 
     hdr = ['البنية', 'بارامترات', 'حالات', 'تقييمات', 'J (mm)', 'Ms',
            'الجهد V/N', 'حدّ التصميم (mm)', 'متوسّط الفصوص (mm)',
-           'أسوأ متانة (mm)', 'الاحتفاظ', 'زمنيّ (mm)']
+           'أسوأ متانة (mm)', 'الاحتفاظ', 'ذروة u عند S (V)',
+           'خطوات مشبَّعة', 'زمنيّ (mm)']
     print(f'\n### البروتوكول {C.PROTOCOL} — مرتّبة حسب `{par}`\n')
     print('| ' + ' | '.join(hdr) + ' |')
     print('|' + '---|' * len(hdr))
@@ -163,6 +185,9 @@ def main():
              else '< 0.005' if k in worst and worst[k] <= 0.0
              else cell(worst.get(k, None) and worst[k] * 1e3)),
             ret,
+            ('—' if k not in umax
+             else f'{umax[k]:.1f}' + (' ✗' if ydiv.get(k) else '')),
+            ('—' if k not in nsat else f'{int(nsat[k])}'),
             cell(tlim.get(k, None) and tlim[k] * 1e3),
         ]) + ' |')
 

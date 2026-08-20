@@ -414,6 +414,29 @@ def test_mu_bound_is_between_spectral_radius_and_sigma_max():
         assert d > 0.0
 
 
+def test_inner_outer_factorization_reconstructs_the_plant():
+    """P = B . P_min avec |B| = 1 et P_min sans zero instable.
+
+    Les trois proprietes ensemble, car SEPAREMENT elles ne prouvent rien. Une
+    orientation fausse du facteur de Blaschke — (z-s)/(z+s) au lieu de
+    (s-z)/(s+z), la convention la plus repandue — laisse |P_min| = |P| exact
+    et |B| = 1 exact, et donne pourtant B.P_min = -P. Un observateur bati
+    la-dessus inverserait le signe de la boucle sans qu'aucun des deux
+    controles evidents ne bronche. C'est le controle de RECONSTRUCTION qui
+    tranche, et c'est pour cela qu'il est ici.
+    """
+    from nmp_dob import check_factorization
+    plate = _plate()
+    w, z, H, D_obs, _ = plant_vectors(plate, C.N_MODES)
+    r = check_factorization(w, z, D_obs * H)
+    assert r['n_rhp'] == 1, f"attendu 1 zero instable, obtenu {r['n_rhp']}"
+    assert 2400 < r['f_rhp'][0] < 2520, f"zero a {r['f_rhp'][0]:.0f} Hz"
+    assert r['mag_err'] < 1e-9, f"|P_min| != |P| : {r['mag_err']:.2e}"
+    assert r['allpass_err'] < 1e-12, f"|B| != 1 : {r['allpass_err']:.2e}"
+    assert r['recon_err'] < 1e-9, f"B.P_min != P : {r['recon_err']:.2e}"
+    assert r['n_rhp_after'] == 0, 'P_min garde un zero instable'
+
+
 def _main():
     fs = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     bad = 0

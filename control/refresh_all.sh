@@ -45,8 +45,24 @@ python control/run_compare.py
 step "etalon temporel (les douze, dont SMC et MPC non lineaires)"
 python control/run_time_compare.py
 
-step "robustesse (sept cas)"
-python control/robustness_new.py
+step "robustesse (sept cas), repartie sur les coeurs"
+# Sept cas x douze structures x six positions x une bissection a m = 200 :
+# environ six mille resolutions de Floquet, l'etape la plus longue de la
+# chaine, et sans aucune interaction entre structures.
+ROB="boucle ouverte,${STRUCTS// /,}"
+ncore=$(nproc)
+i=0
+IFS=',' read -ra RK <<< "$ROB"
+for k in "${RK[@]}"; do
+  [ "$k" = "fdob12345" ] && export FDOB_MODES=12345 || export FDOB_MODES=12
+  KINDS="$k" OUT_TAG="_${k// /_}" python -u control/robustness_new.py \
+      > "logs/robust_${PROTOCOL}_${k// /_}.log" 2>&1 &
+  i=$((i + 1))
+  [ $((i % ncore)) -eq 0 ] && wait
+done
+wait
+python control/robustness_new.py --merge "results/robust_new_${PROTOCOL}.npz" \
+    results/robust_new_"${PROTOCOL}"_*.npz
 
 step "tableaux et figures"
 python control/report_tables.py

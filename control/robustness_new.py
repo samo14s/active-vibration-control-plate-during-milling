@@ -97,8 +97,20 @@ def main():
         return pl
 
     got = discover()
+    # KINDS : n'evaluer qu'une partie des structures, pour repartir le calcul
+    # sur les coeurs. Sept cas x douze structures x six positions x une
+    # bissection a m = 200 font environ six mille resolutions de Floquet ; en
+    # un seul processus c'est l'etape la plus longue de toute la chaine, et
+    # elle se decoupe sans la moindre interaction entre structures.
+    want = os.environ.get('KINDS')
+    if want:
+        keep = {w.strip() for w in want.split(',')}
+        got = [(k, ss) for k, ss in got if k in keep]
+        if not got:
+            print(f'  aucune des structures demandees ({want}) n est presente')
+            return 1
     print('  structures trouvees : '
-          + ', '.join(k for k, _ in got[1:]))
+          + ', '.join(k for k, _ in got))
     print('=' * 78)
     print(' ROBUSTESSE — limite axiale au pire poste [mm], 5 modes, m = 200')
     print('=' * 78)
@@ -116,13 +128,53 @@ def main():
                                           for k, v in row.items())
               + f'   ({time.time() - t0:.0f} s)', flush=True)
 
-    np.savez_compressed(os.path.join(OUT, f'robust_new_{C.PROTOCOL}.npz'),
+    tag = os.environ.get('OUT_TAG', '')
+    dest = os.path.join(OUT, f'robust_new_{C.PROTOCOL}{tag}.npz')
+    np.savez_compressed(dest,
                         labels=np.array([t for t, _, _ in cases]),
                         kinds=np.array([k for k, _ in got]),
                         limits=np.array([[table[t][k] for k, _ in got]
                                          for t, _, _ in cases]))
-    print(f'\n  -> results/robust_new_{C.PROTOCOL}.npz')
+    print(f'\n  -> {os.path.basename(dest)}')
+    return 0
+
+
+def merge(dest, srcs):
+    """Recolle les fichiers partiels produits avec OUT_TAG.
+
+    Les ETIQUETTES DE CAS doivent coincider exactement : deux morceaux calcules
+    avec des listes de cas differentes ne forment pas un tableau, ils forment
+    deux tableaux. On refuse plutot que d'aligner au hasard."""
+    labels, cols = None, {}
+    for p in srcs:
+        if not os.path.exists(p):
+            print(f'  absent, ignore : {p}')
+            continue
+        d = np.load(p, allow_pickle=True)
+        lab = [str(x) for x in d['labels']]
+        if labels is None:
+            labels = lab
+        elif lab != labels:
+            raise SystemExit(f'  cas incompatibles dans {p} :\n'
+                             f'    {lab}\n  contre\n    {labels}')
+        M = np.asarray(d['limits'], float)
+        for j, k in enumerate([str(x) for x in d['kinds']]):
+            cols.setdefault(k, M[:, j])
+        print(f'  {os.path.basename(p)} : '
+              + ', '.join(str(x) for x in d['kinds']))
+    if not cols:
+        raise SystemExit('  rien a fusionner')
+    order = ['boucle ouverte'] + [k for k in ORDER if k in cols]
+    order += [k for k in cols if k not in order]
+    order = [k for k in order if k in cols]
+    np.savez_compressed(dest, labels=np.array(labels),
+                        kinds=np.array(order),
+                        limits=np.column_stack([cols[k] for k in order]))
+    print(f'\n  {len(order)} structures -> {dest}')
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == '--merge':
+        merge(sys.argv[2], sys.argv[3:])
+    else:
+        sys.exit(main() or 0)

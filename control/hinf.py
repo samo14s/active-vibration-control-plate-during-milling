@@ -117,7 +117,23 @@ def care(A, S, Q):
         raise HinfFailure('valeur propre hamiltonienne sur l axe imaginaire')
     T, U, sdim = schur(H, output='real', sort='lhp')
     if sdim != n:
-        raise HinfFailure(f'sous-espace stable de dimension {sdim}, attendu {n}')
+        # `sort='lhp'` compte les valeurs propres de partie reelle < 0. Le
+        # spectre d'un hamiltonien est symetrique par rapport a l'axe, donc il
+        # y en a exactement n — mais quand deux d'entre elles sont proches de
+        # l'axe, l'arrondi peut en faire passer une du mauvais cote et le
+        # compte tombe a n+-1 ou pire. On ne renonce pas pour autant : on
+        # RANGE explicitement par partie reelle et on coupe entre la n-ieme et
+        # la (n+1)-ieme, ce qui est la definition voulue et ne depend plus du
+        # signe de quantites minuscules.
+        order = np.sort(ev.real)
+        if order[n] - order[n - 1] <= 0.0:
+            raise HinfFailure('spectre hamiltonien non separable')
+        thr = 0.5 * (order[n - 1] + order[n])
+        T, U, sdim = schur(H, output='real',
+                           sort=lambda re, im: re < thr)
+        if sdim != n:
+            raise HinfFailure(
+                f'sous-espace stable de dimension {sdim}, attendu {n}')
     U1, U2 = U[:n, :n], U[n:, :n]
     if np.linalg.matrix_rank(U1, tol=1e-12 * max(1.0, np.max(np.abs(U1)))) < n:
         raise HinfFailure('U1 singuliere : pas de solution stabilisante')
@@ -421,8 +437,29 @@ def hinf_norm(ss, w=None):
     return out
 
 
-def synthesize(P, g_hi=None, g_lo=None, tol=1e-3, n_iter=60, check=True,
-               shifted=False):
+def _accept(P, Ps, gamma):
+    """Le correcteur central a ce gamma, s'il STABILISE reellement la boucle.
+
+    Un gamma peut satisfaire les trois conditions de Riccati numeriquement et
+    rendre malgre tout un correcteur qui ne stabilise pas : les gardes portent
+    sur X, Y et rho(XY), pas sur le resultat. On teste donc directement ce qui
+    compte, par les poles de F_l(P, K).
+
+    Le test est fait A CHAQUE PALIER, et c'est le point : le laisser pour la
+    fin faisait echouer toute la synthese des que la derniere descente allait
+    trop loin, alors qu'un palier superieur parfaitement valide existait. Une
+    valeur propre coute bien moins qu'une decomposition de Schur, donc verifier
+    a chaque palier ne change pas l'ordre de grandeur du cout.
+    """
+    K = central(*Ps, gamma)
+    ev = np.linalg.eigvals(lower_lft(P, K)[0])
+    if not np.all(np.isfinite(ev)) or ev.real.max() >= 0.0:
+        raise HinfFailure('correcteur non stabilisant a ce gamma')
+    return K
+
+
+def synthesize(P, g_hi=None, g_lo=None, tol=1e-3, n_iter=40, check=True,
+               shifted=False, ratio=0.6, n_gap=8):
     """Iteration sur gamma (bissection) -> (K, gamma) au mieux atteignable.
 
     `check` mesure la norme obtenue par balayage et la compare a gamma : c'est
@@ -433,31 +470,70 @@ def synthesize(P, g_hi=None, g_lo=None, tol=1e-3, n_iter=60, check=True,
     if not ok:
         raise HinfFailure(f'hypotheses simplifiees violees : {rep}')
     Ps, alpha, beta = scale_problem(P)
-    # GAMMA EST CHERCHE DANS LES GRANDEURS MISES A L'ECHELLE, et les bornes
-    # aussi. Une premiere version divisait la borne de l'appelant par
-    # alpha.beta : quand ce produit etait grand, la recherche demarrait a un
-    # gamma minuscule, donc B1B1'/gamma^2 explosait — |S| a atteint 4e18 et le
-    # conditionnement du hamiltonien 8e30. La decomposition de Schur classait
-    # alors 10 valeurs propres du bon cote pour un probleme d'ordre 8, alors
-    # que le spectre etait parfaitement partage 8/8 et qu'aucune valeur propre
-    # n'approchait l'axe : un echec purement numerique, sur un probleme sain.
+    # ---------------------------------------------------------------- gamma
+    # PAS DE BISSECTION. La theorie garantit que la faisabilite est MONOTONE
+    # en gamma — si un gamma passe, tous les plus grands passent — et une
+    # bissection ne vaut que sous cette hypothese. Mesure sur ce modele : elle
+    # est FAUSSE numeriquement. En balayant gamma sur douze decades on obtient
     #
-    # Apres `scale_problem` les gains valent O(1), donc ces bornes-ci sont des
-    # nombres PURS et n'ont plus a etre traduites.
-    lo = 1e-9 if g_lo is None else float(g_lo) / (alpha * beta)
+    #     ....FFF...FFFFFFFFFFFFFFFFFFFFFF        (F = faisable)
+    #
+    # c'est-a-dire des TROUS d'infaisabilite au milieu de la region faisable,
+    # larges d'un facteur cinq, dus aux echecs numeriques des deux Riccati et
+    # non a la theorie. Une bissection qui sonde dans un trou conclut
+    # "infaisable", releve sa borne basse, et perd DEFINITIVEMENT toute la
+    # region de gamma plus petits. Le correcteur rendu est alors bien plus
+    # faible que celui qui existe, sans le moindre signe exterieur.
+    #
+    # On descend donc par paliers geometriques en TOLERANT les trous : il faut
+    # `n_gap` echecs CONSECUTIFS pour declarer le fond atteint.
+    lo_floor = 1e-9 if g_lo is None else float(g_lo) / (alpha * beta)
     hi = 1e6 if g_hi is None else float(g_hi) / (alpha * beta)
-    hi = min(max(hi, 1e-6), 1e8) if g_hi is not None else 1e6
-    try:
-        K_hi = central(*Ps, hi)
-    except HinfFailure as e:
-        raise HinfFailure(f'infaisable meme a gamma\' = {hi:.3g} : {e}')
-    best = (K_hi, hi)
+    # UN SEUL BALAYAGE DESCENDANT, sans exiger que le sommet marche. Une
+    # version precedente cherchait d'abord un gamma faisable en MONTANT depuis
+    # 1e6, et n'entamait la descente qu'apres. Elle echouait completement des
+    # que le tout premier gamma ne stabilisait pas — ce qui arrive : a tres
+    # grand gamma, Z = (I - YX/gamma^2)^-1 tend vers l'identite et les deux
+    # Riccati deviennent numeriquement degenerees. Mesure : kw >= 6000 rendait
+    # "infaisable jusqu a 1e16" alors qu'un correcteur parfaitement valide
+    # existait a gamma = 0.022. On descend donc directement, et le premier
+    # palier qui STABILISE ouvre la recherche.
+    best = None
+    g, misses = hi / ratio, 0
+    while g > lo_floor and (best is None or misses < n_gap):
+        g *= ratio
+        try:
+            K = _accept(P, Ps, g)
+            best, misses = (K, g), 0
+        except HinfFailure:
+            misses += 1
+            if best is None and g <= lo_floor * 10:
+                break
+    if best is None:
+        raise HinfFailure(f"aucun gamma stabilisant entre {lo_floor:.2g} et"
+                          f" {hi:.2g} (echelle interne)")
+    # SECONDE PASSE, PLUS FINE. Le palier grossier peut ENJAMBER une fenetre
+    # faisable plus etroite que son pas : mesure a kw = 5166, ou la fenetre de
+    # bas gamma ne fait que 0.75 decade alors que le pas en fait 0.51. On
+    # repasse donc au pas fin sur les deux decades sous le meilleur palier, ce
+    # qui suffit a la resoudre pour une trentaine d'appels de plus.
+    g, misses = best[1], 0
+    floor2 = max(lo_floor, best[1] * 1e-2)
+    while g > floor2 and misses < 3 * n_gap:
+        g *= 0.9
+        try:
+            K = _accept(P, Ps, g)
+            best, misses = (K, g), 0
+        except HinfFailure:
+            misses += 1
+    # Raffinement local entre le meilleur palier et le palier juste en dessous.
+    lo, hi = best[1] * 0.9, best[1]
     for _ in range(n_iter):
         if hi - lo <= tol * max(1e-12, hi):
             break
-        mid = np.sqrt(lo * hi) if lo > 0 else 0.5 * (lo + hi)
+        mid = np.sqrt(lo * hi)
         try:
-            K = central(*Ps, mid)
+            K = _accept(P, Ps, mid)
             best = (K, mid)
             hi = mid
         except HinfFailure:

@@ -233,3 +233,6 @@ results/lobes_*.npz
 # results/robust_new_B.npz, qui lui est suivi. Le motif exige le tiret bas,
 # donc il ne recouvre PAS le fichier fusionne lui-meme.
 results/robust_new_?_*.npz
+
+# Journaux d execution : sortie transitoire, pas un livrable.
+logs/

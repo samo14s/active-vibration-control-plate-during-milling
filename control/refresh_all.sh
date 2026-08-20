@@ -39,6 +39,20 @@ step "fusion des fichiers partiels"
 python control/merge_pso.py "results/pso_${PROTOCOL}.npz" \
     results/pso_"${PROTOCOL}"_*.npz
 
+step "fossoles et limites par position, reparties sur les coeurs"
+# L'essentiel du temps de run_compare, et independant d'une structure a
+# l'autre. Mis en cache ; run_compare relit le cache.
+ncore=$(nproc)
+i=0
+for k in "boucle ouverte" $STRUCTS; do
+  [ "$k" = "fdob12345" ] && export FDOB_MODES=12345 || export FDOB_MODES=12
+  KINDS="$k" python -u control/run_lobes.py \
+      > "logs/lobes_${PROTOCOL}_${k// /_}.log" 2>&1 &
+  i=$((i + 1))
+  [ $((i % ncore)) -eq 0 ] && wait
+done
+wait
+
 step "comparaison a pleine resolution"
 python control/run_compare.py
 

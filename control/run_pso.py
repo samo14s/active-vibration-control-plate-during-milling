@@ -125,6 +125,22 @@ def main():
             # les x manquants par NaN plutot que d'inventer une valeur.
             pxs = prev['xs'] if 'xs' in prev else np.full(
                 (len(prev['seeds']), len(np.atleast_1d(prev['x']))), np.nan)
+            # Les historiques de convergence DEJA stockes sont relus ici et
+            # concatenes plus bas. La version precedente marquait toutes les
+            # anciennes graines `history=None`, si bien que `hs` ne retenait
+            # que les graines AJOUTEES : chaque reprise ECRASAIT les courbes
+            # des graines initiales, definitivement, puisque le .npz est
+            # reecrit en place. C'est ce qui a laisse `hist` a deux lignes
+            # pour des structures qui comptent sept a neuf graines.
+            #
+            # On ne cherche PAS a les rattacher graine par graine : le champ
+            # `hist` est un simple empilement de courbes, sans cle, et les
+            # fichiers deja abimes en contiennent moins qu'ils n'ont de
+            # graines. Les reapparier positionnellement les etiquetterait
+            # faux. On les empile, et on le dit.
+            phist = [np.asarray(r, float)
+                     for r in np.atleast_2d(prev['hist'])] \
+                if 'hist' in prev and np.size(prev['hist']) else []
             for sd, xx, jj, vv in zip(prev['seeds'], pxs,
                                       prev['J_seeds'], prev['variants']):
                 runs.append(dict(seed=int(sd), variant=float(vv), x=xx,
@@ -144,7 +160,10 @@ def main():
                       f" {time.time() - t0:.0f} s)", flush=True)
                 if J > best_J:
                     best_J, best_x = J, x.copy()
-            hs = [r['history'] for r in runs if r['history'] is not None]
+            hs = phist + [r['history'] for r in runs
+                          if r['history'] is not None]
+            print(f"    historiques conserves : {len(phist)} anciens"
+                  f" + {len(hs) - len(phist)} nouveaux", flush=True)
             n_ev = int(prev['n_eval']) + sum(r['n_eval'] for r in runs)
             store[key0] = _pack(D, best_x, best_J, best_var, runs,
                                 plate, int(prev['n_states']), hs, n_ev)

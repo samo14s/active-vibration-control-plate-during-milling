@@ -63,7 +63,12 @@ def main():
     w0, z0, r0 = target_modes(build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL), tg)
     fr = [C.F_NOMINAL[0] * 1.17, C.F_NOMINAL[1] * 1.09] + list(C.F_NOMINAL[2:])
     plate = build_plate(C.PATCH_SIDE, freqs=fr)
-    _, _, _, _, sl = plant_vectors(plate, C.N_MODES)
+    # Le correcteur a ete synthetise sur la plaque NOMINALE et sur le modele
+    # de SYNTHESE ; c'est de la qu'il tient sa convention de signe. La relire
+    # sur la plaque DERIVEE et sur N_MODES le rebatirait a l'envers sous le
+    # protocole A (les deux comptes de modes y donnent des signes opposes).
+    sl = plant_vectors(build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL),
+                       C.N_MODES_DESIGN)[4]
     ft = 3.0 * C.RPM_DESIGN / 60.0
     ap, x0 = 0.30e-3, 0.125
 

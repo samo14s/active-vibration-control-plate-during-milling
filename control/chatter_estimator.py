@@ -173,6 +173,7 @@ class ChatterEstimator:
         self.level_slow = 0.0
         f0 = np.sqrt(band[0] * band[1]) if f_init is None else f_init
         self.f_nom = f0 if f_nom is None else float(f_nom)
+        self.f0 = float(f0)          # etat de DEPART, celui que reset() rend
         self.a = 2.0 * np.cos(2 * np.pi * f0 / self.fs)
         self.P = 1.0e3
         self.y1 = self.y2 = 0.0
@@ -222,8 +223,17 @@ class ChatterEstimator:
         self.p_raw = self.p_flt = 0.0
         self.p_raw_g = self.p_flt_g = 0.0
         self.level_slow = 0.0
+        self.level = 0.0
         self._first = True
-        self.f_hat = self.f_bar = self.f_nom
+        # `self.a` EST l'etat des moindres carres : c'est lui qui porte la
+        # frequence estimee (f = arccos(a/2) . fs / 2pi). Le laisser tel quel
+        # pendant qu'on remet P a sa valeur initiale rendait un estimateur
+        # "remis a zero" qui repartait en fait de la derniere frequence
+        # apprise, avec une covariance grande ouverte — le pire des deux
+        # etats. On restaure l'etat de DEPART, f0, celui que __init__ a pose,
+        # et non f_nom qui peut en differer.
+        self.f_hat = self.f_bar = self.f0
+        self.a = 2.0 * np.cos(2 * np.pi * self.f0 / self.fs)
         self.f_var = 0.0
         self.locked = False
         self.conf = 0.0

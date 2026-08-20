@@ -133,7 +133,7 @@ jobs:
           for m in config plate_model fopid adrc fdob fdob_adaptive \
                    chatter_estimator objective closed_loop simulate \
                    sim_controller pso chebyshev_plate milling_dynamics \
-                   lti_floquet stability_fdm time_domain \
+                   lti_floquet stability_fdm time_domain step_integrals \
                    run_pso run_compare run_adaptive run_pso_time \
                    run_eso_trace diagnose_adrc figures report_tables \
                    analyse_fdob audit_fairness figure_supervisor; do

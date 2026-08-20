@@ -13,9 +13,9 @@ assemblee), ce qui autorise des correcteurs d'ordre eleve — R-ESO + FOPID
 approche par Oustaloup atteint typiquement l'ordre 20.
 """
 import numpy as np
-from scipy.linalg import expm
 
 from milling_dynamics import alpha4_series, alpha4_average, N_TEETH
+from step_integrals import step_integrals
 
 
 def augmented(plate, ctrl, DtD, D_obs, H, a4, n):
@@ -60,10 +60,9 @@ def period_maps(plate, rpm, ap, x_pos, ctrl=None, n_modes=2, m=60,
     maps = []
     for k in range(m):
         A, At = augmented(plate, ctrl, DtD, D_obs, H, a4[k], n_modes)
-        nx = A.shape[0]
-        P0 = expm(A * h)
-        J1 = np.linalg.solve(A, P0 - np.eye(nx))
-        J2 = h * J1 - np.linalg.solve(A, h * P0 - J1)
+        # Meme rattrapage que dans les deux autres moteurs : A peut etre
+        # singuliere sans que les integrales cessent d'exister.
+        P0, J1, J2 = step_integrals(A, h)
         maps.append((P0, (J1 - J2 / h) @ At, (J2 / h) @ At))
     return maps, tau
 
@@ -120,37 +119,60 @@ def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
                 break
     w = max(10, len(g) // 4)
     return float(np.exp(np.mean(np.array(g[-w:]))))
+
+
+def _apply_period(maps, Z, m):
+    """Une periode de dent appliquee au bloc Z de forme (m+1, nx, q)."""
+    for P0, C_lo, C_hi in maps:
+        new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
+        Z = np.roll(Z, 1, axis=0)
+        Z[0] = new
+    return Z
+
+
 def dominant_eigs(maps, m, nx, q=4, n_period=40, seed=0):
     """Valeurs propres dominantes de la monodromie par ITERATION DE SOUS-ESPACE
     (bloc de q vecteurs + projection de Rayleigh-Ritz), donc avec leur PHASE :
-    c'est elle qui donne la frequence de broutement EN BOUCLE FERMEE."""
+    c'est elle qui donne la frequence de broutement EN BOUCLE FERMEE.
+
+    DEUX CONDITIONS, et la version precedente n'en tenait AUCUNE.
+
+    1. Le bloc doit etre REORTHONORMALISE a chaque periode. Une simple
+       division par la norme de Frobenius laisse les q colonnes converger
+       toutes vers la MEME direction dominante : le bloc devient
+       numeriquement de rang un et le sous-espace ne contient plus rien
+       d'autre que le premier vecteur propre.
+    2. La projection de Rayleigh-Ritz s'ecrit H = V^T (A V) avec V
+       ORTHONORMEE. L'ancienne version formait V = Qb.R par une QR puis
+       calculait Qb^T (A V) = H.R sans jamais diviser par R — le facteur
+       triangulaire restait dans le resultat. La garde `S = Qb^T Qb` etait
+       sans effet : Qb sort d'une QR, donc S vaut l'identite et le `solve`
+       ne faisait rien.
+
+    Sur un jeu d'applications aleatoires (nx = 6, m = 4) dont la monodromie
+    exacte a pour multiplicateur dominant +1.0765, l'ancienne version
+    renvoyait -0.2633 : module faux d'un facteur quatre, phase fausse de pi,
+    et un cas instable declare stable. La version ci-dessous retrouve
+    +1.0765.
+    """
     rng = np.random.default_rng(seed)
-    Z = rng.standard_normal((m + 1, nx, q))
-    Z /= np.linalg.norm(Z)
-    prev = None
-    for it in range(n_period):
-        prev = Z.copy()
-        for P0, C_lo, C_hi in maps:
-            new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
-            Z = np.roll(Z, 1, axis=0)
-            Z[0] = new
-        nz = np.linalg.norm(Z)
-        if not np.isfinite(nz) or nz == 0.0:
-            return np.array([np.inf if np.isfinite(nz) else np.inf])
-        Z /= nz
-        if it >= n_period - 2:
-            break
-    # base orthonormee du sous-espace courant et projection
-    V = prev.reshape(-1, q)
-    Qb, _ = np.linalg.qr(V)
-    W = Z.reshape(-1, q) * nz
-    Hm = Qb.T @ W
-    S = Qb.T @ Qb
-    try:
-        Hm = np.linalg.solve(S, Hm)
-    except np.linalg.LinAlgError:
-        pass
-    return np.linalg.eigvals(Hm)
+    dim = (m + 1) * nx
+    q = int(min(q, dim))
+    V = np.linalg.qr(rng.standard_normal((dim, q)))[0]
+    for _ in range(n_period):
+        W = _apply_period(maps, V.reshape(m + 1, nx, q).copy(),
+                          m).reshape(dim, q)
+        if not np.all(np.isfinite(W)):
+            return np.array([np.inf])
+        if np.linalg.norm(W) == 0.0:
+            return np.zeros(q)
+        # Le facteur R est jete ICI a dessein : il ne sert qu'a renormaliser
+        # le bloc. La projection finale, elle, est refaite proprement.
+        V = np.linalg.qr(W)[0]
+    W = _apply_period(maps, V.reshape(m + 1, nx, q).copy(), m).reshape(dim, q)
+    if not np.all(np.isfinite(W)):
+        return np.array([np.inf])
+    return np.linalg.eigvals(V.T @ W)
 
 
 def closed_loop_chatter(plate, rpm, ap, x_pos, ctrl, n_modes=2, m=40,

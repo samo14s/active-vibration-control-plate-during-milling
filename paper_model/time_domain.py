@@ -107,7 +107,11 @@ class TimeSim:
             qd[:, k] = qdp + g * dt * qdd[:, k]
             q[:, k] = qp + b * dt**2 * qdd[:, k]
             y_m[k] = float(D @ q[:, k])
-            if abs(y_m[k]) > stop_um * 1e-6:
+            # `abs(nan) > seuil` est FAUX : sans la garde, une passe partie en
+            # NaN allait jusqu'au bout et ressortait avec diverged=False et
+            # des traces entierement NaN — une divergence comptee comme une
+            # coupe stable. control/simulate.py porte deja cette garde.
+            if not np.isfinite(y_m[k]) or abs(y_m[k]) > stop_um * 1e-6:
                 diverged = k
                 break
         end = diverged if diverged else nstep - 1

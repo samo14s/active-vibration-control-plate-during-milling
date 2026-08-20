@@ -97,16 +97,31 @@ def fig_lobes(cp, prot):
     plt.close(fig)
 
 
+def _bar_offsets(n, span=0.82):
+    """Decalages CENTRES d'un groupe de n barres, et leur largeur.
+
+    Les deux figures a barres ecrivaient le decalage en dur — `(i - 1) * w`
+    avec w = 0.26 — ce qui ne centre un groupe que s'il compte exactement
+    trois barres. Le fichier de comparaison en contient CINQ depuis l'ajout
+    des deux observateurs modaux : le groupe debordait alors de 1.3 unite
+    sur un pas de 1.0 (barres sous la mauvaise categorie dans fig_robust) et
+    les annotations tombaient une barre a cote (fig_positions). On calcule
+    donc les deux ensemble, une seule fois, a partir du nombre reel de
+    structures.
+    """
+    w = span / max(n, 1)
+    return (np.arange(n) - (n - 1) / 2) * w, w
+
+
 def fig_positions(cp, prot):
     d = cp['positions']
     fig, ax = plt.subplots(figsize=(7.6, 4.4))
-    w = 0.26
+    off, w = _bar_offsets(len(KEYS))
     xs = np.arange(len(d['x']))
     for i, k in enumerate(KEYS):
-        ax.bar(xs + (i - (len(KEYS) - 1) / 2) * w, d[k] * 1e3, w,
-               color=COL[k], label=LAB[k])
+        ax.bar(xs + off[i], d[k] * 1e3, w, color=COL[k], label=LAB[k])
         for j, v in enumerate(d[k]):
-            ax.text(xs[j] + (i - 1) * w, v * 1e3, f'{v * 1e3:.2f}',
+            ax.text(xs[j] + off[i], v * 1e3, f'{v * 1e3:.2f}',
                     ha='center', va='bottom', fontsize=7, rotation=90)
     ax.set_xticks(xs)
     ax.set_xticklabels([f'{v * 100:.0f} %' for v in d['x']])
@@ -228,30 +243,58 @@ def fig_pso(ps, prot):
         ax[0].plot(it, h.max(axis=0), color=COL[k], lw=2.4)
     ax[0].set_xlabel('PSO iteration')
     ax[0].set_ylabel('$J$  (Floquet margin)')
-    ax[0].set_title('(a) convergence, 3 seeds per structure', fontsize=10)
+    n_hist = min(int(np.atleast_2d(ps[k]['hist']).shape[0]) for k in KEYS[1:])
+    ax[0].set_title(f'(a) convergence, {n_hist} stored seed histories'
+                    ' per structure', fontsize=10)
     ax[0].grid(alpha=.3)
     ax[0].legend(fontsize=9)
+    # Les graines de DEPISTAGE d'une convention de signe sterile valent le
+    # forfait -1000 (run_pso : `alive = [... if J > -900]`). Les laisser dans
+    # le calcul des bornes ecrasait les courbes reelles — toutes comprises
+    # entre 0.05 et 0.27 — sur une echelle allant jusqu'a -1400.
     fin = np.concatenate([ps[k]['J_seeds'] for k in KEYS[1:]])
+    fin = fin[fin > -900.0]
+    if fin.size == 0:
+        fin = np.zeros(1)
     lo = np.min(fin) - 0.4 * (np.ptp(fin) + 1e-3)
     ax[0].set_ylim(lo, np.max(fin) + 0.15 * (np.ptp(fin) + 1e-3))
     ks = KEYS[1:]
     xs = np.arange(len(ks))
+    n_drop = 0
     for i, k in enumerate(ks):
         js = ps[k]['J_seeds']
+        # Meme raison qu'au panneau (a) : le forfait du depistage sterile
+        # n'est pas une mesure de dispersion, c'est un signe rejete.
+        n_drop += int(np.count_nonzero(js <= -900.0))
+        js = js[js > -900.0]
         ax[1].bar(xs[i], js.max(), 0.5, color=COL[k])
         ax[1].plot(np.full(len(js), xs[i]), js, 'ko', ms=6, zorder=5)
         ax[1].text(xs[i], js.max(), f'{js.max():+.3f}', ha='center',
                    va='bottom', fontsize=9)
     ax[1].set_xticks(xs)
-    ax[1].set_xticklabels([f"{LAB[k]}\n({int(ps[k]['n_par'])} parameters, "
-                           f"{int(ps[k]['n_states'])} states)" for k in ks],
-                          fontsize=9)
+    # Trois lignes courtes plutot qu'une longue : a quatre structures, la
+    # forme "(5 parameters, 16 states)" sur une seule ligne se chevauchait
+    # d'une categorie a l'autre et devenait illisible.
+    ax[1].set_xticklabels([f"{LAB[k]}\n{int(ps[k]['n_par'])} parameters"
+                           f"\n{int(ps[k]['n_states'])} states" for k in ks],
+                          fontsize=8)
     ax[1].set_ylabel('final $J$')
-    ax[1].set_title('(b) best value and seed spread', fontsize=10)
+    ax[1].set_title('(b) best value and seed spread'
+                    + (f' ({n_drop} sterile sign-screening run'
+                       f'{"s" if n_drop > 1 else ""} not shown)'
+                       if n_drop else ''), fontsize=10)
     ax[1].grid(alpha=.3, axis='y')
     ax[1].axhline(0, color='k', lw=.8)
-    _suptitle(fig, 'PSO optimisation - identical budget '
-                   f"({int(ps['fopid']['n_eval'])} evaluations each), "
+    # Le budget n'est pas rigoureusement identique d'une structure a l'autre :
+    # l'essaim est proportionnel a la dimension (10 + 4 x n_dim), donc le
+    # FOPID a 5 parametres et l'ADRC-FOPID a 7 ne consomment pas le meme
+    # nombre d'evaluations. Annoncer le seul chiffre du FOPID comme "chacune"
+    # contredisait ce choix, assume partout ailleurs ; on donne la plage.
+    nev = [int(ps[k]['n_eval']) for k in KEYS[1:]]
+    budget = (f'{nev[0]} evaluations each' if min(nev) == max(nev)
+              else f'{min(nev)}-{max(nev)} evaluations, swarm scaled with'
+                   ' the parameter count')
+    _suptitle(fig, f'PSO optimisation - {budget}, '
                    'identical seeds, identical objective', prot)
     fig.tight_layout()
     fig.savefig(f'{FIG}/fig_pso_{prot}.png', dpi=140)
@@ -261,13 +304,13 @@ def fig_pso(ps, prot):
 def fig_robust(cp, prot):
     tags = [str(x) for x in cp['robust_labels']]
     fig, ax = plt.subplots(figsize=(10.5, 4.6))
-    w = 0.26
+    off, w = _bar_offsets(len(KEYS))
     xs = np.arange(len(tags))
     for i, name in enumerate(KEYS):
         v = np.array([cp['robust'][t][i] for t in tags]) * 1e3
-        ax.bar(xs + (i - 1) * w, v, w, color=COL[name], label=LAB[name])
+        ax.bar(xs + off[i], v, w, color=COL[name], label=LAB[name])
         for j, val in enumerate(v):
-            ax.text(xs[j] + (i - 1) * w, val, f'{val:.2f}', ha='center',
+            ax.text(xs[j] + off[i], val, f'{val:.2f}', ha='center',
                     va='bottom', fontsize=7, rotation=90)
     ax.set_xticks(xs)
     ax.set_xticklabels([ROB_EN.get(t, t).replace(' ', '\n', 1) for t in tags],

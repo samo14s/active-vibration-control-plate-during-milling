@@ -123,10 +123,7 @@ class AdaptiveFDOB:
         # rampe de 20 ms suffit a elle seule a rendre le cas "supervision
         # desactivee" different du correcteur LTI, et le test d'equivalence
         # ne prouverait plus rien.
-        self.alpha = (np.full(len(self.w0), self.alpha_floor) if supervise
-                      and mode == 'bande'
-                      else (np.zeros(len(self.w0)) if supervise
-                            else np.full(len(self.w0), float(par['alpha']))))
+        self.alpha = self._alpha_init()
         self.level = 0.0
         self.conf = np.zeros(len(self.w0))
         self.n_rebuild = 0
@@ -159,6 +156,21 @@ class AdaptiveFDOB:
         self.w_built = np.asarray(w, float).copy()
         self.n_rebuild += 1
 
+    def _alpha_init(self):
+        """Valeur de depart de alpha. UN SEUL endroit, appele par __init__ et
+        par reset() : les deux en avaient chacun sa version, et celle de
+        reset() ignorait a la fois le mode 'bande' et le PLANCHER. Elle
+        remettait donc le correcteur exactement dans l'etat que le
+        commentaire de __init__ decrit comme divergent sur la plaque
+        nominale — alpha nul par bande, donc plus d'action preventive au
+        mode qui ne broute pas encore.
+        """
+        n = len(self.w0)
+        if not self.supervise:
+            return np.full(n, self.alpha_max)
+        return np.full(n, self.alpha_floor) if self.mode == 'bande' \
+            else np.zeros(n)
+
     def reset(self):
         self.xf[:] = 0.0
         self.xr[:] = 0.0
@@ -169,8 +181,7 @@ class AdaptiveFDOB:
         for e in self.est:
             e.reset()
         self.f_hat = (self.w0 / (2 * np.pi)).copy()
-        self.alpha = np.zeros(len(self.w0)) if self.supervise \
-            else np.full(len(self.w0), self.alpha_max)
+        self.alpha = self._alpha_init()
         self._build(self.w0)
 
     def __call__(self, y=0.0, yd=0.0, t=0.0, k=0):

@@ -83,7 +83,11 @@ def main():
     kinds = [k for i, k in enumerate(kinds)
              if k not in kinds[:i] and f'{k}__A' in d.files]
     plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
-    _, _, _, _, sl0 = plant_vectors(plate, C.N_MODES)
+    # Modele de SYNTHESE, comme run_pso.py : sous le protocole A, N_MODES et
+    # N_MODES_DESIGN donnent des conventions de signe opposees et les
+    # correcteurs relus seraient rebatis a l'envers. Identique sous B, ou les
+    # deux valent 5.
+    sl0 = plant_vectors(plate, C.N_MODES_DESIGN)[4]
 
     print('=' * 78)
     print(f" L OBSERVATEUR MODAL AU MEME CRIBLE QUE L ADRC — protocole"

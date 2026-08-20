@@ -77,8 +77,16 @@ def main():
     ss_fopid = (d['fopid__A'], d['fopid__B'], d['fopid__C'], d['fopid__D'])
 
     plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
-    w, zt, H, D_obs, sl0 = plant_vectors(plate, C.N_MODES)
+    w, zt, H, D_obs, _ = plant_vectors(plate, C.N_MODES)
     res = D_obs * H
+    # LA CONVENTION DE SIGNE EST CELLE DU MODELE DE SYNTHESE, pas celle du
+    # modele de verite. run_pso.py la tire de N_MODES_DESIGN ; la relire ici
+    # sur N_MODES reconstruit un correcteur de signe OPPOSE des que les deux
+    # different, c'est-a-dire sous le protocole A : D_obs.H y vaut -1.635 sur
+    # deux modes et +3.395 sur cinq, donc sign_loop passe de +1 a -1. Les
+    # figures de diagnostic du protocole A etaient produites avec la boucle
+    # inversee.
+    sl0 = plant_vectors(plate, C.N_MODES_DESIGN)[4]
 
     print('=' * 78)
     print(f' DIAGNOSTIC DE LA CHAINE DE PERTE — ADRC-FOPID, protocole'

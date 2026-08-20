@@ -115,7 +115,12 @@ def main():
     res = {}
     for pname, freqs in plates:
         plate = build_plate(C.PATCH_SIDE, freqs=freqs)
-        _, _, _, _, sl = plant_vectors(plate, C.N_MODES)
+        # Meme regle qu'ailleurs : la convention de signe vient du modele de
+        # SYNTHESE sur la plaque NOMINALE, celui qui a servi au PSO, et non
+        # de la plaque perturbee vue sur N_MODES modes. Sous le protocole B
+        # les deux coincident ; sous A elles sont opposees.
+        sl = plant_vectors(build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL),
+                           C.N_MODES_DESIGN)[4]
         # L'observateur garde ses frequences NOMINALES : c'est tout l'enjeu.
         w0, z0, r0 = target_modes(build_plate(C.PATCH_SIDE,
                                               freqs=C.F_NOMINAL), tg)

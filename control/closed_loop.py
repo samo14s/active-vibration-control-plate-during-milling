@@ -20,9 +20,9 @@ la monodromie est obtenu par iteration de puissance sur l'application d'une
 periode de dent, sans jamais assembler la matrice (m+1)nx augmentee.
 """
 import numpy as np
-from scipy.linalg import expm
 
 from milling_dynamics import alpha4_series, alpha4_average, N_TEETH
+from step_integrals import step_integrals
 
 
 # ---------------------------------------------------------------------------
@@ -78,31 +78,10 @@ def period_maps(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
     maps = []
     for k in range(m):
         A, At = build_matrices(plate, DtD, D_obs, H, a4[k], ctrl, pd, n_modes)
-        nx = A.shape[0]
-        P0 = expm(A * h)
-        try:
-            J1 = np.linalg.solve(A, P0 - np.eye(nx))
-            J2 = h * J1 - np.linalg.solve(A, h * P0 - J1)
-        except np.linalg.LinAlgError:
-            # A n'est jamais singuliere ici au sens mathematique, mais la
-            # factorisation LU peut le declarer : la matrice d'etat de la
-            # boucle fermee atteint un conditionnement de 1e21 avec les
-            # correcteurs les plus riches (banc modal a cinq modes, 66 etats),
-            # et un pivot exactement nul finit par apparaitre a certaines
-            # profondeurs. On bascule alors sur la forme AUGMENTEE, qui donne
-            # les memes integrales SANS jamais inverser A :
-            #   expm([[A, I, 0], [0, 0, I], [0, 0, 0]] h)
-            #     = [[e^Ah, F1, F2], [0, I, hI], [0, 0, I]]
-            #   F1 = int_0^h e^As ds          -> J1
-            #   F2 = int_0^h (h-s) e^As ds    -> J2 = h F1 - F2
-            # Verifie contre le chemin rapide : ecart relatif 2e-12 (FOPID) a
-            # 4e-7 (ADRC-FOPID), donc les deux chemins sont interchangeables.
-            I = np.eye(nx)
-            Z = np.zeros((nx, nx))
-            M = np.block([[A, I, Z], [Z, Z, I], [Z, Z, Z]])
-            E = expm(M * h)
-            J1 = E[:nx, nx:2 * nx]
-            J2 = h * J1 - E[:nx, 2 * nx:]
+        # Le rattrapage sans inversion vit desormais dans
+        # paper_model/step_integrals.py : les trois moteurs de Floquet du
+        # depot en avaient besoin, et deux d'entre eux ne l'avaient pas.
+        P0, J1, J2 = step_integrals(A, h)
         maps.append((P0, (J1 - J2 / h) @ At, (J2 / h) @ At))
     return maps, tau
 

@@ -16,6 +16,7 @@ import os
 import sys
 
 import numpy as np
+from scipy.linalg import expm as _expm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, '..')
@@ -28,6 +29,8 @@ from adrc import adrc_fopid_ss                                   # noqa: E402
 from fdob import fdob_fopid_ss, target_modes                     # noqa: E402
 from diagnose_adrc import plant_zeros                            # noqa: E402
 from chatter_estimator import Biquad, notch, bandpass            # noqa: E402
+from lti_floquet import dominant_eigs                            # noqa: E402
+from step_integrals import step_integrals                        # noqa: E402
 
 OM = 2 * np.pi * np.logspace(0, 4.4, 2000)
 PAR = dict(Kp=2.516e4, Ki=1.045e7, Kd=6.065, lam=0.2677, mu=0.1322)
@@ -211,6 +214,76 @@ def test_comb_rejects_tooth_harmonics():
             assert g < 0.01, f'harmonique {f0} Hz mal rejetee : gain {g:.4f}'
         else:
             assert g > 0.80, f'mode {f0} Hz trop attenue : gain {g:.4f}'
+
+
+# -------------------------------------------------------------- Floquet
+def _random_maps(seed, nx=6, n_sub=3):
+    rng = np.random.default_rng(seed)
+    return [(rng.standard_normal((nx, nx)) * 0.35,
+             rng.standard_normal((nx, nx)) * 0.05,
+             rng.standard_normal((nx, nx)) * 0.05) for _ in range(n_sub)]
+
+
+def _exact_monodromy(maps, m, nx):
+    """La monodromie ASSEMBLEE, colonne par colonne, de la meme recurrence."""
+    dim = (m + 1) * nx
+    Z = np.zeros((m + 1, nx, dim))
+    for j in range(m + 1):
+        Z[j, :, j * nx:(j + 1) * nx] = np.eye(nx)
+    for P0, C_lo, C_hi in maps:
+        new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
+        Z = np.roll(Z, 1, axis=0)
+        Z[0] = new
+    return Z.reshape(dim, dim)
+
+
+def test_dominant_eigs_matches_the_assembled_monodromy():
+    """L'iteration de sous-espace rend le multiplicateur dominant EXACT.
+
+    C'est le multiplicateur dont le module decide de la stabilite et dont la
+    PHASE donne la frequence de broutement en boucle fermee. La version
+    d'origine ne reorthonormalisait pas le bloc et gardait le facteur R de la
+    QR dans la projection : sur la graine 3 elle rendait -0.2633 la ou la
+    monodromie assemblee donne +1.0765 — un cas instable declare stable.
+    """
+    m, nx = 4, 6
+    for seed in (3, 11, 42):
+        maps = _random_maps(seed, nx)
+        mu = np.linalg.eigvals(_exact_monodromy(maps, m, nx))
+        ref = mu[int(np.argmax(np.abs(mu)))]
+        ev = dominant_eigs(maps, m, nx, q=4, n_period=60)
+        got = ev[int(np.argmax(np.abs(ev)))]
+        assert abs(got - ref) < 1e-9 * max(1.0, abs(ref)), \
+            f'graine {seed} : obtenu {got:+.6f}, attendu {ref:+.6f}'
+
+
+def test_step_integrals_agree_on_both_paths():
+    """Les deux chemins de J1 et J2 donnent la meme chose quand A est
+    inversible, et le chemin augmente REPOND encore quand elle ne l'est pas.
+
+    Les trois moteurs de Floquet en dependent ; deux d'entre eux levaient une
+    exception au lieu de rendre une integrale parfaitement definie.
+    """
+    rng = np.random.default_rng(7)
+    h = 1e-4
+    A = rng.standard_normal((8, 8)) * 50.0
+    _, J1, J2 = step_integrals(A, h)
+    ref1 = np.linalg.solve(A, np.eye(8) * 0 + _expm(A * h) - np.eye(8))
+    ref2 = h * ref1 - np.linalg.solve(A, h * _expm(A * h) - ref1)
+    for got, ref, nm in ((J1, ref1, 'J1'), (J2, ref2, 'J2')):
+        err = float(np.max(np.abs(got - ref)) / np.max(np.abs(ref)))
+        assert err < 1e-8, f'{nm} : les deux chemins divergent de {err:.2e}'
+    # A SINGULIERE : c'est le cas qui faisait planter stability_fdm.
+    S = A.copy()
+    S[:, 3] = S[:, 0] * 2.0                     # colonne dependante -> det = 0
+    _, K1, K2 = step_integrals(S, h)
+    assert np.all(np.isfinite(K1)) and np.all(np.isfinite(K2)), \
+        'A singuliere : integrales non finies'
+    # controle independant : J1 = int_0^h e^{As} ds, par quadrature fine
+    ts = (np.arange(4000) + 0.5) * (h / 4000)
+    quad = sum(_expm(S * t) for t in ts) * (h / 4000)
+    err = float(np.max(np.abs(K1 - quad)) / np.max(np.abs(quad)))
+    assert err < 1e-6, f'A singuliere : J1 faux de {err:.2e}'
 
 
 def _main():

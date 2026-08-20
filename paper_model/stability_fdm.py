@@ -22,9 +22,9 @@ l'etat augmente z = [x ; q_{k-1} ; ... ; q_{k-m}] ; la coupe est stable si le
 rayon spectral est <= 1 (Floquet).
 """
 import numpy as np
-from scipy.linalg import expm
 
 from milling_dynamics import alpha4_series, alpha4_average, N_TEETH
+from step_integrals import step_integrals
 
 
 def floquet_matrix(omega, zeta, DtD, a4_mid, tau, n=None):
@@ -46,16 +46,24 @@ def floquet_matrix(omega, zeta, DtD, a4_mid, tau, n=None):
         A[n:, n:] = -C0
         B = np.zeros((2 * n, n))
         B[n:, :] = a4_mid[k] * DtD
-        P0 = expm(A * h)
-        J1 = np.linalg.solve(A, P0 - np.eye(2 * n))          # int e^{Au} du
-        J2 = h * J1 - np.linalg.solve(A, h * P0 - J1)        # int e^{A(h-s)} s ds
+        # La raideur effective K0 + a4(t).D^T D s'annule a certaines
+        # profondeurs : A devient alors singuliere et le `solve` direct
+        # levait une exception au lieu de rendre des integrales qui, elles,
+        # existent. Voir step_integrals.py.
+        P0, J1, J2 = step_integrals(A, h)
         C_hi = (J2 / h) @ B                                  # coeff q_{k-m+1}
         C_lo = (J1 - J2 / h) @ B                             # coeff q_{k-m}
         Dk = np.zeros((dim, dim))
         Dk[:2 * n, :2 * n] = P0
         # q_{k-m}   est le DERNIER bloc de z, q_{k-m+1} l'avant-dernier
         Dk[:2 * n, dim - n:] = C_lo
-        Dk[:2 * n, dim - 2 * n:dim - n] += C_hi
+        # ... SAUF a m = 1, ou "l'avant-dernier bloc" n'existe pas : q_{k-m+1}
+        # vaut alors q_k, la position COURANTE, qui vit dans les n premieres
+        # colonnes de l'etat. Comme dim - 2n = n a m = 1, l'ecriture generale
+        # tombait exactement sur le bloc des VITESSES et assemblait
+        # silencieusement une autre monodromie que celle voulue.
+        j_hi = 0 if m == 1 else dim - 2 * n
+        Dk[:2 * n, j_hi:j_hi + n] += C_hi
         # decalage de l'historique : nouveau q_{k} = positions de x_k
         Dk[2 * n:3 * n, :n] = I2
         if m > 1:

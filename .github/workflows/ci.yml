@@ -1,0 +1,142 @@
+name: verification
+
+# Ce qui tourne ici est le SOUS-ENSEMBLE RAPIDE. Le depot contient aussi des
+# calculs lourds — Floquet sur les lobes, PSO, dichotomies temporelles — qui
+# se comptent en heures et n'ont pas leur place dans un CI de relecture. Le
+# tableau des durees mesurees et la raison de chaque exclusion sont plus bas.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  invariants:
+    # Les identites dont depend le reste : si l'une casse, ce n'est pas un
+    # detail d'implementation, c'est une conclusion des rapports qui tombe.
+    # Neuf verifications en moins de deux secondes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Invariants mathematiques
+        env:
+          OMP_NUM_THREADS: '1'
+          MPLBACKEND: Agg
+          PROTOCOL: B
+          CALIB: measured
+        run: python tests/test_invariants.py
+
+  verification-rapide:
+    # Les scripts de verification dont la duree mesuree est <= 30 s.
+    runs-on: ubuntu-latest
+    env:
+      OMP_NUM_THREADS: '1'
+      MPLBACKEND: Agg
+      PROTOCOL: B
+      CALIB: measured
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # 01 et 02 lisent les .xlsx numerises par glob RELATIF, donc ils doivent
+      # tourner depuis le dossier qui les contient.
+      - name: 01-02 — donnees mesurees des Fig. 12(a) et 12(b)
+        working-directory: simulation/sim_kit
+        run: |
+          python ../../verification/01_frf_vs_measured.py
+          python ../../verification/02_static_gain_and_cutting_coeffs.py
+
+      - name: 03-12 — modele, coefficients de coupe, FRF, D^T D
+        run: |
+          for f in 03_static_compliance_and_chatter \
+                   04_stability_lobes \
+                   05_alpha4_sign_convention \
+                   06_numerics_quadrature_mesh \
+                   07_model_v2_claims \
+                   08_modes_damping_patch_geometry \
+                   09_ritz_model_identification \
+                   10_cutting_force_coefficients \
+                   11_frf_and_antiresonances \
+                   12_dtd_along_pass; do
+            echo "::group::$f"
+            python "verification/$f.py"
+            echo "::endgroup::"
+          done
+
+      - name: 14-16, 19 — reponse libre, couplage piezo, incertitude, pastille
+        run: |
+          for f in 14_uncontrolled_time_response \
+                   15_piezo_coupling_eq14_15 \
+                   16_additive_uncertainty_weights \
+                   19_patch_orientation; do
+            echo "::group::$f"
+            python "verification/$f.py"
+            echo "::endgroup::"
+          done
+
+  compilation:
+    # Aucun test ne couvre les scripts lourds ; on verifie au moins qu'ils
+    # restent syntaxiquement valides et importables, ce qui attrape les
+    # ruptures d'API entre modules.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Compilation de tous les modules
+        run: python -m compileall -q control paper_model verification tests
+      # Les modules de control/ importent ceux de paper_model/ sans prefixe :
+      # chaque script ajoute les deux dossiers a sys.path lui-meme. Un import
+      # nu echoue donc si PYTHONPATH ne les contient pas — verifie en local
+      # avant d'ecrire ce job.
+      - name: Import des modules de la couche commande
+        env:
+          OMP_NUM_THREADS: '1'
+          MPLBACKEND: Agg
+          PROTOCOL: B
+          CALIB: measured
+          PYTHONPATH: ${{ github.workspace }}/paper_model:${{ github.workspace }}/control
+        run: |
+          for m in config plate_model fopid adrc fdob fdob_adaptive \
+                   chatter_estimator objective closed_loop simulate \
+                   sim_controller pso chebyshev_plate milling_dynamics \
+                   lti_floquet stability_fdm time_domain; do
+            echo "import $m"
+            python -c "import $m" || exit 1
+          done
+
+# DUREES MESUREES sur la machine de developpement (un coeur, OMP_NUM_THREADS=1).
+# Le CI tourne le sous-ensemble <= 30 s ; total mesure ~110 s, soit quelques
+# minutes sur un runner GitHub.
+#
+#   inclus                                       exclus, et pourquoi
+#   -----------------------------------------    -------------------------------
+#   01 frf_vs_measured              (~5 s)       13 open_loop_stability_lobes
+#   02 static_gain_cutting_coeffs   (~5 s)          88 s — balayage de Floquet
+#   03 static_compliance_chatter      4 s        17 alpha4_band_stability
+#   04 stability_lobes                2 s           124 s — idem sur une bande
+#   05 alpha4_sign_convention        29 s        18 sign_convention
+#   06 numerics_quadrature_mesh       2 s           > 300 s — trois essais de
+#   07 model_v2_claims                3 s           signe, chacun un Floquet
+#   08 modes_damping_patch_geometry  11 s        20 reduction_and_uncertainty
+#   09 ritz_model_identification      4 s           lourd — mu-analyse
+#   10 cutting_force_coefficients    13 s
+#   11 frf_and_antiresonances         1 s        Et toute la couche commande :
+#   12 dtd_along_pass                 3 s        run_pso (~50 min), run_compare
+#   14 uncontrolled_time_response    28 s        (~2 h), run_adaptive (~37 min),
+#   15 piezo_coupling_eq14_15         2 s        run_pso_time (~2.4 h).
+#   16 additive_uncertainty_weights   2 s
+#   19 patch_orientation              1 s

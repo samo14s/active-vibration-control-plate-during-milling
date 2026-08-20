@@ -98,6 +98,11 @@ def main():
     # structures, sans quoi ce serait une faveur.
     extra = [int(v) for v in os.environ['EXTRA_SEEDS'].split(',')] \
         if os.environ.get('EXTRA_SEEDS') else None
+    # OUT_TAG : ecrire dans un fichier SEPARE. Sans cela, deux optimisations
+    # lancees en parallele — une par coeur libre — reliraient le meme .npz et
+    # la derniere a finir ecraserait le travail de l'autre. Chaque processus
+    # ecrit donc son propre fichier, et `merge_pso.py` les reunit ensuite.
+    tag = os.environ.get('OUT_TAG', '')
     store = {}
     path = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
     if os.path.exists(path):
@@ -227,10 +232,11 @@ def main():
           + ", ".join(f"{int(v['n_eval'])} ({k})" for k, v in store.items())
           + " — l'essaim est proportionnel a la dimension, donc le nombre"
             " d'evaluations differe et est rapporte tel quel")
-    np.savez_compressed(path,
+    out_path = os.path.join(OUT, f'pso_{C.PROTOCOL}{tag}.npz')
+    np.savez_compressed(out_path,
                         **{f'{k}__{kk}': vv for k, v in store.items()
                            for kk, vv in v.items()})
-    print(f"  -> results/pso_{C.PROTOCOL}.npz   ({time.time() - t00:.0f} s)")
+    print(f"  -> {os.path.basename(out_path)}   ({time.time() - t00:.0f} s)")
 
 
 if __name__ == '__main__':

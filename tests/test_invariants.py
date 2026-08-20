@@ -286,6 +286,71 @@ def test_step_integrals_agree_on_both_paths():
     assert err < 1e-6, f'A singuliere : J1 faux de {err:.2e}'
 
 
+# -------------------------------------------------------------- H-infini
+def _hinf_problem(k=50.0, f0=543.0, zw=0.3, w2=1.0):
+    from hinf import plant_ss, bandpass_weight, augment
+    w = np.array([2 * np.pi * f0])
+    return augment(plant_ss(w, np.array([0.02]), np.array([3.0])),
+                   bandpass_weight(k, f0, zw), w2, 1e-3)
+
+
+def test_care_residual_is_zero():
+    """La solution du hamiltonien verifie VRAIMENT A'X + XA + Q - XSX = 0.
+
+    `care` n'utilise pas scipy.solve_continuous_are : S est INDEFINIE en
+    H-infini (B2B2' - B1B1'/g^2), ce qu'aucune ecriture (A,B,Q,R) ne
+    represente. Ce test verifie l'equation elle-meme, pas la routine.
+    """
+    from hinf import care
+    rng = np.random.default_rng(5)
+    for _ in range(4):
+        n = 6
+        A = rng.standard_normal((n, n)) - 2.0 * np.eye(n)
+        B2 = rng.standard_normal((n, 1))
+        B1 = rng.standard_normal((n, 2))
+        C1 = rng.standard_normal((2, n))
+        S = B2 @ B2.T - (B1 @ B1.T) / 9.0        # indefinie a dessein
+        Q = C1.T @ C1
+        X = care(A, S, Q)
+        R = A.T @ X + X @ A + Q - X @ S @ X
+        err = float(np.max(np.abs(R))) / max(1.0, float(np.max(np.abs(Q))))
+        assert err < 1e-8, f'residu de Riccati {err:.2e}'
+        assert np.min(np.linalg.eigvalsh(S)) < 0, 'S devait etre indefinie'
+
+
+def test_hinf_assumptions_hold_by_construction():
+    """`augment` produit D11 = 0, D12'C1 = 0 et B1 D21' = 0 SANS loop-shift.
+
+    C'est ce qui autorise les formules simplifiees de Glover-Doyle. Si cette
+    propriete tombe (par exemple si quelqu'un rend W2 dynamique ou W1
+    seulement propre), la synthese devient fausse SANS rien signaler — d'ou
+    ce test.
+    """
+    from hinf import assumptions
+    for kw in (dict(), dict(w2=1e-3), dict(zw=0.05), dict(f0=1068.0)):
+        ok, rep = assumptions(*_hinf_problem(**kw))
+        assert ok, f'hypotheses violees pour {kw} : {rep}'
+
+
+def test_hinf_reaches_the_gamma_it_claims():
+    """La norme H-infini ANNONCEE est retrouvee par un balayage frequentiel.
+
+    Le controle est independant du solveur : il ne partage aucune ligne de
+    code avec les equations de Riccati. Un solveur faux rend une matrice
+    plausible qui ne fait pas ce qu'elle promet ; c'est ce test, et lui seul,
+    qui separe "les equations ont converge" de "le correcteur atteint gamma".
+    """
+    from hinf import synthesize, lower_lft, hinf_norm
+    P = _hinf_problem()
+    K, g = synthesize(P, check=False)
+    got = hinf_norm(lower_lft(P, K))
+    assert np.isfinite(got), 'boucle fermee instable'
+    assert abs(got - g) <= 0.05 * g, \
+        f'gamma annonce {g:.6g}, mesure {got:.6g}'
+    ev = np.linalg.eigvals(lower_lft(P, K)[0])
+    assert ev.real.max() < 0, f'boucle fermee instable : {ev.real.max():.3g}'
+
+
 def _main():
     fs = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     bad = 0

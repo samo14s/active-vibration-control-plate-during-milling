@@ -86,9 +86,15 @@ class Design:
         if self.kind == 'dvf':
             return dict(g=10.0 ** p['log_g'], f_d=p['f_d'])
         if self.kind == 'vpa':
-            return dict(gains=[10.0 ** p['log_g1'], 10.0 ** p['log_g2']],
-                        freqs=[p['f_a1'], p['f_a2']],
-                        zetas=[10.0 ** p['log_z1'], 10.0 ** p['log_z2']])
+            # SCALAIRES, pas des listes. `run_pso` imprime et stocke chaque
+            # parametre par f"{v:.4g}" et np.array([...]) : une liste y leve
+            # TypeError APRES l'optimisation, donc apres avoir depense le
+            # budget et AVANT d'ecrire le fichier — la pire place possible.
+            # C'est `build` qui les regroupe, pas `decode`.
+            return dict(g1=10.0 ** p['log_g1'], f1=p['f_a1'],
+                        z1=10.0 ** p['log_z1'],
+                        g2=10.0 ** p['log_g2'], f2=p['f_a2'],
+                        z2=10.0 ** p['log_z2'])
         if self.kind == 'lqg':
             return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
                         w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
@@ -121,7 +127,8 @@ class Design:
             core = dvf_ss(p['g'], p['f_d'], self.sign_loop * self.sign_variant)
             return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind == 'vpa':
-            core = vpa_ss(p['gains'], p['freqs'], p['zetas'],
+            core = vpa_ss([p['g1'], p['g2']], [p['f1'], p['f2']],
+                          [p['z1'], p['z2']],
                           self.sign_loop * self.sign_variant)
             return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind == 'lqg':

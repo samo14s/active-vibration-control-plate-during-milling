@@ -25,6 +25,7 @@ from adrc import adrc_fopid_ss, b0_nominal
 from fdob import fdob_fopid_ss, target_modes
 from hinf import HinfFailure, augment, bandpass_weight, plant_ss, synthesize
 from musyn import augment_mu, dk_iterate
+from classical import LqgFailure, dvf_ss, lqg_ss, vpa_ss
 from plate_model import plant_vectors
 
 
@@ -56,14 +57,15 @@ class Design:
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
             self.tw, self.tz, self.tr = target_modes(plate, self.targets)
-        if kind in ('hinf', 'musyn'):
-            # Ces deux-la se synthetisent SUR le modele : elles ont besoin du
+        if kind in ('hinf', 'musyn', 'lqg'):
+            # Ces trois-la se synthetisent SUR le modele : elles ont besoin du
             # procede lui-meme, pas seulement de son signe de boucle.
             w, zt, Hv, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
             self.plant = plant_ss(w, zt, D_obs * Hv)
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
                   fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
-                  musyn=C.BOUNDS_MU)[kind]
+                  musyn=C.BOUNDS_MU, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
+                  lqg=C.BOUNDS_LQG)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -80,6 +82,16 @@ class Design:
             return dict(kw=10.0 ** p['log_kw'], f_w=p['f_w'],
                         zw=10.0 ** p['log_zw'], w2=10.0 ** p['log_w2'],
                         eps=10.0 ** p['log_eps'])
+        if self.kind == 'dvf':
+            return dict(g=10.0 ** p['log_g'], f_d=p['f_d'])
+        if self.kind == 'vpa':
+            return dict(gains=[10.0 ** p['log_g1'], 10.0 ** p['log_g2']],
+                        freqs=[p['f_a1'], p['f_a2']],
+                        zetas=[10.0 ** p['log_z1'], 10.0 ** p['log_z2']])
+        if self.kind == 'lqg':
+            return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
+                        w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
+                        f_w=p['f_w'])
         out = dict(Kp=10.0 ** p['log_Kp'], Ki=10.0 ** p['log_Ki'],
                    Kd=10.0 ** p['log_Kd'], lam=p['lam'], mu=p['mu'])
         if self.kind == 'adrc':
@@ -101,6 +113,21 @@ class Design:
         instable est compte comme un echec. Le taux d'echec est rapporte.
         """
         p = self.decode(u)
+        if self.kind == 'dvf':
+            core = dvf_ss(p['g'], p['f_d'], self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        if self.kind == 'vpa':
+            core = vpa_ss(p['gains'], p['freqs'], p['zetas'],
+                          self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        if self.kind == 'lqg':
+            try:
+                K = lqg_ss(self.plant, **p)
+            except (LqgFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
         if self.kind in ('hinf', 'musyn'):
             W1 = bandpass_weight(p['kw'], p['f_w'], p['zw'])
             try:

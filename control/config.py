@@ -283,3 +283,30 @@ BOUNDS_MU = dict(BOUNDS_HINF)
 #: superviseur de l'observateur modal : on mesure ce qu'apporte D-K, sans le
 #: melanger a un gain d'optimisation.
 N_DK = 3
+
+
+# ---------------------------------------------------------------------------
+# Boitiers des trois references classiques (control/classical.py).
+#
+# Les DIMENSIONS DIFFERENT ici, et c'est voulu. Le DVF n'a que deux poignees
+# parce qu'il n'en a que deux : lui en inventer une troisieme pour "egaliser"
+# serait truquer la comparaison dans l'autre sens. L'essaim etant
+# proportionnel a la dimension (10 + 4 x n_dim), chaque structure recoit un
+# effectif adapte a son espace — c'est la regle deja appliquee aux quatre
+# premieres, pas une faveur nouvelle.
+BOUNDS_DVF = dict(log_g=(-2.0, 6.0), f_d=(200.0, 8000.0))
+
+# Un absorbeur par mode de broutement. Les centres sont libres autour des deux
+# modes nominaux (540 et 1068 Hz) : on ne suppose pas que l'accord optimal est
+# l'accord exact, c'est justement une question que l'optimiseur tranche.
+BOUNDS_VPA = dict(
+    log_g1=(-2.0, 8.0), f_a1=(350.0, 800.0), log_z1=(-2.5, -0.3),
+    log_g2=(-2.0, 8.0), f_a2=(800.0, 1500.0), log_z2=(-2.5, -0.3))
+
+# LQG : quatre ponderations plus la frequence de mise en forme. Seuls les
+# rapports q/r et w/v pilotent le resultat, mais on laisse les quatre libres
+# plutot que d'imposer a l'optimiseur une reparametrisation qu'il n'a pas
+# demandee — et le cout en est nul, l'essaim etant dimensionne par n_dim.
+BOUNDS_LQG = dict(
+    log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
+    log_v=(-6.0, 2.0), f_w=(350.0, 1500.0))

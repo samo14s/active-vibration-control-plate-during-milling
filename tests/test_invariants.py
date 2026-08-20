@@ -277,20 +277,29 @@ def test_floquet_spectrum_matches_the_assembled_monodromy_on_the_real_plate():
     comme unique reference.
     """
     from closed_loop import period_maps, spectral_radius
-    npz = os.path.join(ROOT, 'results', 'pso_B.npz')
-    if not os.path.exists(npz):
-        import pytest
-        pytest.skip('results/pso_B.npz absent')
+    from fopid import series, rolloff_ss
     plate = _plate()
-    d = np.load(npz, allow_pickle=True)
+    n = 5
+    D_obs = plate.D_row(plate.lp, plate.hp)[:n]
+    res = D_obs * np.asarray(plate.H_Pe_modal, float)[:n]
+    ro = rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER)
+    ctrls = {
+        'fopid': series(fopid_ss(2.5e4, 1.0e7, 6.0, 0.27, 0.13,
+                                 C.OUST_WB, C.OUST_WH, C.OUST_N, -1.0), ro),
+        'adrc': series(adrc_fopid_ss(6.2e4, 5.5e7, 3.4e3, 0.58, 0.085,
+                                     1.86e4, 40.72, C.OUST_WB, C.OUST_WH,
+                                     C.OUST_N, -1.0), ro),
+        'fdob': series(fdob_fopid_ss(133.0, 6.6e6, 389.0, 0.25, 0.33, 7.0e-3,
+                                     0.33, plate.omega_n[:2],
+                                     plate.zeta_modes[:2], res[:2],
+                                     C.FDOB_WC, C.OUST_WB, C.OUST_WH,
+                                     C.OUST_N, -1.0), ro),
+    }
     m = 12                                   # petit : la reference est en O(dim^3)
-    for kind in ('fopid', 'adrc', 'fdob'):
-        if f'{kind}__A' not in d.files:
-            continue
-        ss = tuple(d[f'{kind}__{k}'] for k in 'ABCD')
+    for kind, ss in ctrls.items():
         for ap in (0.10e-3, 0.20e-3):
             maps, _ = period_maps(plate, C.RPM_DESIGN, ap, 0.5 * plate.lp,
-                                  ctrl=ss, pd=None, n_modes=5, m=m)
+                                  ctrl=ss, pd=None, n_modes=n, m=m)
             nx = maps[0][0].shape[0]
             ref = float(np.max(np.abs(np.linalg.eigvals(
                 _exact_monodromy(maps, m, nx)))))

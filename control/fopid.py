@@ -20,6 +20,8 @@ MEME realisation (meme bande, meme ordre N) pour les deux correcteurs
 compares : c'est une des conditions d'equite du protocole.
 """
 import numpy as np
+
+from ss_balance import balance_ss
 from scipy.signal import zpk2ss
 
 
@@ -114,7 +116,12 @@ def series(ss1, ss2):
     B = np.vstack([B1, B2 @ D1])
     C = np.hstack([D2 @ C1, C2])
     D = D2 @ D1
-    return A, B, C, D
+    # EQUILIBRAGE FINAL. Sans lui, la composition accumule les echelles des
+    # deux blocs : le correcteur FDOB stocke atteignait cond(A) = 5.5e19, dont
+    # 3.1e4 apres une simple similitude diagonale. Voir ss_balance.py — la
+    # fonction de transfert est inchangee, la matrice d'etat ne l'est pas, et
+    # c'est la matrice d'etat que Floquet exponentie.
+    return balance_ss((A, B, C, D))
 
 
 def rolloff_ss(fc, order=2):
@@ -132,8 +139,14 @@ def rolloff_ss(fc, order=2):
     from scipy.signal import butter, tf2ss
     b, a = butter(order, 2 * np.pi * fc, analog=True)
     A, B, C, D = tf2ss(b, a)
-    return (np.atleast_2d(A), np.atleast_2d(B).reshape(-1, 1),
-            np.atleast_2d(C).reshape(1, -1), np.atleast_2d(D).reshape(1, 1))
+    # La forme compagne de Butterworth porte C = [0, (2 pi fc)^2] = [0,
+    # 2.53e9] a 8 kHz. C'est petit vu isolement — mais `series` greffe ce bloc
+    # sur TOUS les correcteurs compares, et ce 2.53e9 se lisait verbatim dans
+    # la ligne C de chaque optimum stocke. Il est la source commune du
+    # conditionnement de toutes les realisations du depot.
+    return balance_ss((np.atleast_2d(A), np.atleast_2d(B).reshape(-1, 1),
+                       np.atleast_2d(C).reshape(1, -1),
+                       np.atleast_2d(D).reshape(1, 1)))
 
 
 # ---------------------------------------------------------------------------

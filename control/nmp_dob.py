@@ -44,6 +44,8 @@ part vaut-elle quelque chose sur cette plaque ? Le protocole y repondra, et
 la reponse peut tres bien etre non.
 """
 import numpy as np
+
+from ss_balance import balance_ss
 from scipy.linalg import matrix_balance
 from scipy.signal import tf2ss, tf2zpk, zpk2tf
 
@@ -362,7 +364,12 @@ def nmp_dob_fopid_ss(Kp, Ki, Kd, lam, mu, wq, alpha, w, zeta, res,
     qn, qd = _q_tf(wq, Q_ORDER)
     nm = np.trim_zeros(np.asarray(nm, float), 'f')
     # V = Q ; W = Q . P_min^-1 = (qn . dm) / (qd . nm)
-    Av, Bv, Cv, Dv = tf2ss(qn, qd)
+    # Le denominateur de Q = (wq/(s+wq))^3 vaut [1, 3wq, 3wq^2, wq^3] : a
+    # wq = 2 pi 3000 c'est un ecart de 6.7e12 entre coefficients, et 6.3e13 en
+    # haut de BOUNDS_NMPDOB. C'etait le dernier tf2ss NU de ce fichier, celui
+    # que la correction de W avait laisse en place ; equilibre, il fait passer
+    # le correcteur assemble de cond 3.3e12 a 2.8e5.
+    Av, Bv, Cv, Dv = balance_ss(tf2ss(qn, qd))
     # W n'est PAS forme comme un polynome : voir la note ci-dessus.
     Aw, Bw, Cw, Dw = _w_ss(nm, dm, wq, Q_ORDER)
     Av, Bv, Cv = np.atleast_2d(Av), np.atleast_2d(Bv), np.atleast_2d(Cv)

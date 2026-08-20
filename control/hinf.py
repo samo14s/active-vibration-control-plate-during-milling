@@ -283,50 +283,10 @@ def _normalize(B2, C2, D12, D21):
     return B2 / s12, C2 / s21, D12 / s12, D21 / s21, s12, s21
 
 
-def _balance(A, Bs, Cs, n_sweep=8):
-    """Equilibrage du SYSTEME, pas seulement de A.
-
-    `matrix_balance` de scipy n'equilibre que A : elle laisse B et C intacts,
-    et sur ce modele c'est insuffisant — le hamiltonien atteint un
-    conditionnement de 1e20 parce que |A| ~ 1e7 (les w^2 modaux) cotoie
-    |C1'C1| ~ 1e10 pendant que |S| ~ 1. Une decomposition de Schur sur une
-    telle matrice rend un sous-espace invariant dont les petites directions
-    sont du bruit d'arrondi, et la solution de Riccati n'existe plus
-    numeriquement alors qu'elle existe mathematiquement.
-
-    On egalise donc, etat par etat, la norme de la LIGNE i de [A B] et celle
-    de la COLONNE i de [A ; C], par la similitude diagonale x = T x~. Les
-    facteurs sont arrondis a des puissances de deux : la mise a l'echelle est
-    alors EXACTE en binaire et n'introduit aucune erreur d'arrondi propre.
-    """
-    A = np.array(A, float)
-    Bs = [np.array(b, float) for b in Bs]
-    Cs = [np.array(c, float) for c in Cs]
-    n = A.shape[0]
-    t = np.ones(n)
-    for _ in range(n_sweep):
-        moved = False
-        for i in range(n):
-            r = np.linalg.norm(np.concatenate(
-                [np.delete(A[i, :], i)] + [b[i, :] for b in Bs]))
-            c = np.linalg.norm(np.concatenate(
-                [np.delete(A[:, i], i)] + [cc[:, i] for cc in Cs]))
-            if r <= 0.0 or c <= 0.0:
-                continue
-            f = 2.0 ** np.round(np.log2(np.sqrt(c / r)))
-            if f == 1.0:
-                continue
-            A[i, :] *= f
-            A[:, i] /= f
-            for b in Bs:
-                b[i, :] *= f
-            for cc in Cs:
-                cc[:, i] /= f
-            t[i] /= f
-            moved = True
-        if not moved:
-            break
-    return A, Bs, Cs, t
+# L'equilibrage du SYSTEME vit desormais dans ss_balance.py : le meme besoin
+# est apparu sur TOUS les correcteurs du depot, pas seulement sur le
+# hamiltonien H-infini. Le corps est inchange.
+from ss_balance import balance as _balance                       # noqa: E402
 
 
 def scale_problem(P):

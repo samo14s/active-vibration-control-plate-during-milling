@@ -20,6 +20,7 @@ frequences de son Tableau 1.
 
     PROTOCOL=B CALIB=measured python robustness_new.py
 """
+import glob
 import os
 import sys
 import time
@@ -35,26 +36,32 @@ from closed_loop import limit as cl_limit                     # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'results')
 
-#: ou vit chaque structure. Les quatre d'origine sont dans le fichier commun ;
-#: les nouvelles dans leur fichier parallele tant que la fusion n'a pas eu lieu.
-SOURCES = [('boucle ouverte', None),
-           ('fopid', 'pso_B.npz'), ('adrc', 'pso_B.npz'),
-           ('fdob', 'pso_B.npz'), ('fdob12345', 'pso_B.npz'),
-           ('dvf', 'pso_B_dvf.npz'), ('hinf', 'pso_B_hinf.npz'),
-           ('lqg', 'pso_B_lqg.npz'), ('vpa', 'pso_B_vpa.npz'),
-           ('musyn', 'pso_B_musyn.npz'), ('nmpdob', 'pso_B_nmpdob.npz')]
+#: ORDRE D'AFFICHAGE, pas liste de structures : rien n'est code en dur ici.
+#: `discover` lit ce que les fichiers contiennent REELLEMENT — le fichier
+#: fusionne d'abord, puis les fichiers paralleles pour les structures que la
+#: fusion n'a pas encore reunies. Une structure nouvelle apparait donc dans le
+#: tableau sans qu'on touche a ce fichier, ce qui est la condition meme de
+#: l'equite : le meme code d'evaluation pour toutes.
+ORDER = ['fopid', 'adrc', 'fdob', 'fdob12345', 'dvf', 'vpa', 'hinf', 'musyn',
+         'lqg', 'mpc', 'smc', 'nmpdob']
 
 
-def load_ss(kind, fname):
-    if fname is None:
-        return None
-    path = os.path.join(OUT, fname)
-    if not os.path.exists(path):
-        return False
-    d = np.load(path, allow_pickle=True)
-    if f'{kind}__A' not in d.files:
-        return False
-    return (d[f'{kind}__A'], d[f'{kind}__B'], d[f'{kind}__C'], d[f'{kind}__D'])
+def discover():
+    """[(kind, (A, B, C, D))], boucle ouverte en tete."""
+    found = {}
+    merged = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
+    paths = ([merged] if os.path.exists(merged) else []) + sorted(
+        glob.glob(os.path.join(OUT, f'pso_{C.PROTOCOL}_*.npz')))
+    for path in paths:
+        d = np.load(path, allow_pickle=True)
+        for k in d.files:
+            kind, _, field = k.partition('__')
+            if field == 'A' and kind not in found:
+                found[kind] = (d[f'{kind}__A'], d[f'{kind}__B'],
+                               d[f'{kind}__C'], d[f'{kind}__D'])
+    rank = {k: i for i, k in enumerate(ORDER)}
+    keys = sorted(found, key=lambda k: (rank.get(k, len(ORDER)), k))
+    return [('boucle ouverte', None)] + [(k, found[k]) for k in keys]
 
 
 def worst_limit(plate, ss, n_modes):
@@ -89,13 +96,9 @@ def main():
                 pl.freq_n, float) * w_scale))
         return pl
 
-    got = []
-    for kind, fname in SOURCES:
-        ss = load_ss(kind, fname)
-        if ss is False:
-            print(f'  (absent, ignore : {kind})')
-            continue
-        got.append((kind, ss))
+    got = discover()
+    print('  structures trouvees : '
+          + ', '.join(k for k, _ in got[1:]))
     print('=' * 78)
     print(' ROBUSTESSE — limite axiale au pire poste [mm], 5 modes, m = 200')
     print('=' * 78)

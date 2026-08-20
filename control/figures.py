@@ -27,10 +27,32 @@ FIG = os.path.join(HERE, '..', 'figures', 'comparison')
 os.makedirs(FIG, exist_ok=True)
 
 COL = {'boucle ouverte': '#c8963e', 'fopid': '#1a3f8f', 'adrc': '#16a085',
-       'fdob': '#c0392b', 'fdob12345': '#8e44ad'}
+       'fdob': '#c0392b', 'fdob12345': '#8e44ad', 'dvf': '#d35400',
+       'vpa': '#27ae60', 'hinf': '#2c3e50', 'musyn': '#7f8c8d',
+       'lqg': '#e74c3c', 'mpc': '#9b59b6', 'smc': '#f39c12',
+       'nmpdob': '#00838f'}
 LAB = {'boucle ouverte': 'no control', 'fopid': 'FOPID',
        'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (2 modes)',
-       'fdob12345': 'FDOB (5 modes)'}
+       'fdob12345': 'FDOB (5 modes)', 'dvf': 'DVF', 'vpa': 'VPA',
+       'hinf': 'H-infinity', 'musyn': 'mu-synthesis', 'lqg': 'LQG',
+       'mpc': 'MPC', 'smc': 'SMC', 'nmpdob': 'NMP-DOB'}
+# Une structure absente de ces deux tables ne doit pas faire tomber une figure
+# entiere : elle est tracee en gris avec son propre nom. Le contraire est
+# arrive — ajouter une structure et decouvrir le KeyError apres la campagne.
+_PALETTE = ('#34495e', '#95a5a6', '#16a085', '#e67e22', '#8e44ad')
+
+
+class _Fallback(dict):
+    def __init__(self, base, default):
+        super().__init__(base)
+        self._default = default
+
+    def __missing__(self, k):
+        return self._default(k)
+
+
+COL = _Fallback(COL, lambda k: _PALETTE[hash(k) % len(_PALETTE)])
+LAB = _Fallback(LAB, lambda k: str(k).upper())
 # Les structures tracees sont celles que le fichier de comparaison contient.
 KEYS = ('boucle ouverte', 'fopid', 'adrc')          # defaut, remplace par main
 

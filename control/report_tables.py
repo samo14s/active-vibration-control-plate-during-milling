@@ -17,9 +17,19 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C
 
 OUT = os.path.join(HERE, '..', 'results')
-LAB = {'boucle ouverte': 'بلا تحكّم', 'fopid': 'FOPID',
-       'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (نمطان)',
-       'fdob12345': 'FDOB (5 أنماط)'}
+_LAB = {'boucle ouverte': 'بلا تحكّم', 'fopid': 'FOPID',
+        'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (نمطان)',
+        'fdob12345': 'FDOB (5 أنماط)', 'dvf': 'DVF', 'vpa': 'VPA',
+        'hinf': 'H∞', 'musyn': 'μ-synthesis', 'lqg': 'LQG', 'mpc': 'MPC',
+        'smc': 'SMC', 'nmpdob': 'NMP-DOB'}
+
+
+class _Fallback(dict):
+    def __missing__(self, k):
+        return str(k).upper()
+
+
+LAB = _Fallback(_LAB)
 
 
 def load(name):

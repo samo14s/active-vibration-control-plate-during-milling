@@ -760,3 +760,63 @@ def _main():
 
 if __name__ == '__main__':
     sys.exit(_main())
+
+
+def test_les_exceptions_de_synthese_sont_toutes_rattrapees_par_build():
+    """Toute exception qu'une voie de synthese peut lever DOIT etre rattrapee
+    par `Design.build`, qui rend alors None — une conception qu'on ne sait pas
+    noter est INFAISABLE, pas une panne du programme.
+
+    Ce test existe a cause d'une panne reelle. J'ai ajoute `musyn.MuBracket`
+    pour qu'une section doree saturee cesse de rendre une borne mu gonflee en
+    silence, en la faisant heriter de RuntimeError — sans verifier que les
+    appelants la rattrapaient. `Design.build` n'attrape que
+    (HinfFailure, LinAlgError, ValueError, FloatingPointError) : la campagne
+    musyn est morte au bout de 43 minutes en emportant tout le tirage. Le
+    garde etait devenu un mode de panne pire que le defaut qu'il signalait.
+
+    On verifie donc la PROPRIETE, pas le cas particulier : chaque exception
+    definie dans les modules de synthese doit etre une sous-classe de l'un
+    des types que `build` rattrape.
+    """
+    import ast
+    import inspect
+    import numpy as np
+    import classical
+    import hinf
+    import musyn
+    import nonlinear
+    import pso
+
+    # L'UNION des types rattrapes par les `except` de Design.build — et non un
+    # tuple ecrit a la main. Les branches n'attrapent pas toutes la meme
+    # chose : la voie lqg/mpc rattrape LqgFailure, la voie hinf/musyn rattrape
+    # HinfFailure. Coder un seul tuple ici ferait echouer le test sur une
+    # exception parfaitement geree, et c'est ce qu'a fait sa premiere version.
+    src = inspect.getsource(pso.Design.build)
+    arbre = ast.parse(src.lstrip())
+    noms = set()
+    for n in ast.walk(arbre):
+        if isinstance(n, ast.ExceptHandler) and n.type is not None:
+            cibles = (n.type.elts if isinstance(n.type, ast.Tuple)
+                      else [n.type])
+            for c in cibles:
+                noms.add(ast.unparse(c).split('.')[-1])
+    rattrapees = tuple(
+        t for t in (hinf.HinfFailure, classical.LqgFailure, ValueError,
+                    FloatingPointError, np.linalg.LinAlgError, RuntimeError)
+        if t.__name__ in noms)
+    assert rattrapees, f'aucun type reconnu parmi {sorted(noms)}'
+
+    manquantes = []
+    for mod in (hinf, musyn, classical, nonlinear):
+        for nom, obj in vars(mod).items():
+            if (inspect.isclass(obj) and issubclass(obj, BaseException)
+                    and obj.__module__ == mod.__name__
+                    and not issubclass(obj, rattrapees)):
+                manquantes.append(f'{mod.__name__}.{nom}')
+    assert not manquantes, (
+        'exceptions qu aucun except de Design.build ne rattrape : '
+        + ', '.join(manquantes)
+        + ' — les faire heriter d un type deja rattrape, ou les ajouter '
+          'a la branche correspondante dans control/pso.py')

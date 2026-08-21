@@ -236,3 +236,8 @@ results/robust_new_?_*.npz
 
 # Journaux d execution : sortie transitoire, pas un livrable.
 logs/
+
+# Points de reprise du PSO : etat de travail, regenere, et dont le contenu
+# finit dans le .npz de la structure. Rien a versionner.
+results/ckpt_*.json
+results/ckpt_*.json.tmp

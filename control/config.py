@@ -330,6 +330,24 @@ BOUNDS_MPC = dict(
 #   phi    : largeur de la couche limite, en unites de la surface s
 #            (m/s + lambda*m). Une couche trop fine ramene le broutement de
 #            commande, une couche trop large annule le mode glissant.
+# TROIS BORNES POUR UN CRITERE QUI N'EN VOIT QUE DEUX. `nonlinear.smc_lti_ss`
+# ne depend de (k_s, phi) que par le RAPPORT g = k_s/phi : a g fige, faire
+# varier k_s de 0.1 a 3.162 V laisse J, Ms et l'effort identiques a toutes
+# les decimales imprimees et la reponse frequentielle a 1.7e-16 pres. Le
+# critere de Floquet est donc EXACTEMENT invariant le long d'une droite du
+# boitier, et c'est k_s — la coordonnee laissee libre — qui fixe l'autorite
+# reelle, puisque la vraie loi u = -k_s sat(s/phi) est bornee a |u| <= k_s.
+#
+# Consequence mesuree a l'optimum retenu (k_s = 0.6514 V) : a la limite du
+# SMC lui-meme, la force de coupe crete vaut 0.1608 N, que l'effort mesure
+# (70.54 V/N) porte a 11.34 V, soit 17.4 x k_s. La couche limite est quittee
+# immediatement, donc la realisation LTI sur laquelle le SMC est NOTE decrit
+# un regime qu'il n'occupe pas. Le chiffre honnete du SMC est la colonne
+# TEMPORELLE, ou sa saturation reelle est simulee.
+#
+# Non corrige ici a dessein : ajouter une contrainte propre au SMC romprait
+# le protocole commun, qui est ce que cette comparaison garantit. Voir
+# COMPARAISON_ETENDUE.md section 5.2bis.
 BOUNDS_SMC = dict(log_lam=(2.0, 5.0), log_ks=(-1.0, 3.0), log_phi=(-8.0, -1.0))
 
 

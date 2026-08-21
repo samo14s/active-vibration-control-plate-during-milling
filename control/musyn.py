@@ -59,10 +59,28 @@ import sys
 import numpy as np
 
 
-class MuBracket(RuntimeError):
+class MuBracket(ValueError):
     """La section doree s'est arretee sur un BORD du crochet : la valeur
     rendue serait le minimum du bord, pas de la droite, donc une borne mu
-    fausse et silencieusement gonflee."""
+    fausse et silencieusement gonflee.
+
+    HERITE DE ValueError A DESSEIN. Une conception dont la mise a l'echelle D
+    veut fuir a l'infini est une conception que l'on NE SAIT PAS NOTER — pas
+    une panne du programme. `pso.Design.build` attrape deja
+    (HinfFailure, LinAlgError, ValueError, FloatingPointError) et rend None,
+    ce qui la compte comme infaisable : c'est exactement le traitement voulu.
+
+    Je l'avais d'abord fait heriter de RuntimeError, sans verifier que les
+    appelants la rattrapaient. Consequence mesuree : la campagne musyn
+    relancee est morte au bout de 43 minutes sur
+    « section doree saturee au bord log d = 40.000 », en emportant tout le
+    tirage. Une exception ajoutee pour rendre un defaut VISIBLE ne doit pas
+    devenir elle-meme un mode de panne plus grave que ce qu'elle signale.
+
+    La saturation a +40 n'est pas non plus un crochet trop etroit : d y couvre
+    e^80, soit 1e35. Un optimum qui fuit encore au-dela veut annuler un bloc,
+    donc la borne mu n'existe pas pour cette conception.
+    """
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:

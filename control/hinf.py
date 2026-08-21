@@ -75,7 +75,7 @@ Le second point est l'essentiel : c'est lui qui distingue "les equations ont
 converge" de "le correcteur atteint vraiment gamma".
 """
 import numpy as np
-from scipy.linalg import schur
+from scipy.linalg import matrix_balance, schur
 
 
 class HinfFailure(RuntimeError):
@@ -108,6 +108,30 @@ def care(A, S, Q):
                   [-np.asarray(Q, float), -A.T]])
     if not np.all(np.isfinite(H)):
         raise HinfFailure('hamiltonien non fini')
+    # EQUILIBRAGE DU HAMILTONIEN. Ce n'est pas un raffinement : c'est ce qui
+    # separe une faisabilite CONFORME A LA THEORIE d'une poussiere de points
+    # isoles. Le hamiltonien assemble ici melange des w^2 de l'ordre de 1e9,
+    # une ponderation a k = 7.8e7 et un eps = 1.3e-6 : ses coefficients
+    # couvrent une douzaine de decades et la decomposition de Schur echoue sur
+    # la quasi-totalite des gamma ou une solution existe.
+    #
+    # MESURE sur le procede musyn stocke, 300 gamma sur douze decades :
+    # 6/300 faisables sans equilibrage, 300/300 avec — 294 gagnes, AUCUN
+    # perdu. Bout en bout, synthesize rend gamma = 1.718e7 sans, 398.66 avec,
+    # pour un correcteur dont la norme MESUREE vaut 289.46 dans les deux cas :
+    # le gamma annonce etait donc sans rapport avec ce que le correcteur fait.
+    # Sur le procede H-infini : 1.2049 -> 1.1078, norme 1.0498 -> 1.0251.
+    #
+    # CONSEQUENCE SUR LA LECTURE FAITE PLUS BAS. Les "trous d'infaisabilite"
+    # que l'echelle geometrique contourne etaient des ECHECS NUMERIQUES de
+    # cette routine, non une propriete du probleme. La faisabilite redevient
+    # monotone une fois le hamiltonien equilibre. L'echelle est conservee —
+    # elle ne coute presque rien et reste une protection — mais elle n'est
+    # plus ce qui rattrape le defaut.
+    #
+    # La similitude est diagonale, donc le spectre et le sous-espace invariant
+    # sont inchanges ; on la defait sur U avant de former X.
+    H, T_bal = matrix_balance(H, permute=False)
     ev = np.linalg.eigvals(H)
     # Un pole sur l'axe imaginaire, c'est le gamma optimal lui-meme : la
     # frontiere de faisabilite. On la refuse plutot que de rendre une solution
@@ -134,6 +158,7 @@ def care(A, S, Q):
         if sdim != n:
             raise HinfFailure(
                 f'sous-espace stable de dimension {sdim}, attendu {n}')
+    U = T_bal @ U                      # defaire l'equilibrage sur les vecteurs
     U1, U2 = U[:n, :n], U[n:, :n]
     if np.linalg.matrix_rank(U1, tol=1e-12 * max(1.0, np.max(np.abs(U1)))) < n:
         raise HinfFailure('U1 singuliere : pas de solution stabilisante')

@@ -58,6 +58,12 @@ import sys
 
 import numpy as np
 
+
+class MuBracket(RuntimeError):
+    """La section doree s'est arretee sur un BORD du crochet : la valeur
+    rendue serait le minimum du bord, pas de la droite, donc une borne mu
+    fausse et silencieusement gonflee."""
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
@@ -150,7 +156,22 @@ def mu_upper(M, n_a=1, n_gold=40):
         return float(np.linalg.svd(np.diag(s) @ M @ np.diag(1.0 / s),
                                    compute_uv=False)[0])
 
-    lo, hi = -12.0, 12.0
+    # CROCHET. Il valait [-12, +12] et il SATURAIT : sur les tours D-K de
+    # l'optimum musyn stocke, 400 frequences sur 400 avaient leur argmin colle
+    # a +12.00 alors que l'optimum reel vivait dans [13.4, 17.9] — hors du
+    # crochet. La borne rendue etait alors le minimum SUR LE BORD et non sur
+    # la droite : mu = 346.249 au lieu de 83.695, soit +314 %, et jusqu'a
+    # +367 % point par point. Rien ne le signalait : la fonction rendait
+    # simplement min(fc, fd), et les deux invariants de tests/ (mu <= sigma_max
+    # et mu >= rayon spectral) sont satisfaits par une borne GONFLEE, donc
+    # aveugles a ce mode de panne.
+    #
+    # Le crochet est donc elargi a [-40, 40] — la mise a l'echelle d est un
+    # rapport de grandeurs physiques qui peut couvrir des decades — et la
+    # SATURATION EST DETECTEE : si l'optimum retenu touche un bord, on le
+    # signale au lieu de rendre une borne fausse en silence.
+    lo, hi = -40.0, 40.0
+    lo0, hi0 = lo, hi
     phi = 0.5 * (np.sqrt(5.0) - 1.0)
     c, dd = hi - phi * (hi - lo), lo + phi * (hi - lo)
     fc, fd = sig(c), sig(dd)
@@ -163,7 +184,13 @@ def mu_upper(M, n_a=1, n_gold=40):
             lo, c, fc = c, dd, fd
             dd = lo + phi * (hi - lo)
             fd = sig(dd)
-    return min(fc, fd), float(np.exp(0.5 * (c + dd)))
+    ld = 0.5 * (c + dd)
+    if ld <= lo0 + 1e-6 or ld >= hi0 - 1e-6:
+        # Au bord : la valeur rendue n'est pas un minimum interieur, donc pas
+        # une borne superieure de mu utilisable pour comparer des tours.
+        raise MuBracket(f'section doree saturee au bord log d = {ld:.3f} '
+                        f'du crochet [{lo0:g}, {hi0:g}]')
+    return min(fc, fd), float(np.exp(ld))
 
 
 def mu_curve(P, K, om, n_a=1):

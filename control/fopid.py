@@ -104,7 +104,7 @@ def fopid_frf(Kp, Ki, Kd, lam, mu, w, wb, wh, N, sign_loop=1.0):
 
 
 # ---------------------------------------------------------------------------
-def series(ss1, ss2):
+def series(ss1, ss2, balance=True):
     """Mise en cascade ss2 o ss1 (l'entree traverse ss1 puis ss2)."""
     A1, B1, C1, D1 = [np.atleast_2d(np.asarray(m, float)) for m in ss1]
     A2, B2, C2, D2 = [np.atleast_2d(np.asarray(m, float)) for m in ss2]
@@ -121,7 +121,18 @@ def series(ss1, ss2):
     # 3.1e4 apres une simple similitude diagonale. Voir ss_balance.py — la
     # fonction de transfert est inchangee, la matrice d'etat ne l'est pas, et
     # c'est la matrice d'etat que Floquet exponentie.
-    return balance_ss((A, B, C, D))
+    #
+    # `balance=False` N'EST PAS UNE OPTION DE PERFORMANCE. Elle existe pour un
+    # seul usage : LIRE LES ETATS PAR LEUR INDICE. L'equilibrage est une
+    # similitude diagonale, donc il renumerote les echelles des coordonnees —
+    # sur l'optimum ADRC stocke, t = (2^-1, 2^15, 2^25). Un lecteur qui prend
+    # x[2] pour z3 lit alors z3 / 2^25 et croit mesurer un observateur muet :
+    # run_eso_trace.py annoncait 100.000 % d'erreur d'estimation contre
+    # 75.144 % en coordonnees naturelles, et |z3|/b0 tombait a 3.7e-7 V contre
+    # 12.48 V. Rien ne pouvait le signaler, la correlation etant invariante
+    # d'echelle. Tout ce qui EXPONENTIE la matrice (Floquet, cont2discrete)
+    # doit garder balance=True.
+    return balance_ss((A, B, C, D)) if balance else (A, B, C, D)
 
 
 def rolloff_ss(fc, order=2):

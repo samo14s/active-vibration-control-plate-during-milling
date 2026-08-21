@@ -121,7 +121,7 @@ class Design:
             out['alpha'] = p['alpha']
         return out
 
-    def build(self, u):
+    def build(self, u, balance=True):
         """Correcteur, ou None si la SYNTHESE elle-meme echoue.
 
         Le None n'est pas un detail d'implementation. Une synthese H-infini
@@ -134,12 +134,14 @@ class Design:
         p = self.decode(u)
         if self.kind == 'dvf':
             core = dvf_ss(p['g'], p['f_d'], self.sign_loop * self.sign_variant)
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'vpa':
             core = vpa_ss([p['g1'], p['g2']], [p['f1'], p['f2']],
                           [p['z1'], p['z2']],
                           self.sign_loop * self.sign_variant)
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'smc':
             # Le filtre de lissage commun est DEJA dans cette realisation :
             # le PD seul est impropre. Meme filtre, memes parametres, applique
@@ -154,7 +156,8 @@ class Design:
                     FloatingPointError):
                 return None
             core = (K[0], K[1], self.sign_variant * K[2], K[3])
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'lqg':
             try:
                 K = lqg_ss(self.plant, **p)
@@ -162,7 +165,8 @@ class Design:
                     FloatingPointError):
                 return None
             core = (K[0], K[1], self.sign_variant * K[2], K[3])
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind in ('hinf', 'musyn'):
             W1 = bandpass_weight(p['kw'], p['f_w'], p['zw'])
             try:
@@ -176,7 +180,8 @@ class Design:
                     FloatingPointError):
                 return None
             core = (K[0], K[1], self.sign_variant * K[2], K[3])
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'nmpdob':
             # Le procede vu par l'observateur est le modele de SYNTHESE complet :
             # la factorisation a besoin de tous les modes, c'est meme son objet.
@@ -186,7 +191,8 @@ class Design:
                                     D_obs * Hv, C.OUST_WB, C.OUST_WH,
                                     C.OUST_N,
                                     self.sign_loop * self.sign_variant)
-            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'fopid':
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
                             C.OUST_WB, C.OUST_WH, C.OUST_N,
@@ -203,7 +209,8 @@ class Design:
                                  p['zeta_q'], p['alpha'], self.tw, self.tz,
                                  self.tr, C.FDOB_WC, C.OUST_WB, C.OUST_WH,
                                  C.OUST_N, self.sign_loop * self.sign_variant)
-        return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
 
     def order(self, u):
         ss = self.build(u)

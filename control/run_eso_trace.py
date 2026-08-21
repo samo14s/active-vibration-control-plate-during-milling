@@ -51,8 +51,35 @@ class LoggingController(LTIController):
 
 def main():
     d = np.load(os.path.join(OUT, f'pso_{C.PROTOCOL}.npz'), allow_pickle=True)
-    ss = (d['adrc__A'], d['adrc__B'], d['adrc__C'], d['adrc__D'])
     par = dict(zip([str(k) for k in d['adrc__keys']], d['adrc__values']))
+    # LE CORRECTEUR STOCKE EST EQUILIBRE, DONC ILLISIBLE PAR INDICE. Ce script
+    # lit x[0] et x[2] comme z1 et z3 : c'est licite dans les coordonnees
+    # NATURELLES de l'ESO, ou B = [3wo, 3wo^2, wo^3], et faux dans celles de
+    # results/pso_*.npz, que `series` equilibre. Sur l'optimum stocke la
+    # similitude vaut t = (2^-1, 2^15, 2^25), si bien que x[2] valait z3/2^25 :
+    # ce trace annoncait 100.000 % d'erreur d'estimation (contre 75.144 %),
+    # un suivi de mesure a 103.338 % (contre 12.437 %) et |z3|/b0 a 3.7e-7 V
+    # de moyenne (contre 12.48 V). La correlation, invariante d'echelle, ne
+    # bougeait pas : rien dans la sortie ne pouvait signaler la panne.
+    #
+    # On RECONSTRUIT donc le meme correcteur sans l'equilibrage final. La
+    # fonction de transfert est identique — c'est la meme loi — seules les
+    # coordonnees changent, et ce sont elles que ce script inspecte.
+    from pso import Design
+    from plate_model import build_plate as _bp
+    _plate = _bp(C.PATCH_SIDE, freqs=C.F_NOMINAL)
+    from plate_model import plant_vectors
+    _sl = plant_vectors(_plate, C.N_MODES_DESIGN)[4]
+    _D = Design('adrc', _plate, _sl,
+                sign_variant=float(d['adrc__sign_variant']))
+    ss = _D.build(np.atleast_1d(d['adrc__x']), balance=False)
+    _ss_bal = _D.build(np.atleast_1d(d['adrc__x']))
+    from fopid import ss_frf
+    _w = 2 * np.pi * np.logspace(1, 4.3, 200)
+    _e = np.max(np.abs(ss_frf(ss, _w) - ss_frf(_ss_bal, _w))) / \
+        np.max(np.abs(ss_frf(_ss_bal, _w)))
+    print(f"  realisation NON equilibree pour la lecture des etats ;"
+          f" ecart de reponse frequentielle au correcteur stocke : {_e:.2e}")
     # b0 SIGNE. Le correcteur construit par pso.Design applique
     #     b0_effectif = par['b0'] * sign_variant
     # (control/pso.py). Comparer z3 a y'' - par['b0'] u au lieu de

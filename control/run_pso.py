@@ -15,6 +15,7 @@ Protocole d'equite applique ici :
 
     python run_pso.py
 """
+import json
 import os
 import sys
 import time
@@ -62,6 +63,48 @@ def _pack(D, best_x, best_J, best_var, runs, plate, n_states,
         J_seeds=np.array([r['J'] for r in runs]),
         n_eval=int(sum(r['n_eval'] for r in runs)) if n_eval is None
         else n_eval)
+
+
+def _ckpt_path(kind, tag):
+    """Ou vivent les tirages deja faits pour cette structure."""
+    return os.path.join(OUT, f'ckpt_{C.PROTOCOL}{tag}_{kind}.json')
+
+
+def _ckpt_load(kind, tag):
+    """Tirages deja termines, releus depuis le disque.
+
+    POURQUOI. `run_pso` n'ecrivait son .npz qu'a la toute fin, apres les cinq
+    tirages. Sur cette machine les conteneurs redemarrent toutes les quelques
+    heures : le FDOB a cinq modes a perdu DIX HEURES de calcul — depistage
+    plus deux raffinements, tous mesures et affiches dans son journal — parce
+    que le cinquieme tirage n'avait pas fini. Rien n'etait faux, tout etait
+    perdu.
+
+    Un tirage PSO est deterministe a (structure, convention, graine) donnes :
+    il est donc licite de le relire au lieu de le refaire, et c'est exactement
+    ce que fait la reprise par graines supplementaires depuis toujours. On
+    ecrit maintenant apres CHAQUE tirage.
+    """
+    p = _ckpt_path(kind, tag)
+    if not os.path.exists(p):
+        return {}
+    try:
+        with open(p) as f:
+            raw = json.load(f)
+    except (ValueError, OSError):
+        return {}
+    return {(float(r['variant']), int(r['seed'])): r for r in raw}
+
+
+def _ckpt_save(kind, tag, runs):
+    p = _ckpt_path(kind, tag)
+    tmp = p + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump([dict(seed=int(r['seed']), variant=float(r['variant']),
+                        x=list(map(float, np.atleast_1d(r['x']))),
+                        J=float(r['J']), n_eval=int(r.get('n_eval', 0)))
+                   for r in runs], f)
+    os.replace(tmp, p)          # remplacement ATOMIQUE : jamais de fichier mi-ecrit
 
 
 def main():
@@ -198,17 +241,26 @@ def main():
         # la moitie vide sur la moitie qui vit — identiquement pour les deux
         # structures : 2 depistages + 3 raffinements chacune.
         screen = {}
+        done = _ckpt_load(kind, tag)
         for variant in (+1.0, -1.0):
             D = Design(kind, plate, sign_loop, sign_variant=variant)
             t0 = time.time()
-            fit = lambda u: evaluate(plate, D.build(u))
-            x, J, inf = pso(fit, D.n, seed=C.PSO['seeds'][0])
+            prev = done.get((variant, int(C.PSO['seeds'][0])))
+            if prev is not None:
+                x, J, inf = (np.asarray(prev['x'], float), float(prev['J']),
+                             dict(history=None, n_eval=int(prev['n_eval'])))
+                repris = '  (repris du disque)'
+            else:
+                fit = lambda u: evaluate(plate, D.build(u))
+                x, J, inf = pso(fit, D.n, seed=C.PSO['seeds'][0])
+                repris = ''
             screen[variant] = J
             runs.append(dict(seed=C.PSO['seeds'][0], variant=variant, x=x, J=J,
                              history=inf['history'], n_eval=inf['n_eval']))
+            _ckpt_save(kind, tag, runs)
             print(f"    depistage signe {variant:+.0f} : J = {J:+.4f} mm"
                   f"  ({inf['n_eval']} evaluations,"
-                  f" {time.time() - t0:.0f} s)", flush=True)
+                  f" {time.time() - t0:.0f} s){repris}", flush=True)
             if J > best_J:
                 best_J, best_x, best_var = J, x.copy(), variant
         alive = [v for v, J in screen.items() if J > -900.0]
@@ -221,13 +273,21 @@ def main():
         D = Design(kind, plate, sign_loop, sign_variant=best_var)
         for seed in C.PSO['seeds'][1:]:
             t0 = time.time()
-            fit = lambda u: evaluate(plate, D.build(u))
-            x, J, inf = pso(fit, D.n, seed=seed)
+            prev = done.get((best_var, int(seed)))
+            if prev is not None:
+                x, J, inf = (np.asarray(prev['x'], float), float(prev['J']),
+                             dict(history=None, n_eval=int(prev['n_eval'])))
+                repris = '  (repris du disque)'
+            else:
+                fit = lambda u: evaluate(plate, D.build(u))
+                x, J, inf = pso(fit, D.n, seed=seed)
+                repris = ''
             runs.append(dict(seed=seed, variant=best_var, x=x, J=J,
                              history=inf['history'], n_eval=inf['n_eval']))
+            _ckpt_save(kind, tag, runs)
             print(f"    raffinement graine {seed} : J = {J:+.4f} mm"
                   f"  ({inf['n_eval']} evaluations,"
-                  f" {time.time() - t0:.0f} s)", flush=True)
+                  f" {time.time() - t0:.0f} s){repris}", flush=True)
             if J > best_J:
                 best_J, best_x, best_var = J, x.copy(), best_var
         D = Design(kind, plate, sign_loop, sign_variant=best_var)

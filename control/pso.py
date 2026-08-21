@@ -23,6 +23,12 @@ import config as C
 from fopid import fopid_ss, rolloff_ss, series
 from adrc import adrc_fopid_ss, b0_nominal
 from fdob import fdob_fopid_ss, target_modes
+from hinf import HinfFailure, augment, bandpass_weight, plant_ss, synthesize
+from musyn import augment_mu, dk_iterate
+from nonlinear import mpc_lti_ss, smc_lti_ss
+from classical import LqgFailure, dvf_ss, lqg_ss, vpa_ss
+from nmp_dob import nmp_dob_fopid_ss
+from plate_model import plant_vectors
 
 
 # ---------------------------------------------------------------------------
@@ -53,8 +59,16 @@ class Design:
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
             self.tw, self.tz, self.tr = target_modes(plate, self.targets)
+        if kind in ('hinf', 'musyn', 'lqg', 'mpc'):
+            # Ces trois-la se synthetisent SUR le modele : elles ont besoin du
+            # procede lui-meme, pas seulement de son signe de boucle.
+            w, zt, Hv, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
+            self.plant = plant_ss(w, zt, D_obs * Hv)
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
-                  fdob=C.BOUNDS_FDOB)[kind]
+                  fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
+                  musyn=C.BOUNDS_MU, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
+                  lqg=C.BOUNDS_LQG, nmpdob=C.BOUNDS_NMPDOB,
+                  mpc=C.BOUNDS_MPC, smc=C.BOUNDS_SMC)[kind]
         self.names = list(bd.keys())
         self.lo = np.array([bd[k][0] for k in self.names], float)
         self.hi = np.array([bd[k][1] for k in self.names], float)
@@ -64,6 +78,36 @@ class Design:
         """[0,1]^n -> dictionnaire de parametres physiques."""
         v = self.lo + np.clip(np.asarray(u, float), 0.0, 1.0) * (self.hi - self.lo)
         p = dict(zip(self.names, v))
+        if self.kind in ('hinf', 'musyn'):
+            # Boitier de PONDERATIONS, pas de gains : ces structures n'ont
+            # aucune cle Kp/Ki/Kd/lam/mu, donc on sort AVANT de construire le
+            # dictionnaire commun — le construire d'abord leverait KeyError.
+            return dict(kw=10.0 ** p['log_kw'], f_w=p['f_w'],
+                        zw=10.0 ** p['log_zw'], w2=10.0 ** p['log_w2'],
+                        eps=10.0 ** p['log_eps'])
+        if self.kind == 'dvf':
+            return dict(g=10.0 ** p['log_g'], f_d=p['f_d'])
+        if self.kind == 'vpa':
+            # SCALAIRES, pas des listes. `run_pso` imprime et stocke chaque
+            # parametre par f"{v:.4g}" et np.array([...]) : une liste y leve
+            # TypeError APRES l'optimisation, donc apres avoir depense le
+            # budget et AVANT d'ecrire le fichier — la pire place possible.
+            # C'est `build` qui les regroupe, pas `decode`.
+            return dict(g1=10.0 ** p['log_g1'], f1=p['f_a1'],
+                        z1=10.0 ** p['log_z1'],
+                        g2=10.0 ** p['log_g2'], f2=p['f_a2'],
+                        z2=10.0 ** p['log_z2'])
+        if self.kind == 'lqg':
+            return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
+                        w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
+                        f_w=p['f_w'])
+        if self.kind == 'mpc':
+            return dict(q=10.0 ** p['log_q'], r=10.0 ** p['log_r'],
+                        w_proc=10.0 ** p['log_w'], v_meas=10.0 ** p['log_v'],
+                        f_w=p['f_w'], horizon=10.0 ** p['log_T'])
+        if self.kind == 'smc':
+            return dict(lam=10.0 ** p['log_lam'], k_s=10.0 ** p['log_ks'],
+                        phi=10.0 ** p['log_phi'])
         out = dict(Kp=10.0 ** p['log_Kp'], Ki=10.0 ** p['log_Ki'],
                    Kd=10.0 ** p['log_Kd'], lam=p['lam'], mu=p['mu'])
         if self.kind == 'adrc':
@@ -72,10 +116,83 @@ class Design:
         elif self.kind == 'fdob':
             out['zeta_q'] = 10.0 ** p['log_zq']
             out['alpha'] = p['alpha']
+        elif self.kind == 'nmpdob':
+            out['wq'] = 10.0 ** p['log_wq']
+            out['alpha'] = p['alpha']
         return out
 
-    def build(self, u):
+    def build(self, u, balance=True):
+        """Correcteur, ou None si la SYNTHESE elle-meme echoue.
+
+        Le None n'est pas un detail d'implementation. Une synthese H-infini
+        n'aboutit pas pour toute ponderation : il existe des reglages ou aucun
+        correcteur n'atteint le gamma demande. C'est une propriete REELLE de
+        la structure, et la compter comme un echec plutot que la contourner
+        fait partie de l'equite — au meme titre qu'un FOPID nominalement
+        instable est compte comme un echec. Le taux d'echec est rapporte.
+        """
         p = self.decode(u)
+        if self.kind == 'dvf':
+            core = dvf_ss(p['g'], p['f_d'], self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
+        if self.kind == 'vpa':
+            core = vpa_ss([p['g1'], p['g2']], [p['f1'], p['f2']],
+                          [p['z1'], p['z2']],
+                          self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
+        if self.kind == 'smc':
+            # Le filtre de lissage commun est DEJA dans cette realisation :
+            # le PD seul est impropre. Meme filtre, memes parametres, applique
+            # une seule fois — d'ou l'absence de `series` ici.
+            return smc_lti_ss(p['lam'], p['k_s'], p['phi'], C.ROLLOFF_HZ,
+                              C.ROLLOFF_ORDER,
+                              self.sign_loop * self.sign_variant)
+        if self.kind == 'mpc':
+            try:
+                K = mpc_lti_ss(self.plant, **p)
+            except (LqgFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
+        if self.kind == 'lqg':
+            try:
+                K = lqg_ss(self.plant, **p)
+            except (LqgFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
+        if self.kind in ('hinf', 'musyn'):
+            W1 = bandpass_weight(p['kw'], p['f_w'], p['zw'])
+            try:
+                if self.kind == 'hinf':
+                    Pg = augment(self.plant, W1, p['w2'], p['eps'])
+                    K, _ = synthesize(Pg)
+                else:
+                    Pg = augment_mu(self.plant, W1, p['w2'], p['eps'])
+                    K, _, _ = dk_iterate(Pg, n_dk=C.N_DK)
+            except (HinfFailure, np.linalg.LinAlgError, ValueError,
+                    FloatingPointError):
+                return None
+            core = (K[0], K[1], self.sign_variant * K[2], K[3])
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
+        if self.kind == 'nmpdob':
+            # Le procede vu par l'observateur est le modele de SYNTHESE complet :
+            # la factorisation a besoin de tous les modes, c'est meme son objet.
+            w, zt, Hv, D_obs, _ = plant_vectors(self.plate, C.N_MODES_DESIGN)
+            core = nmp_dob_fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'],
+                                    p['mu'], p['wq'], p['alpha'], w, zt,
+                                    D_obs * Hv, C.OUST_WB, C.OUST_WH,
+                                    C.OUST_N,
+                                    self.sign_loop * self.sign_variant)
+            return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
         if self.kind == 'fopid':
             core = fopid_ss(p['Kp'], p['Ki'], p['Kd'], p['lam'], p['mu'],
                             C.OUST_WB, C.OUST_WH, C.OUST_N,
@@ -92,10 +209,12 @@ class Design:
                                  p['zeta_q'], p['alpha'], self.tw, self.tz,
                                  self.tr, C.FDOB_WC, C.OUST_WB, C.OUST_WH,
                                  C.OUST_N, self.sign_loop * self.sign_variant)
-        return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER))
+        return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
+                          balance=balance)
 
     def order(self, u):
-        return self.build(u)[0].shape[0]
+        ss = self.build(u)
+        return -1 if ss is None else ss[0].shape[0]
 
 
 # ---------------------------------------------------------------------------

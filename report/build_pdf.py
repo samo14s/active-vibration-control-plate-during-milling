@@ -1,9 +1,9 @@
 """
 build_pdf.py — Rapport final PDF (arabe, RTL) : verification + comparaison
 ==========================================================================
-Assemble MODELE_PAPIER.md et COMPARAISON_ADRC_FOPID.md, insere les 12 figures
-de verification et les 11 figures de comparaison a leur place, et imprime le
-tout en PDF.
+Assemble les CINQ parties — MODELE_PAPIER.md, COMPARAISON_ADRC_FOPID.md,
+DIAGNOSTIC_ADRC.md, OBSERVATEUR_MODAL.md et COMPARAISON_ETENDUE.md — insere
+les figures a leur place, et imprime le tout en PDF.
 
 Le rendu passe par Chromium (Playwright) et non par ReportLab : c'est la seule
 voie disponible ici qui mette en forme l'arabe correctement (HarfBuzz fait la
@@ -224,11 +224,24 @@ a { color: var(--acc); text-decoration: none; }
 """
 
 
+FIGS_ETENDUE = [
+    ('5.1 الجدول', 'fig_summary_B.png',
+     'الاثنتا عشرة بنية على المحاور نفسها : الهدف، الهامش، الجهد، والحدّ.'),
+    ('5.3 الترتيب الاسمي', 'fig_robust_B.png',
+     'المتانة عبر سبع حالات اضطراب. الأعمدة الصفرية انهيارٌ تامّ لا حدّ صغير.'),
+    ('5.4 فلوكيه لا يرى', 'fig_time_S_B.png',
+     'شرط الورقة S : من يمسك الممرّة بلا تشبّع، ومن يُشبِع ويتباعد.'),
+    ('5.5 التشتّت', 'fig_pso_B.png',
+     'تقارب الأسراب. اتّساع الحزمة هو تشتّت البذور، وهو جزء من النتيجة.'),
+]
+
+
 def main():
     md_v = open(os.path.join(ROOT, 'MODELE_PAPIER.md')).read()
     md_c = open(os.path.join(ROOT, 'COMPARAISON_ADRC_FOPID.md')).read()
     md_d = open(os.path.join(ROOT, 'DIAGNOSTIC_ADRC.md')).read()
     md_o = open(os.path.join(ROOT, 'OBSERVATEUR_MODAL.md')).read()
+    md_e = open(os.path.join(ROOT, 'COMPARAISON_ETENDUE.md')).read()
 
     md_v, n = insert_figures(md_v, FIGS_VERIF,
                              os.path.join(ROOT, 'figures', 'verification'), 1)
@@ -237,6 +250,8 @@ def main():
     md_d, n = insert_figures(md_d, FIGS_DIAG,
                              os.path.join(ROOT, 'figures', 'comparison'), n)
     md_o, n = insert_figures(md_o, FIGS_OBS,
+                             os.path.join(ROOT, 'figures', 'comparison'), n)
+    md_e, n = insert_figures(md_e, FIGS_ETENDUE,
                              os.path.join(ROOT, 'figures', 'comparison'), n)
 
     conv = markdown.Markdown(extensions=['tables', 'fenced_code', 'md_in_html'])
@@ -247,6 +262,8 @@ def main():
     html_d = conv.convert(md_d)
     conv.reset()
     html_o = conv.convert(md_o)
+    conv.reset()
+    html_e = conv.convert(md_e)
 
     cover = """
 <div class="cover">
@@ -262,7 +279,11 @@ def main():
     الجزء الثاني يقارن بنيتَي تحكّم على النموذج نفسه ببروتوكول إنصاف قابل للتدقيق.
     الجزء الثالث يُشخّص رياضيًّا، حلقةً حلقة، لماذا يخسر ADRC‑FOPID هنا — وأيّ عنصر
     يجب تغييره. والجزء الرابع يبني ذلك العنصر، ويُشرِف عليه بمُقدِّر تردّد خَرخَرة،
-    ويقيسه بالبروتوكول نفسه. <b>الحكم النهائي في القسم 11 من الجزء الرابع.</b>
+    ويقيسه بالبروتوكول نفسه. والجزء الخامس يوسّع المقارنة إلى <b>اثنتي عشرة
+    بنية</b> — تُضاف LQG وH∞ وμ-synthesis وDVF وVPA وMPC وSMC وبنية جديدة يصفها
+    التشخيص — بالمِحكّ نفسه، ويفصل ما هو <b>مُثبَت إحصائيًّا</b> عمّا ليس كذلك.
+    <b>الحكم النهائي في القسم 11 من الجزء الرابع، والمقارنة الموسّعة في القسم 5
+    من الجزء الخامس.</b>
     كلّ رقم في الصفحات التالية يُعاد إنتاجه بسكربت واحد في المستودع.
   </div>
   <div class="meta">مستودع <code>active-vibration-control-plate-during-milling</code>
@@ -276,6 +297,7 @@ def main():
            f'<div class="part">{html_c}</div>'
            f'<div class="part">{html_d}</div>'
            f'<div class="part">{html_o}</div>'
+           f'<div class="part">{html_e}</div>'
            f'</body></html>')
 
     with open(OUT_HTML, 'w') as f:

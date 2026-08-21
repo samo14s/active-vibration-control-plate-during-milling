@@ -22,6 +22,7 @@ periode de dent, sans jamais assembler la matrice (m+1)nx augmentee.
 import numpy as np
 
 from milling_dynamics import alpha4_series, alpha4_average, N_TEETH
+import monodromy
 from step_integrals import step_integrals
 
 
@@ -86,92 +87,47 @@ def period_maps(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
     return maps, tau
 
 
-def spectral_radius(maps, m, nx, n_period=None, seed=0, tol=1e-3,
-                    n_min=40, n_max=400):
-    """Rayon spectral de la monodromie (iteration de puissance ADAPTATIVE).
+def spectral_radius(maps, m, nx, seed=0, k=4):
+    """Rayon spectral de la monodromie — Arnoldi, voir paper_model/monodromy.py.
 
-    Deux pieges, tous deux mesures sur ce modele :
+    REMPLACE UNE ITERATION DE PUISSANCE ADAPTATIVE QUI RENDAIT DES VALEURS
+    FAUSSES. L'ancien texte de cette fonction expliquait deux pieges reels (un
+    nombre de periodes fixe et trop petit ; un critere d'arret a fenetres
+    recouvrantes et tolerance relative) et les corrigeait tous les deux — mais
+    il restait le troisieme, qu'aucun reglage du critere ne peut atteindre :
+    la monodromie de ce systeme est tres non normale (conditionnement de la
+    base propre : 1.35e29 sur le cas FDOB), le facteur de croissance traverse
+    une longue HUITIEME PLATE a une valeur qui n'est pas la bonne, et deux
+    fenetres non recouvrantes s'y accordent aussi bien que sur la vraie
+    limite. Mesure, FOPID stocke, 5 modes, m = 24, a_p = 0.10 mm : la
+    monodromie assemblee donne 0.967392 ; l'iteration rendait 0.96690 /
+    0.79107 / 0.96756 selon la graine. Sur le FDOB au meme point : 0.9142 /
+    0.9138 / 0.9108 pour un exact de 0.959809.
 
-    1. Un nombre de periodes FIXE et petit sous-estime rho, donc SURESTIME la
-       stabilite (boucle ouverte, 4900 tr/min, a_p = 0.05 mm, m = 200) :
+    L'erreur etait TOUJOURS PAR DEFAUT sur rho, donc TOUJOURS PAR EXCES sur
+    a_p,lim : chaque limite publiee par ce depot etait optimiste.
 
-           n_period      10       20       50      100      200
-           rho        0.8270   0.9207   1.0126   1.0173   1.0164
-
-    2. Un critere d'arret mal construit s'arrete trop tot. La version
-       precedente comparait deux moyennes cumulees se recouvrant a 90 % et
-       tolerait une variation RELATIVE de log rho : pres de la frontiere de
-       stabilite log rho -> 0, la tolerance relative degenere, et sur des cas
-       de boucle fermee reels l'iteration s'arretait a 80 periodes en rendant
-       0.8887 la ou la valeur convergee (1500 periodes) vaut 0.9753 — avec une
-       dispersion de 9 % selon la graine.
-
-    D'ou : fenetres NON RECOUVRANTES (les dix derniers facteurs de croissance
-    contre les dix precedents), tolerance ABSOLUE sur log rho, et estimateur
-    pris sur la queue seule (le transitoire initial de l'iteration biaise une
-    moyenne sur toute la seconde moitie). `n_period` force un nombre fixe.
+    Arnoldi rend le meme spectre a 1e-15 pres que la monodromie assemblee, sur
+    tous les m ou l'assemblage reste calculable, et coute 3 a 15 fois moins.
     """
-    rng = np.random.default_rng(seed)
-    Z = rng.standard_normal((m + 1, nx))
-    Z /= np.linalg.norm(Z)
-    g = []
-    n_fixed = None if n_period is None else int(n_period)
-    limit_it = n_fixed if n_fixed is not None else n_max
-    ok = 0
-    for it in range(limit_it):
-        for P0, C_lo, C_hi in maps:
-            new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
-            Z = np.roll(Z, 1, axis=0)
-            Z[0] = new
-        nz = np.linalg.norm(Z)
-        if not np.isfinite(nz):
-            return np.inf
-        if nz == 0.0:
-            return 0.0
-        g.append(np.log(nz))
-        Z /= nz
-        if n_fixed is None and len(g) >= max(n_min, 20):
-            a = float(np.mean(g[-10:]))
-            b = float(np.mean(g[-20:-10]))
-            ok = ok + 1 if abs(a - b) <= tol else 0
-            if ok >= 2:                       # deux passages consecutifs
-                break
-    w = max(10, len(g) // 4)
-    return float(np.exp(np.mean(np.array(g[-w:]))))
-def dominant_eig(maps, m, nx, q=6, n_period=60, seed=0):
-    """Valeurs propres dominantes de la monodromie (iteration de sous-espace
-    + projection de Rayleigh-Ritz orthonormee ; la phase donne la frequence
-    de broutement)."""
-    rng = np.random.default_rng(seed)
-    Z = rng.standard_normal((m + 1, nx, q))
-    Q, _ = np.linalg.qr(Z.reshape(-1, q))
-    Z = Q.reshape(m + 1, nx, q)
+    return monodromy.spectral_radius(maps, m, nx, seed=seed, k=k)
 
-    def one_period(Z):
-        for P0, C_lo, C_hi in maps:
-            new = P0 @ Z[0] + C_lo @ Z[m] + C_hi @ Z[m - 1]
-            Z = np.roll(Z, 1, axis=0)
-            Z[0] = new
-        return Z
 
-    for _ in range(n_period):
-        Z = one_period(Z)
-        V = Z.reshape(-1, q)
-        if not np.isfinite(V).all():
-            return np.array([np.nan])
-        Q, _ = np.linalg.qr(V)
-        Z = Q.reshape(m + 1, nx, q)
-    Zb = Z.reshape(-1, q)                    # base orthonormee Q
-    W = one_period(Z.copy()).reshape(-1, q)  # M Q
-    Hm = Zb.T @ W                            # Q^T M Q  (Rayleigh-Ritz)
-    return np.linalg.eigvals(Hm)
+def dominant_eig(maps, m, nx, k=6, seed=0):
+    """Multiplicateurs dominants AVEC leur phase (frequence de broutement).
+
+    L'iteration de sous-espace qui vivait ici souffrait de la meme huitieme
+    plate que l'iteration de puissance ; Arnoldi rend les valeurs propres
+    complexes directement.
+    """
+    return monodromy.dominant(maps, m, nx, k=k, seed=seed)
 
 
 def is_stable(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2, m=40,
-              coeff_mode='time', coeff_scale=1.0, n_period=None, ae=None):
+              coeff_mode='time', coeff_scale=1.0, seed=0, ae=None):
     maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl, pd, n_modes, m,
                           coeff_mode, coeff_scale, ae)
-    rho = spectral_radius(maps, m, maps[0][0].shape[0], n_period)
+    rho = spectral_radius(maps, m, maps[0][0].shape[0], seed)
     return rho <= 1.0, rho
 
 

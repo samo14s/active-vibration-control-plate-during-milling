@@ -119,24 +119,34 @@ def main():
     cfgs = [('boucle ouverte', None)] + [(k, ctl[k]['ss']) for k in kinds]
     store = {}
 
-    # ---------------- 1. lobes de stabilite -------------------------------
-    speeds = np.arange(3000, 7001, 200)
-    lob = {}
+    # ---------------- 1-2. lobes de stabilite et limites par position -----
+    # Ces deux etapes sont l'essentiel du temps de ce script : vingt et une
+    # vitesses fois cinq positions fois une bissection a m = 200, par
+    # structure — 19.5 s par appel a `limits` sur le FOPID, donc sept minutes
+    # de fossoles, et bien plus sur les structures a cinquante-six etats. A
+    # douze structures cela depasse l'heure et demie en un seul processus.
+    # `run_lobes.py` les calcule EN PARALLELE et les met en cache ; on relit
+    # le cache quand il est la. Le contenu est identique : meme appel a
+    # `objective.limits`, meme grille, et le cache est invalide si la grille
+    # de vitesses ou de positions a change.
+    from run_lobes import SPEEDS as speeds, load_cache
+    lob, pos = {}, {}
     for name, ss in cfgs:
-        v = []
-        for rpm in speeds:
-            L = limits(plate, ss, rpm, hi=4.0e-3)
-            v.append(L.min())
-        lob[name] = np.array(v)
-        print(f"  lobes {name:14s} : moyenne {np.mean(v) * 1e3:.3f} mm,"
-              f" min {np.min(v) * 1e3:.3f} mm  ({time.time() - t00:.0f} s)",
-              flush=True)
-    store['lobes'] = dict(rpm=speeds, **lob)
-
-    # ---------------- 2. limites par position -----------------------------
-    pos = {}
-    for name, ss in cfgs:
+        hit = load_cache(name)
+        if hit is not None:
+            lob[name], pos[name] = hit
+            print(f"  lobes {name:14s} : (cache) moyenne"
+                  f" {np.mean(lob[name]) * 1e3:.3f} mm,"
+                  f" min {np.min(lob[name]) * 1e3:.3f} mm", flush=True)
+            continue
+        lob[name] = np.array([limits(plate, ss, rpm, hi=4.0e-3).min()
+                              for rpm in speeds])
         pos[name] = limits(plate, ss, C.RPM_DESIGN, hi=4.0e-3)
+        print(f"  lobes {name:14s} : moyenne {np.mean(lob[name]) * 1e3:.3f} mm,"
+              f" min {np.min(lob[name]) * 1e3:.3f} mm"
+              f"  ({time.time() - t00:.0f} s)", flush=True)
+    store['lobes'] = dict(rpm=speeds, **lob)
+    for name, _ in cfgs:
         print(f"  positions {name:14s} : {np.round(pos[name] * 1e3, 3)} mm"
               f"   min = {pos[name].min() * 1e3:.3f}", flush=True)
     store['positions'] = dict(x=np.array(C.POSITIONS), **pos)

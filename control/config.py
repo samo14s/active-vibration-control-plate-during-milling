@@ -86,19 +86,14 @@ N_MODES_OBJ = 2 if PROTOCOL == 'A' else 5     # modele vu par l'optimiseur
 N_MODES_DESIGN = N_MODES_OBJ  # ce que le correcteur "connait" (b0 nominal)
 M_FLOQUET_PSO = 24            # sous-intervalles pendant l'optimisation
 M_FLOQUET = 200               # sous-intervalles pour tous les resultats
-# Nombre de periodes de l'iteration de puissance : None = critere d'arret
-# ADAPTATIF (voir closed_loop.spectral_radius). Un nombre fixe et petit
-# sous-estime rho, donc SURESTIME la stabilite : a 20 periodes la boucle
-# ouverte a 4900 tr/min etait declaree stable jusqu'a 0.080 mm au lieu de
-# 0.045 mm. Ne remettre une valeur entiere que pour un diagnostic.
-N_PERIOD = None
-# Tolerance de l'iteration de puissance PENDANT l'optimisation. Le classement
-# n'a pas besoin de la precision des resultats finals : n_min = 30 et
-# tol = 3e-3 coutent 25 % de moins et laissent rho a mieux que 0.3 %. Les
-# resultats publies (limites, lobes, robustesse) utilisent le reglage strict.
-N_PERIOD_MIN_PSO = 30
-N_PERIOD_TOL_PSO = 5e-3
-N_PERIOD_MAX_PSO = 150
+# Le rayon spectral de la monodromie est desormais obtenu par Arnoldi
+# (paper_model/monodromy.py) : il est EXACT a 1e-15 pres, donc il n'y a plus
+# ni nombre de periodes, ni tolerance, ni reglage degrade pour l'optimisation.
+# Les quatre constantes N_PERIOD, N_PERIOD_MIN_PSO, N_PERIOD_TOL_PSO et
+# N_PERIOD_MAX_PSO qui vivaient ici reglaient une iteration de puissance qui
+# rendait des valeurs fausses (0.79107 pour un exact de 0.967392) et dont
+# aucun reglage ne pouvait detecter l'erreur ; elles ont ete supprimees plutot
+# que conservees inertes.
 # Pas d'integration temporelle. Les correcteurs contiennent des poles
 # d'Oustaloup jusqu'a w_h = 2*pi*100 kHz : a n_sub = 164 (fs = 40 kHz) ces
 # dynamiques se replient et la simulation diverge avec des tensions de 700 kV
@@ -245,3 +240,138 @@ BOUNDS_FDOB = dict(
 FDOB_MODES = os.environ.get('FDOB_MODES', '12')
 FDOB_TARGETS = tuple(int(c) - 1 for c in FDOB_MODES)
 FDOB_WC = 2 * np.pi * 8000.0      # = coupure d'anti-repliement, non ajustee
+
+
+# ---------------------------------------------------------------------------
+# Boitiers des structures de SYNTHESE MODELE (control/hinf.py, control/musyn.py)
+#
+# Ces deux-la ne se reglent pas par des gains mais par des PONDERATIONS : c'est
+# la nature meme de la synthese H-infini et mu. Le protocole d'equite ne dit
+# pas "les memes parametres pour tous" — il serait alors impossible de comparer
+# des structures differentes — mais "le meme budget de recherche, les memes
+# graines, les memes contraintes, la meme fonction objectif". Chaque structure
+# cherche donc sur SES propres poignees.
+#
+# Cinq parametres, exactement comme le FOPID. Ce n'est pas un hasard qu'on
+# s'autorise : c'est une contrainte qu'on s'impose, pour que l'ecart mesure ne
+# puisse pas etre attribue a une dimension de recherche plus riche.
+#
+#   kw    gain de la ponderation de performance (passe-bande)
+#   f_w   centre de la bande — LIBRE entre les deux modes de broutement et
+#         au-dela : l'optimiseur decide s'il vaut mieux viser un mode ou
+#         couvrir les deux
+#   zw    largeur relative de la bande
+#   w2    ponderation de l'effort de commande (scalaire : voir hinf.py, c'est
+#         ce qui donne D12'C1 = 0 sans decalage de boucle)
+#   eps   ponderation du bruit de mesure
+BOUNDS_HINF = dict(
+    log_kw=(0.0, 8.0), f_w=(350.0, 1500.0), log_zw=(-1.5, 0.3),
+    log_w2=(-4.0, 2.0), log_eps=(-6.0, -1.0))
+
+# La mu-synthese partage EXACTEMENT le meme boitier : la ponderation
+# d'incertitude, elle, n'est pas reglee — c'est celle du papier (Eqs. 18-19),
+# figee. La difference entre les deux structures est donc uniquement
+# l'iteration D-K, ce qui est precisement ce qu'on veut mesurer.
+BOUNDS_MU = dict(BOUNDS_HINF)
+
+#: nombre de tours D-K. Fixe, hors PSO, pour la meme raison que les reglages du
+#: superviseur de l'observateur modal : on mesure ce qu'apporte D-K, sans le
+#: melanger a un gain d'optimisation.
+N_DK = 3
+
+
+# ---------------------------------------------------------------------------
+# Boitiers des trois references classiques (control/classical.py).
+#
+# Les DIMENSIONS DIFFERENT ici, et c'est voulu. Le DVF n'a que deux poignees
+# parce qu'il n'en a que deux : lui en inventer une troisieme pour "egaliser"
+# serait truquer la comparaison dans l'autre sens. L'essaim etant
+# proportionnel a la dimension (10 + 4 x n_dim), chaque structure recoit un
+# effectif adapte a son espace — c'est la regle deja appliquee aux quatre
+# premieres, pas une faveur nouvelle.
+BOUNDS_DVF = dict(log_g=(-2.0, 6.0), f_d=(200.0, 8000.0))
+
+# Un absorbeur par mode de broutement. Les centres sont libres autour des deux
+# modes nominaux (540 et 1068 Hz) : on ne suppose pas que l'accord optimal est
+# l'accord exact, c'est justement une question que l'optimiseur tranche.
+BOUNDS_VPA = dict(
+    log_g1=(-2.0, 8.0), f_a1=(350.0, 800.0), log_z1=(-2.5, -0.3),
+    log_g2=(-2.0, 8.0), f_a2=(800.0, 1500.0), log_z2=(-2.5, -0.3))
+
+# LQG : quatre ponderations plus la frequence de mise en forme. Seuls les
+# rapports q/r et w/v pilotent le resultat, mais on laisse les quatre libres
+# plutot que d'imposer a l'optimiseur une reparametrisation qu'il n'a pas
+# demandee — et le cout en est nul, l'essaim etant dimensionne par n_dim.
+BOUNDS_LQG = dict(
+    log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
+    log_v=(-6.0, 2.0), f_w=(350.0, 1500.0))
+
+# MPC explicite : rigoureusement les memes cinq ponderations que le LQG, plus
+# l'HORIZON — c'est la condition pour que l'ecart mesure entre les deux porte
+# sur l'horizon et sur rien d'autre. La borne basse (10 us) est bien en deca
+# de la periode du mode le plus haut (0.24 ms a 4122 Hz), donc d'un correcteur
+# vraiment myope ; la borne haute (100 ms) est le regime ou la Riccati a
+# horizon fini a deja rejoint l'equation algebrique — mesure : ecart relatif
+# au gain LQR de 0.38 a 1 ms, 0.16 a 10 ms, 0.030 a 100 ms. Laisser
+# l'optimiseur atteindre ce bord est voulu : si le meilleur MPC est le LQG,
+# c'est un resultat, pas un echec de reglage.
+BOUNDS_MPC = dict(
+    log_q=(0.0, 16.0), log_r=(-6.0, 2.0), log_w=(0.0, 12.0),
+    log_v=(-6.0, 2.0), f_w=(350.0, 1500.0), log_T=(-5.0, -1.0))
+
+# Mode glissant a couche limite. Seuls K_s/phi et lambda entrent dans la loi
+# LINEAIRE de l'interieur de la couche (u = -(K_s/phi)(ydot + lambda y)) ;
+# K_s et phi sont neanmoins laisses separes parce qu'ils se separent hors de
+# la couche, ou K_s est l'autorite maximale et phi la largeur de la zone
+# lineaire — et c'est le critere TEMPOREL qui les distingue.
+#   lambda : pente de la surface, soit la pulsation de coupure du glissement.
+#            De 100 a 1e5 rad/s encadre les cinq modes (3.4e3 a 2.6e4 rad/s).
+#   K_s    : autorite, en volts. Bornee par V_MAX cote simulation.
+#   phi    : largeur de la couche limite, en unites de la surface s
+#            (m/s + lambda*m). Une couche trop fine ramene le broutement de
+#            commande, une couche trop large annule le mode glissant.
+# TROIS BORNES POUR UN CRITERE QUI N'EN VOIT QUE DEUX. `nonlinear.smc_lti_ss`
+# ne depend de (k_s, phi) que par le RAPPORT g = k_s/phi : a g fige, faire
+# varier k_s de 0.1 a 3.162 V laisse J, Ms et l'effort identiques a toutes
+# les decimales imprimees et la reponse frequentielle a 1.7e-16 pres. Le
+# critere de Floquet est donc EXACTEMENT invariant le long d'une droite du
+# boitier, et c'est k_s — la coordonnee laissee libre — qui fixe l'autorite
+# reelle, puisque la vraie loi u = -k_s sat(s/phi) est bornee a |u| <= k_s.
+#
+# Consequence mesuree a l'optimum retenu (k_s = 0.6514 V) : a la limite du
+# SMC lui-meme, la force de coupe crete vaut 0.1608 N, que l'effort mesure
+# (70.54 V/N) porte a 11.34 V, soit 17.4 x k_s. La couche limite est quittee
+# immediatement, donc la realisation LTI sur laquelle le SMC est NOTE decrit
+# un regime qu'il n'occupe pas. Le chiffre honnete du SMC est la colonne
+# TEMPORELLE, ou sa saturation reelle est simulee.
+#
+# Non corrige ici a dessein : ajouter une contrainte propre au SMC romprait
+# le protocole commun, qui est ce que cette comparaison garantit. Voir
+# COMPARAISON_ETENDUE.md section 5.2bis.
+BOUNDS_SMC = dict(log_lam=(2.0, 5.0), log_ks=(-1.0, 3.0), log_phi=(-8.0, -1.0))
+
+
+# Boitier de l'observateur conscient du zero instable (control/nmp_dob.py).
+# Memes bornes de gains que le FOPID — la structure le CONTIENT a alpha = 0,
+# donc lui donner d'autres bornes casserait cette inclusion. Sept parametres,
+# comme l'ADRC-FOPID et comme l'observateur modal : les trois structures qui
+# ajoutent un observateur a l'epine dorsale FOPID sont ainsi comparables a
+# dimension egale.
+#
+# UNE PRECISION SUR L'INCLUSION. « La structure contient le FOPID a alpha = 0 »
+# est vrai A TRAVERS L'ENUMERATION DES SIGNES, pas variante par variante : a
+# alpha = 0 cette structure rend MOINS le FOPID construit avec le meme
+# argument de signe, si bien que reproduire un optimum FOPID de
+# sign_variant = +1 demande ici sign_variant = -1 (avec +1 le point alpha = 0
+# est nominalement instable). Le PSO enumere les deux conventions, donc
+# l'inclusion tient pour l'optimisation ; elle ne tient pas pour une lecture
+# variante par variante.
+#
+# `wq` est la coupure du filtre Q. Sa borne haute n'est pas libre : au-dela de
+# la bande d'Oustaloup le filtre ne fait plus que de l'amplification de bruit,
+# et au-dela du zero instable (2459 Hz) il tente d'inverser ce qui, meme
+# apres factorisation, ne rend rien d'utile.
+BOUNDS_NMPDOB = dict(
+    log_Kp=(2.0, 7.0), log_Ki=(2.0, 9.0), log_Kd=(0.0, 5.0),
+    lam=(0.05, 1.0), mu=(0.05, 1.0),
+    log_wq=(2.5, 4.6), alpha=(0.0, 0.9))

@@ -26,11 +26,45 @@ OUT = os.path.join(HERE, '..', 'results')
 FIG = os.path.join(HERE, '..', 'figures', 'comparison')
 os.makedirs(FIG, exist_ok=True)
 
-COL = {'boucle ouverte': '#c8963e', 'fopid': '#1a3f8f', 'adrc': '#16a085',
-       'fdob': '#c0392b', 'fdob12345': '#8e44ad'}
+# Treize couleurs qui doivent rester DISTINGUABLES cote a cote, y compris
+# imprimees en niveaux de gris : on ecarte donc aussi les CLARTES, pas
+# seulement les teintes. Un premier jeu confondait fdob12345 avec mpc (deux
+# violets voisins) et l'ocre de la boucle ouverte avec le DVF et le SMC.
+COL = {'boucle ouverte': '#8c6d1f',   # ocre sombre — la reference
+       'fopid': '#1a3f8f',            # bleu marine
+       'adrc': '#16a085',             # turquoise
+       'fdob': '#c0392b',             # rouge brique
+       'fdob12345': '#f1948a',        # rose saumon (meme famille, plus clair)
+       'dvf': '#d35400',              # orange brule
+       'vpa': '#27ae60',              # vert
+       'hinf': '#2c3e50',             # ardoise
+       'musyn': '#95a5a6',            # gris clair
+       'lqg': '#e91e63',              # magenta
+       'mpc': '#6a1b9a',              # violet profond
+       'smc': '#f7c948',              # jaune
+       'nmpdob': '#00838f'}           # petrole
 LAB = {'boucle ouverte': 'no control', 'fopid': 'FOPID',
        'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (2 modes)',
-       'fdob12345': 'FDOB (5 modes)'}
+       'fdob12345': 'FDOB (5 modes)', 'dvf': 'DVF', 'vpa': 'VPA',
+       'hinf': 'H-infinity', 'musyn': 'mu-synthesis', 'lqg': 'LQG',
+       'mpc': 'MPC', 'smc': 'SMC', 'nmpdob': 'NMP-DOB'}
+# Une structure absente de ces deux tables ne doit pas faire tomber une figure
+# entiere : elle est tracee en gris avec son propre nom. Le contraire est
+# arrive — ajouter une structure et decouvrir le KeyError apres la campagne.
+_PALETTE = ('#34495e', '#95a5a6', '#16a085', '#e67e22', '#8e44ad')
+
+
+class _Fallback(dict):
+    def __init__(self, base, default):
+        super().__init__(base)
+        self._default = default
+
+    def __missing__(self, k):
+        return self._default(k)
+
+
+COL = _Fallback(COL, lambda k: _PALETTE[hash(k) % len(_PALETTE)])
+LAB = _Fallback(LAB, lambda k: str(k).upper())
 # Les structures tracees sont celles que le fichier de comparaison contient.
 KEYS = ('boucle ouverte', 'fopid', 'adrc')          # defaut, remplace par main
 
@@ -72,24 +106,48 @@ def _suptitle(fig, txt, prot):
 
 # ---------------------------------------------------------------------------
 def fig_lobes(cp, prot):
+    """Fossoles de stabilite.
+
+    A quatre structures un seul panneau suffisait : treize courbes a
+    marqueurs et un encart de douze lignes ne se lisent plus. On garde donc
+    les courbes — en ECHELLE LOG, parce que les limites couvrent deux decades
+    de 0.03 a 2 mm et qu'une echelle lineaire ecrase tout le bas du
+    classement — et on sort le resume des gains dans un second panneau
+    ordonne, ou treize barres restent lisibles la ou treize lignes de texte
+    ne l'etaient pas.
+    """
     d = cp['lobes']
-    fig, ax = plt.subplots(figsize=(8.4, 4.8))
+    many = len(KEYS) > 6
+    fig, ax = plt.subplots(1, 2, figsize=(12.6, 4.8),
+                           gridspec_kw=dict(width_ratios=[2.0, 1.0]))
     for k in KEYS:
-        ax.plot(d['rpm'], d[k] * 1e3, '-o', ms=4, color=COL[k], lw=1.6,
-                label=LAB[k])
-    ax.axvline(C.RPM_DESIGN, color='k', ls=':', lw=1)
-    ax.annotate('design speed', (C.RPM_DESIGN, ax.get_ylim()[1]), fontsize=8,
-                rotation=90, va='top', ha='right')
-    gains = {k: np.mean(d[k]) / np.mean(d['boucle ouverte'])
-             for k in KEYS[1:]}
-    ax.text(0.02, 0.97, 'mean limit gain vs open loop:\n'
-            + '\n'.join(f'{LAB[k]}  x{g:.1f}' for k, g in gains.items()),
-            transform=ax.transAxes, va='top', fontsize=9,
-            bbox=dict(fc='w', ec='0.7', alpha=.9))
-    ax.set_xlabel('Spindle speed (rpm)')
-    ax.set_ylabel('Limiting axial depth $a_{p,lim}$ (mm)')
-    ax.grid(alpha=.3)
-    ax.legend(fontsize=9, loc='upper right')
+        ax[0].plot(d['rpm'], d[k] * 1e3, '-' if many else '-o', ms=4,
+                   color=COL[k], lw=1.2 if many else 1.6, label=LAB[k])
+    ax[0].set_yscale('log')
+    ax[0].axvline(C.RPM_DESIGN, color='k', ls=':', lw=1)
+    ax[0].annotate('design speed', (C.RPM_DESIGN, ax[0].get_ylim()[1]),
+                   fontsize=8, rotation=90, va='top', ha='right')
+    ax[0].set_xlabel('Spindle speed (rpm)')
+    ax[0].set_ylabel('Limiting axial depth $a_{p,lim}$ (mm)')
+    ax[0].grid(alpha=.3, which='both')
+    ax[0].legend(fontsize=7 if many else 9, loc='upper left', ncol=2 if many
+                 else 1, framealpha=.9)
+
+    base = np.mean(d['boucle ouverte'])
+    gains = sorted(((k, np.mean(d[k]) / base) for k in KEYS[1:]),
+                   key=lambda t: t[1])
+    ypos = np.arange(len(gains))
+    ax[1].barh(ypos, [g for _, g in gains],
+               color=[COL[k] for k, _ in gains])
+    ax[1].set_yticks(ypos)
+    ax[1].set_yticklabels([LAB[k] for k, _ in gains], fontsize=8)
+    ax[1].axvline(1.0, color='k', ls=':', lw=1)
+    for y, (_, g) in zip(ypos, gains):
+        ax[1].text(g, y, f' x{g:.1f}', va='center', fontsize=8)
+    ax[1].set_xlabel('mean limit / open loop')
+    ax[1].grid(alpha=.3, axis='x')
+    ax[1].set_xlim(0, max(g for _, g in gains) * 1.22)
+
     _suptitle(fig, 'Stability lobes - worst position along the top edge '
                    '(5-mode model, Floquet m = 200)', prot)
     fig.tight_layout()

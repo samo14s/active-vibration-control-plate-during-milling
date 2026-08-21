@@ -219,3 +219,25 @@ __marimo__/
 
 # rapport : le HTML intermediaire (7.7 Mo, images en base64) est regenerable
 report/rapport_final.html
+
+# Cache des fossoles (control/run_lobes.py). CE N'EST PAS UN RESULTAT : son
+# contenu finit tel quel dans results/compare_B.npz, qui lui est suivi. Le
+# cache existe pour que les vingt et une bissections par structure puissent
+# etre calculees EN PARALLELE et ne soient jamais refaites ; le versionner
+# reviendrait a stocker deux fois la meme chose, et a produire un commit par
+# structure au fil d'une campagne.
+results/lobes_*.npz
+
+# Partiels de robustesse (KINDS/OUT_TAG de control/robustness_new.py). Meme
+# raison que le cache des fossoles : `--merge` les reunit dans
+# results/robust_new_B.npz, qui lui est suivi. Le motif exige le tiret bas,
+# donc il ne recouvre PAS le fichier fusionne lui-meme.
+results/robust_new_?_*.npz
+
+# Journaux d execution : sortie transitoire, pas un livrable.
+logs/
+
+# Points de reprise du PSO : etat de travail, regenere, et dont le contenu
+# finit dans le .npz de la structure. Rien a versionner.
+results/ckpt_*.json
+results/ckpt_*.json.tmp

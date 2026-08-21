@@ -8,7 +8,8 @@ de les enchainer. Ce script recolle les morceaux.
 REGLE DE FUSION, ET ELLE N'EST PAS ANODINE. Chaque fichier partiel contient
 AUSSI les structures deja optimisees, relues au demarrage. Les recopier
 aveuglement ferait dependre le resultat de l'ordre des fichiers. On prend donc,
-pour chaque structure, la version dont le `J` est le plus eleve — ce qui est
+pour chaque structure, la version qui compte le PLUS DE GRAINES, puis a
+effectif egal celle dont le `J` est le plus eleve — ce qui est
 sans effet quand une structure n'apparait qu'une fois, et resout le conflit de
 la seule facon defendable quand elle apparait plusieurs fois.
 
@@ -41,7 +42,24 @@ def main():
             continue
         for kind, v in load(p).items():
             J = float(v.get('J', -np.inf))
-            if kind not in merged or J > float(merged[kind].get('J', -np.inf)):
+            # LE CRITERE N'EST PAS `J` SEUL. Une reprise avec des graines
+            # supplementaires conserve TOUTES les graines precedentes et son
+            # `J` est le maximum sur l'ensemble : elle est donc un SURENSEMBLE
+            # de l'ancienne, meme quand les graines ajoutees n'ameliorent
+            # rien et que `J` ne bouge pas. Trier sur `J` seul gardait alors
+            # l'ANCIEN enregistrement et jetait les graines ajoutees.
+            #
+            # Mesure : apres les graines 5-6, seules les cinq structures dont
+            # `J` avait progresse gardaient six graines ; les six autres
+            # retombaient a quatre. Le test de rang tournait donc avec des
+            # effectifs INEGAUX — exactement l'iniquite que ces graines
+            # devaient supprimer, et au detriment des structures que les
+            # graines n'avaient pas flattees.
+            n_new = int(np.size(v.get('J_seeds', [])))
+            n_old = (-1 if kind not in merged
+                     else int(np.size(merged[kind].get('J_seeds', []))))
+            if kind not in merged or (n_new, J) > (
+                    n_old, float(merged[kind].get('J', -np.inf))):
                 merged[kind] = v
             print(f'  {kind:12s} J = {J:+.4f}   ({os.path.basename(p)})')
     np.savez_compressed(dest, **{f'{k}__{kk}': vv

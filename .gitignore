@@ -219,6 +219,9 @@ __marimo__/
 
 # rapport : le HTML intermediaire (7.7 Mo, images en base64) est regenerable
 report/rapport_final.html
+# meme raison : intermediaire autonome de 13 Mo (images en base64)
+# regenere a chaque build ; seul le PDF est un livrable.
+report/resultats.html
 
 # Cache des fossoles (control/run_lobes.py). CE N'EST PAS UN RESULTAT : son
 # contenu finit tel quel dans results/compare_B.npz, qui lui est suivi. Le

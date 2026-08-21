@@ -64,7 +64,32 @@ from nonlinear import SMC, MPC                                # noqa: E402
 from hinf import plant_ss                                     # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'results')
-T_SIM = 0.5              # duree de passe simulee a chaque position [s]
+# HORIZON. Il valait 0.5 s, et a cet horizon le critere ne mesurait PAS la
+# stabilite : il mesurait si une croissance exponentielle atteint 5 mm avant
+# la fin de la fenetre. Mesure a la limite alors PUBLIEE de la boucle ouverte
+# (0.095215 mm) : log rho = +0.076 aux SIX positions, rho = 1.079, croissance
+# x1.1e4 sur 0.5 s — et |y|max = 4897.3 um contre un seuil de 5000, donc
+# « survivante ». A T = 1 s la meme coupe diverge. Le seuil etait franchi a
+# t = 0.5014 s, 1.4 ms apres la fin de la fenetre.
+#
+# LE BIAIS DEPEND DE LA STRUCTURE, donc il faussait les COMPARAISONS et pas
+# seulement l'echelle. Rapport (limite temporelle / limite de Floquet) a
+# T = 0.5 s : boucle ouverte 2.59, smc 1.63, nmpdob 1.48, fopid 1.46,
+# adrc 1.19, fdob 1.16, musyn 1.16, dvf 1.13, vpa 1.05, hinf 1.05,
+# lqg 0.93, mpc 0.93. Le gain du FOPID sur la boucle ouverte passait de
+# x3.08 a x3.71 en changeant ce seul nombre de 0.5 a 1 s.
+#
+# Le surplus au-dessus de la limite de Floquet suit 1/T (mesure : 0.05851,
+# 0.03044, 0.01579 mm a T = 0.5, 1, 2 s ; rapports 1.922 et 1.928). D'ou
+# T = 4.1 s pour 20 % de surplus, 8.3 s pour 10 %, 16.6 s pour 5 %. On prend
+# 4 s : le surplus residuel d'environ 20 % est ANNONCE, il n'est plus
+# silencieux, et le cout mesure reste tenable (la boucle ouverte passe de
+# 110 s a environ 700 s).
+#
+# CE QUE CE CRITERE MESURE VRAIMENT, une fois l'horizon assaini : la survie
+# GRAND SIGNAL sous saturation reelle. Il ne remplace pas Floquet et ne doit
+# pas etre lu comme une limite de stabilite.
+T_SIM = 4.0              # duree simulee a chaque position [s]
 AP_HI = 2.5e-3           # borne haute de la dichotomie
 RTOL = 0.03              # tolerance relative de la dichotomie
 

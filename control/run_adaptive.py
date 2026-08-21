@@ -55,7 +55,7 @@ from fdob import target_modes
 from fdob_adaptive import AdaptiveFDOB
 
 OUT = os.path.join(HERE, '..', 'results')
-T_SIM = 0.5              # duree de passe simulee a chaque position [s]
+T_SIM = 4.0              # meme horizon que run_time_compare : voir la note qui y est
 AP_HI = 0.60e-3          # borne haute de la dichotomie
 RTOL = 0.03              # tolerance relative de la dichotomie
 

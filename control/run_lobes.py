@@ -40,6 +40,7 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C                                            # noqa: E402
 from plate_model import build_plate                           # noqa: E402
 from objective import limits                                  # noqa: E402
+from stored_ctrl import discover as stored                    # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'results')
 SPEEDS = np.arange(3000, 7001, 200)
@@ -62,7 +63,7 @@ def load_cache(kind):
     return np.asarray(d['lobes'], float), np.asarray(d['positions'], float)
 
 
-def compute(kind, ss):
+def compute(kind, ss, pd):
     """Calcule et met en cache. VERROU ATOMIQUE : plusieurs processus peuvent
     se voir confier des listes qui se recouvrent, et deux d'entre eux ecrivant
     le meme .npz en meme temps le laisseraient tronque. `mkdir` est atomique
@@ -74,16 +75,16 @@ def compute(kind, ss):
         print(f'  {kind:16s} deja en cours dans un autre processus')
         return
     try:
-        _compute(kind, ss)
+        _compute(kind, ss, pd)
     finally:
         os.rmdir(lock)
 
 
-def _compute(kind, ss):
+def _compute(kind, ss, pd):
     t0 = time.time()
-    lob = np.array([limits(plate_g, ss, rpm, hi=4.0e-3).min()
+    lob = np.array([limits(plate_g, ss, rpm, hi=4.0e-3, pd=pd).min()
                     for rpm in SPEEDS])
-    pos = limits(plate_g, ss, C.RPM_DESIGN, hi=4.0e-3)
+    pos = limits(plate_g, ss, C.RPM_DESIGN, hi=4.0e-3, pd=pd)
     np.savez_compressed(cache_path(kind), rpm=SPEEDS, lobes=lob,
                         x=np.asarray(C.POSITIONS), positions=pos)
     print(f'  {kind:16s} moyenne {np.mean(lob) * 1e3:.3f} mm, '
@@ -92,26 +93,11 @@ def _compute(kind, ss):
           f'   ({time.time() - t0:.0f} s)', flush=True)
 
 
-def stored():
-    found = {}
-    merged = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
-    paths = ([merged] if os.path.exists(merged) else []) + sorted(
-        glob.glob(os.path.join(OUT, f'pso_{C.PROTOCOL}_*.npz')))
-    for path in paths:
-        d = np.load(path, allow_pickle=True)
-        for k in d.files:
-            kind, _, field = k.partition('__')
-            if field == 'A' and kind not in found:
-                found[kind] = (d[f'{kind}__A'], d[f'{kind}__B'],
-                               d[f'{kind}__C'], d[f'{kind}__D'])
-    return found
-
-
 if __name__ == '__main__':
     plate_g = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
     st = stored()
     want = os.environ.get('KINDS')
-    todo = ([('boucle ouverte', None)] if not want
+    todo = ([('boucle ouverte', (None, None))] if not want
             or 'boucle ouverte' in want else [])
     if want:
         keep = {w.strip() for w in want.split(',')}
@@ -124,8 +110,8 @@ if __name__ == '__main__':
     print(f'  fossoles {SPEEDS[0]}-{SPEEDS[-1]} tr/min, '
           f'{len(C.POSITIONS)} positions, m = {C.M_FLOQUET}, '
           f'{C.N_MODES} modes')
-    for kind, ss in todo:
+    for kind, (ss, pd) in todo:
         if load_cache(kind) is not None:
             print(f'  {kind:16s} deja en cache')
             continue
-        compute(kind, ss)
+        compute(kind, ss, pd)

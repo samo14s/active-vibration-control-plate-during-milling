@@ -820,3 +820,136 @@ def test_les_exceptions_de_synthese_sont_toutes_rattrapees_par_build():
         + ', '.join(manquantes)
         + ' — les faire heriter d un type deja rattrape, ou les ajouter '
           'a la branche correspondante dans control/pso.py')
+
+
+# ------------------------------------------------- controle a retard actif
+def test_le_spectre_par_monodromie_redonne_les_poles_sans_retard():
+    """`nominal_max_re` doit coincider avec les valeurs propres quand pd = 0.
+
+    A profondeur nulle et SANS terme retarde, la boucle fermee est un simple
+    probleme aux valeurs propres. Avec le terme de l'Eq. (30) elle ne l'est
+    plus : les gains vivent sur l'etat retarde, le spectre devient infini, et
+    le maximum se lit sur la monodromie — log(rho)/tau, puisque le
+    multiplicateur dominant vaut e^{lambda tau}.
+
+    Le risque est que ce SECOND chemin, celui qui sert a `musyn_td`, soit
+    faux d'un facteur ou d'un signe sans que rien ne le montre : il ne
+    s'applique qu'a une structure, et il n'y a aucun autre chiffre a
+    comparer. On l'ancre donc sur le cas ou les deux chemins doivent donner
+    LE MEME nombre — pd = (0, 0), qui est un terme retarde d'amplitude nulle
+    et laisse pourtant le calcul passer par la monodromie.
+    """
+    import numpy as np
+    import config as C
+    from plate_model import build_plate
+    from objective import nominal_poles, nominal_max_re
+    from pso import Design
+
+    plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
+    D = Design('fopid', plate, -1.0, sign_variant=1.0)
+    ss = D.build(np.full(D.n, 0.5))
+    assert ss is not None
+
+    par_valeurs_propres = float(nominal_poles(plate, ss,
+                                              n_modes=C.N_MODES).real.max())
+    par_monodromie = nominal_max_re(plate, ss, (0.0, 0.0), n_modes=C.N_MODES)
+    ech = max(1.0, abs(par_valeurs_propres))
+    assert abs(par_monodromie - par_valeurs_propres) < 1e-3 * ech, (
+        f'monodromie {par_monodromie:.6g} contre valeurs propres '
+        f'{par_valeurs_propres:.6g}')
+
+
+def test_le_correcteur_a_retard_simule_a_la_frf_qui_le_contraint():
+    """Le simulateur temporel et la contrainte frequentielle, meme loi.
+
+    `frequency_metrics` note le terme de l'Eq. (30) par sa FRF analytique,
+    (K_Pp + K_Pd jw) e^{-jw tau} ; `DelayedPDController` l'execute pas a pas
+    sur un historique. Ce sont deux ECRITURES de la meme loi, et rien ne les
+    relie dans le code : un retard decale d'un pas, un signe de K_Pd, une
+    convention d'historique a l'envers passeraient les deux fois — la
+    contrainte porterait sur une loi, la simulation sur une autre, et les
+    deux tableaux se contrediraient sans qu'on sache lequel croire.
+
+    On excite donc le correcteur seul par une sinusoide et on compare le gain
+    ET la phase mesures a la formule. La phase est le point sensible : c'est
+    elle qui porte tout l'effet du retard.
+    """
+    import numpy as np
+    from sim_controller import DelayedPDController
+
+    tau = 4.0816e-3                 # une periode de dent a 4900 tr/min
+    n_sub = 164
+    dt = tau / n_sub
+    Kp, Kd = 3.7e4, -21.0
+    c = DelayedPDController(None, (Kp, Kd), n_sub, dt)
+
+    for f0 in (37.0, 245.0, 613.0):
+        c.reset()
+        w = 2 * np.pi * f0
+        n = int(round(24.0 / (f0 * dt)))          # 24 periodes
+        t = np.arange(n) * dt
+        y = np.sin(w * t)
+        yd = w * np.cos(w * t)
+        u = np.array([c(y=y[k], yd=yd[k]) for k in range(n)])
+
+        # on ne garde que la fin, une fois l'historique rempli
+        k0 = 4 * n_sub
+        s, cc = np.sin(w * t[k0:]), np.cos(w * t[k0:])
+        m = 2.0 / (n - k0)
+        a, b = m * float(u[k0:] @ s), m * float(u[k0:] @ cc)
+        mesure = a + 1j * b
+        exact = (Kp + Kd * 1j * w) * np.exp(-1j * w * tau)
+        rel = abs(mesure - exact) / abs(exact)
+        assert rel < 2e-2, (
+            f'a {f0} Hz : mesure {abs(mesure):.4g} @ '
+            f'{np.angle(mesure, deg=True):.2f} deg contre formule '
+            f'{abs(exact):.4g} @ {np.angle(exact, deg=True):.2f} deg '
+            f'(ecart relatif {rel:.3%})')
+
+
+def test_tout_l_aval_recharge_les_gains_de_retard():
+    """Aucun script d'aval ne doit reassembler un correcteur a la main.
+
+    Les gains de l'Eq. (30) ne tiennent pas dans un (A, B, C, D) : ils vivent
+    sur l'etat retarde. Un script qui recharge un correcteur en lisant les
+    quatre champs directement recharge donc mu TOUT SEUL — sans lever, sans
+    rien afficher d'anormal, et en publiant sous le nom de la reference du
+    papier des chiffres qui ne sont pas les siens. C'est exactement ce que
+    faisaient les quatre boucles recopiees avant `stored_ctrl`.
+
+    Le test porte sur la PROPRIETE structurelle, pas sur une liste de
+    fichiers : tout module de `control/` qui reassemble les quatre champs
+    pour une structure VARIABLE doit passer par `stored_ctrl`. Un cinquieme
+    script d'aval ecrit plus tard tombera dessus tout seul.
+
+    Deux choses ne sont volontairement PAS visees. Lire `{k}__A` seulement
+    pour ENUMERER les structures presentes ne recharge rien
+    (`audit_fairness`, `analyse_fdob` font cela). Et nommer la structure en
+    toutes lettres — `d['adrc__A']` dans `diagnose_adrc` — est un choix
+    delibere et verifiable : ni `adrc` ni `fopid` n'ont de terme retarde, et
+    le jour ou l'un en aurait un, ce serait a la relecture de ce nom-la de
+    s'en apercevoir, pas a une regle generale.
+    """
+    import glob
+    import os
+    import re
+
+    ici = os.path.dirname(os.path.abspath(__file__))
+    # les quatre champs, avec un nom de structure VARIABLE (f-string)
+    motifs = [re.compile(r'\{[A-Za-z_][A-Za-z_0-9]*\}__' + ch)
+              for ch in 'ABCD']
+    fautifs = []
+    for chemin in sorted(glob.glob(os.path.join(ici, '..', 'control',
+                                                '*.py'))):
+        nom = os.path.basename(chemin)
+        if nom in ('stored_ctrl.py', 'run_pso.py', 'merge_pso.py'):
+            continue                       # ceux-la ECRIVENT le fichier
+        src = open(chemin).read()
+        if not all(m.search(src) for m in motifs):
+            continue
+        if 'stored_ctrl' not in src:
+            fautifs.append(nom)
+    assert not fautifs, (
+        'rechargent un correcteur sans ses gains de retard : '
+        + ', '.join(fautifs)
+        + ' — passer par control/stored_ctrl.discover()')

@@ -301,8 +301,30 @@ N_DK = 3
 # de boucle direct, rien n'impose le signe d'une contre-reaction retardee — un
 # retard d'une periode de dent peut aussi bien remettre en phase qu'inverser.
 # Les fixer positifs interdirait la moitie du boitier sans raison.
+#
+# LARGEURS MESUREES, pas devinees. Le premier jeu (+/-2e5, +/-3e2) rendait 1
+# tirage faisable sur 24 : l'essaim aurait passe son budget dans une region
+# sans gradient. Trois mesures l'ont redimensionne.
+#
+#  1. Le bord de K_Pd ne depend PAS du correcteur robuste : il vaut 43.0 pour
+#     mu tel quel (Ms = 1.98) comme pour mu attenue a un quart (Ms = 1.21).
+#     C'est une propriete de la plaque et du retard, pas un reglage. +/-3e2
+#     etait sept fois trop large ; +/-60 laisse 40 % de marge au-dela du bord.
+#
+#  2. J croit de facon MONOTONE le long des deux gains jusqu'au bord de la
+#     contrainte : il n'y a pas d'optimum interieur, l'optimum est « le plus
+#     de gain que Ms <= 2 autorise ». Le boitier doit donc CONTENIR le bord —
+#     tout ce qui est au-dela est infaisable et gaspille, tout ce qui est en
+#     deca coupe l'optimum.
+#
+#  3. Le bord de K_Pp, lui, bouge enormement avec le recul de mu : 8.8e4 quand
+#     mu est a Ms = 1.98, mais 9.4e5 quand il recule a Ms = 1.65. Et c'est la
+#     que se joue le resultat : a ce recul, mu seul donne J = 0.332, K_Pd seul
+#     n'ajoute que 0.012, tandis que K_Pp = -5.6e5 porte J a 0.466 — au-dessus
+#     de tout ce qu'atteint mu a plein gain (0.424). Un boitier a +/-1e5 aurait
+#     rendu 0.364 : il aurait mesure la borne, pas le correcteur.
 BOUNDS_MUTD = dict(BOUNDS_MU)
-BOUNDS_MUTD.update(K_Pp=(-2.0e5, 2.0e5), K_Pd=(-3.0e2, 3.0e2))
+BOUNDS_MUTD.update(K_Pp=(-1.0e6, 1.0e6), K_Pd=(-6.0e1, 6.0e1))
 
 
 # ---------------------------------------------------------------------------

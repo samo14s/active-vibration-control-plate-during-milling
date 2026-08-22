@@ -35,6 +35,20 @@ OUT = os.path.join(HERE, '..', 'results')
 os.makedirs(OUT, exist_ok=True)
 
 
+def _fit(D, plate):
+    """La fonction objectif d'une structure.
+
+    Elle passe par `D.delay_gains`, qui rend None partout sauf pour
+    `musyn_td`. Ce detour n'est pas une precaution de style : les gains de
+    retard ne sont PAS dans le (A, B, C, D) rendu par `build` — ils vivent
+    dans la matrice retardee — donc un `evaluate` sans `pd` optimiserait les
+    cinq ponderations mu SEULES, puis stockerait a cote deux gains que rien
+    n'a regles. L'erreur ne leve rien et ne se voit dans aucun tableau : la
+    structure porterait le nom du correcteur du papier en n'en evaluant que
+    la moitie."""
+    return lambda u: evaluate(plate, D.build(u), pd=D.delay_gains(u))
+
+
 def _pack(D, best_x, best_J, best_var, runs, plate, n_states,
           hist=None, n_eval=None):
     """Le dictionnaire stocke pour une structure. Commun aux deux chemins
@@ -42,7 +56,8 @@ def _pack(D, best_x, best_J, best_var, runs, plate, n_states,
     diverger."""
     par = D.decode(best_x)
     ss = D.build(best_x)
-    _, info = evaluate(plate, ss, detail=True)
+    pd = D.delay_gains(best_x)
+    _, info = evaluate(plate, ss, detail=True, pd=pd)
     hs = [r['history'] for r in runs if r.get('history') is not None] \
         if hist is None else hist
     return dict(
@@ -53,6 +68,11 @@ def _pack(D, best_x, best_J, best_var, runs, plate, n_states,
         keys=np.array(list(par.keys())),
         Ms=info['Ms'], V=info['V'],
         A=ss[0], B=ss[1], C=ss[2], D=ss[3],
+        # (K_Pp, K_Pd) de l'Eq. (30), vide pour les structures sans retard.
+        # STOCKES A PART du (A, B, C, D) parce qu'ils n'y tiennent pas : tout
+        # l'aval (lobes, robustesse, poles, temporel) recharge le correcteur
+        # depuis ce fichier, et sans ce champ il rechargerait mu tout seul.
+        pd=np.array([] if pd is None else list(pd), float),
         # x de CHAQUE graine : sans eux on ne peut pas mesurer la dispersion
         # sur la metrique FINALE (a_p,lim a m = 200), mais seulement sur J,
         # qui est l'estimation bruitee de l'optimiseur.
@@ -214,7 +234,7 @@ def main():
                   flush=True)
             for seed in extra:
                 t0 = time.time()
-                fit = lambda u: evaluate(plate, D.build(u))
+                fit = _fit(D, plate)
                 x, J, inf = pso(fit, D.n, seed=seed)
                 runs.append(dict(seed=seed, variant=best_var, x=x, J=J,
                                  history=inf['history'],
@@ -251,7 +271,7 @@ def main():
                              dict(history=None, n_eval=int(prev['n_eval'])))
                 repris = '  (repris du disque)'
             else:
-                fit = lambda u: evaluate(plate, D.build(u))
+                fit = _fit(D, plate)
                 x, J, inf = pso(fit, D.n, seed=C.PSO['seeds'][0])
                 repris = ''
             screen[variant] = J
@@ -279,7 +299,7 @@ def main():
                              dict(history=None, n_eval=int(prev['n_eval'])))
                 repris = '  (repris du disque)'
             else:
-                fit = lambda u: evaluate(plate, D.build(u))
+                fit = _fit(D, plate)
                 x, J, inf = pso(fit, D.n, seed=seed)
                 repris = ''
             runs.append(dict(seed=seed, variant=best_var, x=x, J=J,
@@ -293,7 +313,8 @@ def main():
         D = Design(kind, plate, sign_loop, sign_variant=best_var)
         print(f"    convention retenue : sign_variant = {best_var:+.0f}")
         par = D.decode(best_x)
-        _, info = evaluate(plate, D.build(best_x), detail=True)
+        _, info = evaluate(plate, D.build(best_x), detail=True,
+                           pd=D.delay_gains(best_x))
         print(f"    meilleur : J = {best_J:+.4f}   Ms = {info['Ms']:.2f}"
               f"   effort = {info['V']:.0f} V/N")
         print("    parametres : " + "  ".join(

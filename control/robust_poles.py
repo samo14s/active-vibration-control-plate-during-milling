@@ -23,7 +23,6 @@ INDEPENDANTE et non une reformulation.
 
     PROTOCOL=B python robust_poles.py
 """
-import glob
 import os
 import sys
 import warnings
@@ -36,8 +35,8 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 
 import config as C                                            # noqa: E402
 from plate_model import build_plate                           # noqa: E402
-from closed_loop import build_matrices                        # noqa: E402
-from robustness_new import ORDER                              # noqa: E402
+from objective import nominal_max_re                          # noqa: E402
+from stored_ctrl import discover as _discover                 # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'results')
 
@@ -52,34 +51,23 @@ def perturbed(freqs=None, zeta_scale=1.0, w_scale=1.0):
     return pl
 
 
-def max_re(plate, ss, n_modes):
+def max_re(plate, ss, n_modes, pd=None):
     """max Re(pole) de la boucle fermee a a_p = 0, position mediane.
 
-    A profondeur nulle le terme de coupe disparait : la matrice ne depend plus
-    ni de la position ni du retard, et le probleme est purement propre."""
-    n = n_modes
-    D = plate.D_row(0.5 * plate.lp, plate.hp)[:n]
-    D_obs = plate.D_row(plate.lp, plate.hp)[:n]
-    H = np.asarray(plate.H_Pe_modal, float)[:n]
-    A, _ = build_matrices(plate, np.outer(D, D), D_obs, H, 0.0, ss, None, n)
-    return float(np.max(np.real(np.linalg.eigvals(A))))
+    Le calcul lui-meme vit dans `objective.nominal_max_re`, partage avec
+    `run_compare` : les deux tableaux affichent la meme colonne, autant
+    qu'elle vienne du meme code. A profondeur nulle et sans terme retarde le
+    terme de coupe disparait, la matrice ne depend plus ni de la position ni
+    du retard, et le probleme est purement propre ; avec le terme retarde de
+    l'Eq. (30) c'est FAUX, et silencieusement — d'ou le detour par la
+    monodromie decrit la-bas."""
+    return nominal_max_re(plate, ss, pd, n_modes)
 
 
 def stored():
-    found = {}
-    merged = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
-    paths = ([merged] if os.path.exists(merged) else []) + sorted(
-        glob.glob(os.path.join(OUT, f'pso_{C.PROTOCOL}_*.npz')))
-    for path in paths:
-        d = np.load(path, allow_pickle=True)
-        for k in d.files:
-            kind, _, field = k.partition('__')
-            if field == 'A' and kind not in found:
-                found[kind] = (d[f'{kind}__A'], d[f'{kind}__B'],
-                               d[f'{kind}__C'], d[f'{kind}__D'])
-    rank = {k: i for i, k in enumerate(ORDER)}
-    keys = sorted(found, key=lambda k: (rank.get(k, len(ORDER)), k))
-    return [('boucle ouverte', None)] + [(k, found[k]) for k in keys]
+    """[(kind, ss, pd)], boucle ouverte en tete."""
+    return [('boucle ouverte', None, None)] + [
+        (k, ss, pd) for k, (ss, pd) in _discover().items()]
 
 
 def main():
@@ -100,14 +88,14 @@ def main():
     print('  coupe ou pas : la limite nulle correspondante est une'
           ' INSTABILITE,')
     print('  non une limite trop petite pour la bissection.\n')
-    ks = [k for k, _ in got]
+    ks = [t[0] for t in got]
     print(f'{"cas":26s}' + ''.join(f'{k[:10]:>11s}' for k in ks))
     table = np.zeros((len(cases), len(got)))
     for i, (tag, kw, nm) in enumerate(cases):
         plate = perturbed(**kw)
         row = []
-        for j, (kind, ss) in enumerate(got):
-            table[i, j] = max_re(plate, ss, nm)
+        for j, (kind, ss, pd) in enumerate(got):
+            table[i, j] = max_re(plate, ss, nm, pd)
             row.append(table[i, j])
         print(f'{tag[:25]:26s}' + ''.join(f'{v:11.3f}' for v in row),
               flush=True)

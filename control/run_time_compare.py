@@ -59,7 +59,7 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C                                            # noqa: E402
 from plate_model import build_plate, plant_vectors            # noqa: E402
 from simulate import MillingSimulation                        # noqa: E402
-from sim_controller import LTIController                      # noqa: E402
+from sim_controller import LTIController, DelayedPDController                      # noqa: E402
 from nonlinear import SMC, MPC                                # noqa: E402
 from hinf import plant_ss                                     # noqa: E402
 
@@ -169,8 +169,19 @@ def main():
         if 'A' not in rec:
             continue
         ss = (rec['A'], rec['B'], rec['C'], rec['D'])
-        cfgs.append((kind, (lambda z: lambda s: LTIController(z, s.dt))(ss),
-                     'LTI'))
+        gd = np.asarray(rec.get('pd', []), float).ravel()
+        if gd.size == 0:
+            cfgs.append((kind,
+                         (lambda z: lambda s: LTIController(z, s.dt))(ss),
+                         'LTI'))
+        else:
+            # Le retard vaut n_sub pas EXACTEMENT (dt = tau / n_sub), donc le
+            # meme retard que la coupe. Sans cette branche `musyn_td` serait
+            # simule comme un correcteur mu ordinaire : la seule structure
+            # dont le retard EST le mecanisme perdrait son mecanisme.
+            cfgs.append((kind, (lambda z, g: lambda s: DelayedPDController(
+                z, g, s.n_sub, s.dt))(ss, (float(gd[0]), float(gd[1]))),
+                'LTI + retard'))
     # ... et les DEUX formes non lineaires, avec les memes parametres optimises
     if 'smc' in store and _params(store['smc']):
         p = _params(store['smc'])

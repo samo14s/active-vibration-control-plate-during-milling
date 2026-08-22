@@ -99,6 +99,32 @@ def nominal_poles(plate, ss, n_modes=None):
     return np.linalg.eigvals(A)
 
 
+def nominal_max_re(plate, ss, pd=None, n_modes=None):
+    """max Re du spectre de la boucle fermee SANS coupe, terme retarde compris.
+
+    Sans `pd`, c'est exactement `nominal_poles(...).real.max()`.
+
+    Avec `pd`, ce n'est plus un probleme aux valeurs propres : les gains de
+    l'Eq. (30) vivent sur l'etat retarde, la boucle nominale est une equation
+    a retard et son spectre est infini. On passe par la monodromie sur une
+    periode de dent — rho = |e^{lambda tau}| pour le mode dominant, donc
+    log(rho)/tau EST le maximum cherche. Pour un systeme sans retard la
+    formule redonne l'autre a l'identique, ce que `tests/` verifie.
+    """
+    n = C.N_MODES_OBJ if n_modes is None else n_modes
+    if pd is None:
+        return float(nominal_poles(plate, ss, n_modes=n).real.max())
+    m = C.M_FLOQUET
+    maps, tau = period_maps(plate, C.RPM_DESIGN, 0.0, 0.5 * plate.lp,
+                            ctrl=ss, pd=pd, n_modes=n, m=m,
+                            coeff_mode='time', coeff_scale=C.SIGN_SIM,
+                            ae=C.AE)
+    rho = spectral_radius(maps, m, maps[0][0].shape[0])
+    if not np.isfinite(rho):
+        return np.inf
+    return float(np.log(max(rho, 1e-300)) / tau)
+
+
 def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None,
                       poles=None, pd=None, tau=None):
     """(Ms, Vmax) : marge de module et effort maximal en V/N.
@@ -289,12 +315,16 @@ def _ap_from_margins(probes, g):
 
 # ---------------------------------------------------------------------------
 def limits(plate, ss, rpm, positions=None, m=None, n_modes=None,
-           lo=0.005e-3, hi=4.0e-3, rtol=1e-3):
-    """Profondeurs limites VRAIES (bissection de Floquet), pleine resolution."""
+           lo=0.005e-3, hi=4.0e-3, rtol=1e-3, pd=None):
+    """Profondeurs limites VRAIES (bissection de Floquet), pleine resolution.
+
+    `pd` porte les gains de l'Eq. (30). Il valait None en dur ici, ce qui
+    etait exact tant qu'aucune structure n'avait de terme retarde ; pour
+    `musyn_td` cela reviendrait a tracer les fossoles de mu tout seul."""
     from closed_loop import limit
     pos = C.POSITIONS if positions is None else positions
     kw = dict(n_modes=C.N_MODES if n_modes is None else n_modes,
               m=C.M_FLOQUET if m is None else m,
               coeff_mode='time', coeff_scale=C.SIGN_SIM, ae=C.AE)
-    return np.array([limit(plate, rpm, fr * plate.lp, ctrl=ss, pd=None,
+    return np.array([limit(plate, rpm, fr * plate.lp, ctrl=ss, pd=pd,
                            lo=lo, hi=hi, rtol=rtol, **kw) for fr in pos])

@@ -31,9 +31,11 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C
 from plate_model import build_plate, plant_vectors, plant_frf
 from fopid import ss_frf
-from objective import limits, frequency_metrics, nominal_poles
+from objective import limits, frequency_metrics, nominal_max_re
 from simulate import MillingSimulation, amplitude_spectrum, mean_abs_amplitude
-from sim_controller import LTIController
+from sim_controller import LTIController, DelayedPDController
+from stored_ctrl import delay_gains
+from milling_dynamics import N_TEETH
 
 OUT = os.path.join(HERE, '..', 'results')
 # Les structures comparees sont celles que le fichier PSO contient, dans
@@ -55,6 +57,7 @@ def load():
     for k in stored_kinds(d):
         out[k] = dict(ss=(d[f'{k}__A'], d[f'{k}__B'], d[f'{k}__C'],
                           d[f'{k}__D']),
+                      pd=delay_gains(d, k),
                       keys=d[f'{k}__keys'], values=d[f'{k}__values'],
                       J=float(d[f'{k}__J']), n_par=int(d[f'{k}__n_par']),
                       n_states=int(d[f'{k}__n_states']))
@@ -84,8 +87,12 @@ def time_case(plate, ap, cfgs, store, tag):
     """Une passe complete par configuration, a la profondeur ap."""
     sim = MillingSimulation(plate, C.RPM_DESIGN, ap, n_modes=C.N_MODES,
                             n_sub=C.N_SUB, sign=C.SIGN_SIM, v_max=C.V_MAX)
-    for name, ss in cfgs:
-        c = None if ss is None else LTIController(ss, sim.dt)
+    for name, ss, pd in cfgs:
+        # Le retard vaut n_sub pas EXACTEMENT (dt = tau / n_sub) : c'est le
+        # meme retard que la coupe, lu dans l'historique sans interpolation.
+        c = (None if ss is None and pd is None else
+             LTIController(ss, sim.dt) if pd is None else
+             DelayedPDController(ss, pd, sim.n_sub, sim.dt))
         r = sim.run(controller=c, T=None)
         f, A = amplitude_spectrum(r['t'], r['y_mill'])
         fu, Au = amplitude_spectrum(r['t'], r['u'], scale=1.0)
@@ -116,7 +123,8 @@ def main():
               f" {ctl[k]['n_states']} etats, J = {ctl[k]['J']:+.4f}")
         print("          " + "  ".join(
             f"{n}={v:.4g}" for n, v in zip(ctl[k]['keys'], ctl[k]['values'])))
-    cfgs = [('boucle ouverte', None)] + [(k, ctl[k]['ss']) for k in kinds]
+    cfgs = [('boucle ouverte', None, None)] + [
+        (k, ctl[k]['ss'], ctl[k]['pd']) for k in kinds]
     store = {}
 
     # ---------------- 1-2. lobes de stabilite et limites par position -----
@@ -131,7 +139,7 @@ def main():
     # de vitesses ou de positions a change.
     from run_lobes import SPEEDS as speeds, load_cache
     lob, pos = {}, {}
-    for name, ss in cfgs:
+    for name, ss, pd in cfgs:
         hit = load_cache(name)
         if hit is not None:
             lob[name], pos[name] = hit
@@ -139,14 +147,14 @@ def main():
                   f" {np.mean(lob[name]) * 1e3:.3f} mm,"
                   f" min {np.min(lob[name]) * 1e3:.3f} mm", flush=True)
             continue
-        lob[name] = np.array([limits(plate, ss, rpm, hi=4.0e-3).min()
+        lob[name] = np.array([limits(plate, ss, rpm, hi=4.0e-3, pd=pd).min()
                               for rpm in speeds])
-        pos[name] = limits(plate, ss, C.RPM_DESIGN, hi=4.0e-3)
+        pos[name] = limits(plate, ss, C.RPM_DESIGN, hi=4.0e-3, pd=pd)
         print(f"  lobes {name:14s} : moyenne {np.mean(lob[name]) * 1e3:.3f} mm,"
               f" min {np.min(lob[name]) * 1e3:.3f} mm"
               f"  ({time.time() - t00:.0f} s)", flush=True)
     store['lobes'] = dict(rpm=speeds, **lob)
-    for name, _ in cfgs:
+    for name, _, _ in cfgs:
         print(f"  positions {name:14s} : {np.round(pos[name] * 1e3, 3)} mm"
               f"   min = {pos[name].min() * 1e3:.3f}", flush=True)
     store['positions'] = dict(x=np.array(C.POSITIONS), **pos)
@@ -180,36 +188,44 @@ def main():
     for tag, kw, nm in cases:
         pl = perturbed(**kw)
         row = [limits(pl, ss, C.RPM_DESIGN, n_modes=nm,
-                      hi=4.0e-3).min() for _, ss in cfgs]
+                      hi=4.0e-3, pd=pd).min() for _, ss, pd in cfgs]
         rob[tag] = np.array(row)
         labels.append(tag)
         print(f"  robustesse [{tag:24s}] (n_modes={nm}) : " + "  ".join(
-            f"{n} = {v * 1e3:.3f} mm" for (n, _), v in zip(cfgs, row)),
+            f"{n} = {v * 1e3:.3f} mm" for (n, _, _), v in zip(cfgs, row)),
             flush=True)
     store['robust'] = rob
     store['robust_labels'] = np.array(labels)
-    store['config_labels'] = np.array([n for n, _ in cfgs])
+    store['config_labels'] = np.array([n for n, _, _ in cfgs])
 
     # ---------------- 5. metriques frequentielles -------------------------
     f = np.logspace(0.5, 4.1, 400)
     fr = dict(f=f)
     Pu, Pf = plant_frf(plate, f, C.N_MODES, x_force=0.0)
     fr['Pu'] = np.abs(Pu)
-    for name, ss in cfgs:
+    tau_td = 60.0 / (N_TEETH * C.RPM_DESIGN)
+    for name, ss, pd in cfgs:
         if ss is None:
             continue
         K = ss_frf(ss, 2 * np.pi * f)
+        if pd is not None:
+            # (K_Pp + K_Pd jw) e^{-jw tau} : la FRF EXACTE de l'Eq. (30). Les
+            # courbes K, S et U qui suivent decrivent alors le correcteur
+            # complet, pas sa moitie non retardee.
+            w_ = 2 * np.pi * f
+            K = K + (pd[0] + pd[1] * 1j * w_) * np.exp(-1j * w_ * tau_td)
         S = 1.0 / (1.0 - Pu * K)
         fr[f'K_{name}'] = np.abs(K)
         fr[f'Kph_{name}'] = np.angle(K, deg=True)
         fr[f'S_{name}'] = np.abs(S)
         fr[f'U_{name}'] = np.abs(K * S * Pf)
         Ms, V = frequency_metrics(plate, ss, positions=C.POSITIONS,
-                                  n_modes=C.N_MODES)
-        ev = nominal_poles(plate, ss, n_modes=C.N_MODES)
+                                  n_modes=C.N_MODES, pd=pd,
+                                  tau=None if pd is None else tau_td)
+        mre = nominal_max_re(plate, ss, pd, n_modes=C.N_MODES)
         print(f"  frequentiel {name:8s} : Ms = {Ms:.3f}"
-              f"   effort = {V:.0f} V/N   max Re(pole) = {ev.real.max():.1f}")
-        store[f'metrics_{name}'] = np.array([Ms, V, ev.real.max()])
+              f"   effort = {V:.0f} V/N   max Re(pole) = {mre:.1f}")
+        store[f'metrics_{name}'] = np.array([Ms, V, mre])
     store['freq'] = fr
 
     store['meta'] = dict(protocol=np.array(C.PROTOCOL),

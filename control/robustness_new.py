@@ -20,7 +20,6 @@ frequences de son Tableau 1.
 
     PROTOCOL=B CALIB=measured python robustness_new.py
 """
-import glob
 import os
 import sys
 import time
@@ -33,6 +32,7 @@ sys.path[:0] = [os.path.join(HERE, '..', 'paper_model'), HERE]
 import config as C                                            # noqa: E402
 from plate_model import build_plate                           # noqa: E402
 from closed_loop import limit as cl_limit                     # noqa: E402
+from stored_ctrl import ORDER, discover as _discover           # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'results')
 
@@ -41,33 +41,22 @@ OUT = os.path.join(HERE, '..', 'results')
 #: fusionne d'abord, puis les fichiers paralleles pour les structures que la
 #: fusion n'a pas encore reunies. Une structure nouvelle apparait donc dans le
 #: tableau sans qu'on touche a ce fichier, ce qui est la condition meme de
-#: l'equite : le meme code d'evaluation pour toutes.
-ORDER = ['fopid', 'adrc', 'fdob', 'fdob12345', 'dvf', 'vpa', 'hinf', 'musyn',
-         'lqg', 'mpc', 'smc', 'nmpdob']
-
-
+#: l'equite : le meme code d'evaluation pour toutes. Le chargement lui-meme
+#: vit dans `stored_ctrl`, partage avec les trois autres scripts d'aval.
 def discover():
-    """[(kind, (A, B, C, D))], boucle ouverte en tete."""
-    found = {}
-    merged = os.path.join(OUT, f'pso_{C.PROTOCOL}.npz')
-    paths = ([merged] if os.path.exists(merged) else []) + sorted(
-        glob.glob(os.path.join(OUT, f'pso_{C.PROTOCOL}_*.npz')))
-    for path in paths:
-        d = np.load(path, allow_pickle=True)
-        for k in d.files:
-            kind, _, field = k.partition('__')
-            if field == 'A' and kind not in found:
-                found[kind] = (d[f'{kind}__A'], d[f'{kind}__B'],
-                               d[f'{kind}__C'], d[f'{kind}__D'])
-    rank = {k: i for i, k in enumerate(ORDER)}
-    keys = sorted(found, key=lambda k: (rank.get(k, len(ORDER)), k))
-    return [('boucle ouverte', None)] + [(k, found[k]) for k in keys]
+    """[(kind, ss, pd)], boucle ouverte en tete.
+
+    Le troisieme membre porte les gains de retard de l'Eq. (30) : sans lui,
+    `musyn_td` serait recharge comme un correcteur mu ordinaire et la
+    reference du papier serait mesuree amputee de sa moitie."""
+    return [('boucle ouverte', None, None)] + [
+        (k, ss, pd) for k, (ss, pd) in _discover().items()]
 
 
-def worst_limit(plate, ss, n_modes):
+def worst_limit(plate, ss, pd, n_modes):
     """Limite au pire poste. `POSITIONS_DESIGN` sont des FRACTIONS de l_P ;
     `limit` attend une coordonnee physique — l'oublier rend zero partout."""
-    return min(cl_limit(plate, C.RPM_DESIGN, x * plate.lp, ctrl=ss,
+    return min(cl_limit(plate, C.RPM_DESIGN, x * plate.lp, ctrl=ss, pd=pd,
                         n_modes=n_modes, m=200, hi=6e-3)
                for x in C.POSITIONS_DESIGN)
 
@@ -105,24 +94,24 @@ def main():
     want = os.environ.get('KINDS')
     if want:
         keep = {w.strip() for w in want.split(',')}
-        got = [(k, ss) for k, ss in got if k in keep]
+        got = [t for t in got if t[0] in keep]
         if not got:
             print(f'  aucune des structures demandees ({want}) n est presente')
             return 1
     print('  structures trouvees : '
-          + ', '.join(k for k, _ in got))
+          + ', '.join(t[0] for t in got))
     print('=' * 78)
     print(' ROBUSTESSE — limite axiale au pire poste [mm], 5 modes, m = 200')
     print('=' * 78)
-    print(f'  structures : {", ".join(k for k, _ in got)}\n')
+    print(f'  structures : {", ".join(t[0] for t in got)}\n')
 
     table = {}
     for tag, kw, nm in cases:
         plate = perturbed(**kw)
         t0 = time.time()
         row = {}
-        for kind, ss in got:
-            row[kind] = worst_limit(plate, ss, nm)
+        for kind, ss, pd in got:
+            row[kind] = worst_limit(plate, ss, pd, nm)
         table[tag] = row
         print(f'  {tag:26s} ' + '  '.join(f'{k}={v * 1e3:.3f}'
                                           for k, v in row.items())
@@ -132,8 +121,8 @@ def main():
     dest = os.path.join(OUT, f'robust_new_{C.PROTOCOL}{tag}.npz')
     np.savez_compressed(dest,
                         labels=np.array([t for t, _, _ in cases]),
-                        kinds=np.array([k for k, _ in got]),
-                        limits=np.array([[table[t][k] for k, _ in got]
+                        kinds=np.array([t[0] for t in got]),
+                        limits=np.array([[table[t][k] for k, _, _ in got]
                                          for t, _, _ in cases]))
     print(f'\n  -> {os.path.basename(dest)}')
     return 0

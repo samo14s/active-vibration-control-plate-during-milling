@@ -133,7 +133,22 @@ def merge(dest, srcs):
 
     Les ETIQUETTES DE CAS doivent coincider exactement : deux morceaux calcules
     avec des listes de cas differentes ne forment pas un tableau, ils forment
-    deux tableaux. On refuse plutot que d'aligner au hasard."""
+    deux tableaux. On refuse plutot que d'aligner au hasard.
+
+    LE FICHIER DE DESTINATION EST AUSSI UNE SOURCE, et il doit l'etre. Il ne
+    l'etait pas, et la fusion n'etait donc pas idempotente : elle reconstruisait
+    le tableau a partir des seuls morceaux presents sur le disque, si bien que
+    toute structure dont le morceau avait ete efface — parce qu'une campagne
+    precedente l'avait deja repliee dans le fichier fusionne — disparaissait
+    sans un mot. C'est arrive : en ajoutant `musyn_td`, la fusion a rendu un
+    tableau de onze colonnes ou `hinf` et `musyn` n'etaient plus, et rien dans
+    sa sortie ne le signalait — elle annonce le nombre de colonnes ecrites, pas
+    celles qu'elle a perdues.
+
+    Les morceaux frais gagnent : la destination n'est lue qu'a la fin, et ne
+    sert qu'a combler. Une colonne ainsi reprise est SIGNALEE, parce qu'elle a
+    ete calculee par une version anterieure du code et que ce depot a deja vu
+    une table rester bit a bit identique alors qu'elle aurait du changer."""
     labels, cols = None, {}
     for p in srcs:
         if not os.path.exists(p):
@@ -151,8 +166,28 @@ def merge(dest, srcs):
             cols.setdefault(k, M[:, j])
         print(f'  {os.path.basename(p)} : '
               + ', '.join(str(x) for x in d['kinds']))
+    repris = []
+    if os.path.exists(dest):
+        d = np.load(dest, allow_pickle=True)
+        lab = [str(x) for x in d['labels']]
+        if labels is not None and lab != labels:
+            raise SystemExit(
+                f'  {dest} existe avec d autres cas :\n    {lab}\n'
+                f'  contre\n    {labels}\n'
+                '  l ecraser perdrait ses colonnes — le deplacer d abord')
+        labels = lab if labels is None else labels
+        M = np.asarray(d['limits'], float)
+        for j, k in enumerate([str(x) for x in d['kinds']]):
+            if k not in cols:
+                cols[k] = M[:, j]
+                repris.append(k)
     if not cols:
         raise SystemExit('  rien a fusionner')
+    if repris:
+        print(f'\n  REPRISES du fichier fusionne precedent (aucun morceau'
+              f' frais sur le disque) : {", ".join(repris)}')
+        print('  ces colonnes datent d une campagne anterieure ; les'
+              ' recalculer si le code d evaluation a change depuis')
     order = ['boucle ouverte'] + [k for k in ORDER if k in cols]
     order += [k for k in cols if k not in order]
     order = [k for k in order if k in cols]

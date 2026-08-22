@@ -953,3 +953,47 @@ def test_tout_l_aval_recharge_les_gains_de_retard():
         'rechargent un correcteur sans ses gains de retard : '
         + ', '.join(fautifs)
         + ' — passer par control/stored_ctrl.discover()')
+
+
+def test_la_fusion_de_robustesse_ne_perd_pas_de_colonne():
+    """Fusionner ne doit jamais RETRANCHER une structure du tableau.
+
+    La fusion reconstruisait le tableau a partir des seuls morceaux presents
+    sur le disque, sans jamais relire sa propre destination. Une structure
+    dont le morceau avait ete efface — parce qu'une campagne precedente
+    l'avait deja repliee dans le fichier fusionne — disparaissait donc a la
+    fusion suivante, sans un mot : la sortie annonce le nombre de colonnes
+    ECRITES, pas celles qu'elle a perdues. En ajoutant la douzieme structure,
+    la fusion a rendu onze colonnes ou `hinf` et `musyn` n'etaient plus.
+
+    Le test construit la situation exacte : une destination qui contient une
+    structure, un morceau frais qui en contient une autre, et la verification
+    que la fusion rend LES DEUX.
+    """
+    import os
+    import tempfile
+    import numpy as np
+    from robustness_new import merge
+
+    labels = np.array(['cas A', 'cas B'])
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = os.path.join(tmp, 'fusionne.npz')
+        np.savez_compressed(dest, labels=labels,
+                            kinds=np.array(['ancienne']),
+                            limits=np.array([[1.0], [2.0]]))
+        part = os.path.join(tmp, 'fusionne_neuve.npz')
+        np.savez_compressed(part, labels=labels,
+                            kinds=np.array(['neuve']),
+                            limits=np.array([[3.0], [4.0]]))
+
+        merge(dest, [part])
+
+        d = np.load(dest, allow_pickle=True)
+        got = [str(k) for k in d['kinds']]
+        assert 'ancienne' in got, (
+            f'colonne perdue a la fusion : {got} — la destination doit etre '
+            f'relue comme source')
+        assert 'neuve' in got, got
+        M = np.asarray(d['limits'], float)
+        assert list(M[:, got.index('ancienne')]) == [1.0, 2.0]
+        assert list(M[:, got.index('neuve')]) == [3.0, 4.0]

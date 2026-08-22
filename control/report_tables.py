@@ -20,7 +20,8 @@ OUT = os.path.join(HERE, '..', 'results')
 _LAB = {'boucle ouverte': 'بلا تحكّم', 'fopid': 'FOPID',
         'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (نمطان)',
         'fdob12345': 'FDOB (5 أنماط)', 'dvf': 'DVF', 'vpa': 'VPA',
-        'hinf': 'H∞', 'musyn': 'μ-synthesis', 'lqg': 'LQG', 'mpc': 'MPC',
+        'hinf': 'H∞', 'musyn': 'μ-synthesis',
+        'musyn_td': 'μ + تأخّر نشط', 'lqg': 'LQG', 'mpc': 'MPC',
         'smc': 'SMC', 'nmpdob': 'NMP-DOB'}
 
 

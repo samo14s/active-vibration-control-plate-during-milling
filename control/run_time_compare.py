@@ -93,8 +93,7 @@ T_SIM = 4.0              # duree simulee a chaque position [s]
 AP_HI = 2.5e-3           # borne haute de la dichotomie
 RTOL = 0.03              # tolerance relative de la dichotomie
 
-ORDER = ['fopid', 'adrc', 'fdob', 'fdob12345', 'dvf', 'vpa', 'hinf', 'musyn',
-         'lqg', 'mpc', 'smc', 'nmpdob']
+from stored_ctrl import ORDER                                  # noqa: E402
 
 
 def discover():

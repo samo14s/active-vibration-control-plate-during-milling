@@ -39,6 +39,7 @@ COL = {'boucle ouverte': '#8c6d1f',   # ocre sombre — la reference
        'vpa': '#27ae60',              # vert
        'hinf': '#2c3e50',             # ardoise
        'musyn': '#95a5a6',            # gris clair
+       'musyn_td': '#5d4037',         # brun
        'lqg': '#e91e63',              # magenta
        'mpc': '#6a1b9a',              # violet profond
        'smc': '#f7c948',              # jaune
@@ -46,7 +47,8 @@ COL = {'boucle ouverte': '#8c6d1f',   # ocre sombre — la reference
 LAB = {'boucle ouverte': 'no control', 'fopid': 'FOPID',
        'adrc': 'ADRC-FOPID', 'fdob': 'FDOB (2 modes)',
        'fdob12345': 'FDOB (5 modes)', 'dvf': 'DVF', 'vpa': 'VPA',
-       'hinf': 'H-infinity', 'musyn': 'mu-synthesis', 'lqg': 'LQG',
+       'hinf': 'H-infinity', 'musyn': 'mu-synthesis',
+       'musyn_td': 'mu + active time delay', 'lqg': 'LQG',
        'mpc': 'MPC', 'smc': 'SMC', 'nmpdob': 'NMP-DOB'}
 # Une structure absente de ces deux tables ne doit pas faire tomber une figure
 # entiere : elle est tracee en gris avec son propre nom. Le contraire est

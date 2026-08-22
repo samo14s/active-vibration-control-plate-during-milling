@@ -203,3 +203,111 @@ can attain within a given range of perturbations**»، لأنظمةٍ خطّيّ
 * قرأتُ **مقاطع** من النصوص الكاملة لـvan Dijk وRamírez — لا الورقتين كاملتين.
 * ScienceDirect وWhite Rose ما زالا **محجوبين بسياسة الشبكة**؛ ورقة 2026
   «spindle speed mapped» وWang et al. 2015 **ما زالتا غير مقروءتين**.
+
+---
+
+## 6. تصحيحٌ عاجل — Consensus **يعمل**، وما قلتُه في القسم 5.5 **خطأ**
+
+**أوّلًا الخطأ نفسه:** كتبتُ في القسمين 4 و5.6 أنّ Consensus «مستنفَد حتّى 1
+سبتمبر». **هذا غير صحيح.** أُعيد الاستعلام فعاد بنتائج فورًا. فالأساس الذي بنيتُ
+عليه المرحلة 0 لم يكن «محرّكًا مستنفَدًا» بل **محرّكًا لم أستعمله**. وثلاثة
+استعلامات جديدة (2026-08-22، بعد ساعة من القسم 5) **تنقض القسم 5.5**.
+
+### 6.1 «جانب قطعة الشغل خالٍ» — **باطل**
+
+قلتُ في 5.5 إنّ لا أحد يجمع: قطعة شغلٍ رقيقة + كهرضغطي + ديناميكا تابعة للموضع +
+تغذية راجعة متأخّرة. **الجمع منشور، وأكثر من مرّة:**
+
+| المقال | ما يجمعه فعلًا |
+|---|---|
+| **Dong et al. 2023**, *J. Vibration and Control* | جدران رقيقة + مشغّلات كهرضغطيّة + «**optimal delayed state feedback controller**»، والتأخّر مأخوذٌ من ديناميكا الفريزة نفسها؛ يدّعون «**the largest stability region** … and **the least energy input**» بين المقاربات المماثلة |
+| **Wang et al. 2019**, *IJAMT* | صفيحة رقيقة + لصيقة كهرضغطيّة + «**time-space varying PD**» صراحةً «considering **the time variant of dynamic characteristics and the position limit of sensor and actuator**» |
+| **Du et al. 2022**, *J. Manufacturing Processes* | نفس المجموعة: صفيحة، ثلاثة أنماط، ديناميكا تتغيّر مع موضع الأداة، و**«actuator position is optimized»** |
+| **Sims et al. 2004** | تخميد نشط كهرضغطي لقطعة شغل رقيقة، **مِجَسّات ومشغّلات متلاصقة مقابل غير متلاصقة** |
+| **Li et al. 2021**, *MSSP* | اقتران المغزل–الأداة–قطعة الشغل، **مخطّط استقرار ثلاثيّ الأبعاد على طول مسار الأداة** |
+
+فـ«التغذية الراجعة المتأخّرة على صفيحةٍ مرنة بمشغّلاتٍ موزّعة وديناميكا تتبع
+المسار» **ليست فجوة**. و«تحسين موضع المشغّل» ليس فجوة (Du 2022). و«متحكّم يتغيّر
+مع الموضع» ليس فجوة (Wang 2019).
+
+### 6.2 تهديدٌ مباشر للمرحلتين 7 و8
+
+**Shadkami Ahvazi et al. 2025**, *ISA Transactions* — «Optimal memory-based
+feedback control for time-delayed systems with application to suppressing
+regenerative chatter»:
+
+> «an optimal **delay-dependent memory-based** controller designed using a
+> **general Lyapunov functional** … obtaining optimal control gains by
+> approximating matrix functions with finite delay-dependent matrices using
+> **Linear Matrix Inequalities (LMIs)** … **substantially expanding the
+> stability region, enabling greater axial cutting depths at each spindle
+> speed**.»
+
+أي أنّ **الطريق الذي أعلنتُ انسداده في المرحلتين 7 و8 يُعلَن مسلوكًا وناجحًا في
+2025**، بأداةٍ من الصنف نفسه (LKF + LMI + تأخّر). أحد ثلاثة صحيح: (أ) بنيتُهم
+تختلف عن بنيتي في نقطةٍ حاسمة، أو (ب) نتيجتُهم أضعف ممّا يوحي الملخّص، أو (ج)
+**نتيجتي السلبية خاطئة**. **لا يجوز نشر شيءٍ من المرحلتين 7 و8 قبل قراءة هذه
+الورقة كاملة والفصل بين الاحتمالات الثلاثة.**
+
+### 6.3 «تشويه التجديد» — قراءتي في المرحلة 9 مسبوقة أيضًا
+
+**Mancisidor et al. 2019**, *Mechatronics*: «a delayed feedback that **distorts
+the regenerative effect** and **virtually reduces the overlap factor** between
+successive waves» (خراطة). و**Du et al. 2022**, *JMPT*: «suppresses milling
+chatter **by reducing the regenerative effect**». فالفكرة التي وصفتُها في
+القسم 3 من `09` بأنّ «المتحكّم لا يُضاف إلى الحلقة بل **يُعدّل معامل التجديد
+نفسه**» **منشورة كآليّةٍ معلَنة**، لا استبصارًا جديدًا.
+
+### 6.4 قفلُ السرعة — أقرب سابقةٍ وجدتُها
+
+**Nakano et al. 2026**, *MSSP*: «The suppression effect **strongly depended on
+the excitation frequency**, showing **limited impact at half-integer multiples
+of the tooth-passing frequency**, while a pronounced increase … **as the
+excitation frequency approached an integer multiple**». هذه بنيةٌ مختلفة (إثارة
+قطعة الشغل لتغيير التأخّر، لا تغذية راجعة متأخّرة)، لكنّها **قفلُ سرعةٍ مقيسٌ
+ومُبلَّغ عنه** في الفريزة التجديديّة. فالبند (ب) يضعف مرّةً ثالثة.
+
+### 6.5 ما بقي بعد هذا كلّه
+
+قائمةٌ قصيرة، وكلّ بندٍ فيها **مشروط**:
+
+1. **النتيجة المقيسة على المعادلة (30)**: ضبطٌ عند سرعةٍ واحدة ببروتوكول Du et
+   al. 2024 ⟵ عدم استقرار **عند عمقٍ صفري** في 11 سرعة من 21. لم أجد من يُبلّغ
+   بهذا. **الأقوى الباقي.**
+2. **معيار المحاذاة بوصفه معيارًا تحليليًّا**: Du 2022 يُحسّن **موضع** المشغّل
+   بدلالة سعة النمط؛ ولم أجد من يربط المضاعِف المهيمن بـ‎cos(H, D)‎ و‎cos(D,
+   D_obs)‎ و‎ωτ‎ في **القناة المتأخّرة**. **مشروطٌ باستعلامٍ ثالث لم يُنفَّذ بعد
+   (حدّ معدّل).**
+3. **تكميم حدود أصناف الشهادات** — **معلَّقٌ كلّيًّا** على Shadkami 2025 (6.2)
+   وعلى Bessel–Legendre (5.3).
+
+### 6.6 حكمٌ صريح على المرحلة 0
+
+فحصُ المرحلة 0 لم يكن رقيقًا فحسب؛ كان **مبنيًّا على ادّعاءٍ غير صحيح** عن أداةٍ
+لم تُجرَّب. وكلّ ما بُني على «هذه فجوة» في المستندات 00 و09 يجب أن يُقرأ **مشروطًا**
+إلى أن يكتمل الفحص. الفقرات التي أعلنت فجوةً ثمّ نُقضت **تُركت في مكانها فوقها
+هذا النقض**، لا تُحذف — ليبقى أثر الخطأ ظاهرًا.
+
+### 6.7 الاستعلام الثالث، بعد رفع حدّ المعدّل — وهو يُثقل 6.2
+
+عاد باثنين مهمّين فوق Ramírez 2018 (المعروف من 5.2):
+
+* **Zope, Mohammadpour, Grigoriadis & Franchek (2012)**, «Delay-Dependent Output
+  Feedback Control of Time-Delay **LPV** Systems»: شرط حقيقيّ محدود **معتمد على
+  التأخّر** عبر **دوالّ Lyapunov–Krasovskii معتمدة على البارامتر**، وتوليف ‎H∞‎
+  بتغذيةٍ راجعة **مع تأخّرٍ في ديناميكا المتحكّم**، بصيغة LMI — و«a numerical
+  example based on a **lumped parameter model of a milling process** is finally
+  employed to validate the presented design method».
+
+  أي أنّ **المرشّح (أ) بحرفيّته** — LKF معتمدة على بارامتر جدولة + LMI + توليف
+  بتأخّر + مثال فريزة — منشورٌ منذ **2012**، أي **قبل** Salavati et al. 2019
+  المذكورين في الجدول الأصلي بسبع سنوات.
+
+* **العدد الخاصّ لـIEEE Access (2020)** يؤكّد أنّ خفض التحفّظ في المعايير
+  المعتمدة على التأخّر **حقلٌ ناضج بعُدّةٍ قياسيّة**: «delay-partitioning method,
+  convex combination method, **Wirtinger-based inequality**, and
+  **Bessel–Legendre inequality**». فالمرحلة 8 لم تستعمل **أيًّا** من الأربعة.
+
+**الحصيلة:** ما كان في المرحلة 9 «المرشّح (أ)» ليس فجوةً بأيّ قراءة. والنتيجة
+السلبية للمرحلتين 7 و8 مبنيّة على **أضعف** أدوات الحقل (ينسن وحدها)، بينما
+الأدبيات تعرض أربع أدوات أقوى وتطبيقًا موفّقًا مزعومًا (Shadkami 2025).

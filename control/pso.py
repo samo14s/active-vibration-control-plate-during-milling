@@ -59,14 +59,14 @@ class Design:
         self.b0_nom = b0_nominal(plate, C.N_MODES_DESIGN)
         if kind == 'fdob':
             self.tw, self.tz, self.tr = target_modes(plate, self.targets)
-        if kind in ('hinf', 'musyn', 'lqg', 'mpc'):
+        if kind in ('hinf', 'musyn', 'musyn_td', 'lqg', 'mpc'):
             # Ces trois-la se synthetisent SUR le modele : elles ont besoin du
             # procede lui-meme, pas seulement de son signe de boucle.
             w, zt, Hv, D_obs, _ = plant_vectors(plate, C.N_MODES_DESIGN)
             self.plant = plant_ss(w, zt, D_obs * Hv)
         bd = dict(fopid=C.BOUNDS_FOPID, adrc=C.BOUNDS_ADRC,
                   fdob=C.BOUNDS_FDOB, hinf=C.BOUNDS_HINF,
-                  musyn=C.BOUNDS_MU, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
+                  musyn=C.BOUNDS_MU, musyn_td=C.BOUNDS_MUTD, dvf=C.BOUNDS_DVF, vpa=C.BOUNDS_VPA,
                   lqg=C.BOUNDS_LQG, nmpdob=C.BOUNDS_NMPDOB,
                   mpc=C.BOUNDS_MPC, smc=C.BOUNDS_SMC)[kind]
         self.names = list(bd.keys())
@@ -78,13 +78,18 @@ class Design:
         """[0,1]^n -> dictionnaire de parametres physiques."""
         v = self.lo + np.clip(np.asarray(u, float), 0.0, 1.0) * (self.hi - self.lo)
         p = dict(zip(self.names, v))
-        if self.kind in ('hinf', 'musyn'):
+        if self.kind in ('hinf', 'musyn', 'musyn_td'):
             # Boitier de PONDERATIONS, pas de gains : ces structures n'ont
             # aucune cle Kp/Ki/Kd/lam/mu, donc on sort AVANT de construire le
             # dictionnaire commun — le construire d'abord leverait KeyError.
-            return dict(kw=10.0 ** p['log_kw'], f_w=p['f_w'],
-                        zw=10.0 ** p['log_zw'], w2=10.0 ** p['log_w2'],
-                        eps=10.0 ** p['log_eps'])
+            out = dict(kw=10.0 ** p['log_kw'], f_w=p['f_w'],
+                       zw=10.0 ** p['log_zw'], w2=10.0 ** p['log_w2'],
+                       eps=10.0 ** p['log_eps'])
+            if self.kind == 'musyn_td':
+                # Gains LINEAIRES, pas logarithmiques : ils sont SIGNES, et un
+                # log interdirait le signe negatif — donc la moitie du boitier.
+                out.update(K_Pp=p['K_Pp'], K_Pd=p['K_Pd'])
+            return out
         if self.kind == 'dvf':
             return dict(g=10.0 ** p['log_g'], f_d=p['f_d'])
         if self.kind == 'vpa':
@@ -120,6 +125,21 @@ class Design:
             out['wq'] = 10.0 ** p['log_wq']
             out['alpha'] = p['alpha']
         return out
+
+    def delay_gains(self, u):
+        """(K_Pp, K_Pd) de l'Eq. (30), ou None si la structure n'en a pas.
+
+        Les gains ne sont PAS dans le (A,B,C,D) rendu par `build`, et c'est
+        volontaire : la loi u_d = K_Pp y(t-tau) + K_Pd y'(t-tau) agit sur
+        l'etat RETARDE. Elle vit donc dans A_tau, pas dans A, et aucune
+        realisation d'etat non retardee ne peut la porter. Les forcer dans le
+        correcteur LTI reviendrait a les appliquer SANS retard — c'est-a-dire
+        a evaluer une autre loi que celle du papier.
+        """
+        if self.kind != 'musyn_td':
+            return None
+        p = self.decode(u)
+        return (float(p['K_Pp']), float(p['K_Pd']))
 
     def build(self, u, balance=True):
         """Correcteur, ou None si la SYNTHESE elle-meme echoue.
@@ -167,7 +187,7 @@ class Design:
             core = (K[0], K[1], self.sign_variant * K[2], K[3])
             return series(core, rolloff_ss(C.ROLLOFF_HZ, C.ROLLOFF_ORDER),
                           balance=balance)
-        if self.kind in ('hinf', 'musyn'):
+        if self.kind in ('hinf', 'musyn', 'musyn_td'):
             W1 = bandpass_weight(p['kw'], p['f_w'], p['zw'])
             try:
                 if self.kind == 'hinf':

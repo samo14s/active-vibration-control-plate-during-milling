@@ -30,6 +30,7 @@ import config as C
 from plate_model import plant_vectors, plant_frf
 from fopid import ss_frf
 from closed_loop import period_maps, spectral_radius
+from milling_dynamics import N_TEETH
 
 # Fond logarithmique [Hz]. La borne BASSE compte autant que la finesse : avec
 # une grille demarrant a 3.16 Hz, le FOPID retenu au protocole B affichait
@@ -99,12 +100,27 @@ def nominal_poles(plate, ss, n_modes=None):
 
 
 def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None,
-                      poles=None):
-    """(Ms, Vmax) : marge de module et effort maximal en V/N."""
+                      poles=None, pd=None, tau=None):
+    """(Ms, Vmax) : marge de module et effort maximal en V/N.
+
+    `pd = (K_Pp, K_Pd)` ajoute le CONTROLE A RETARD ACTIF de l'Eq. (30).
+    Cette loi, u_d = K_Pp y(t - tau) + K_Pd y'(t - tau), est parfaitement LTI :
+    sa reponse frequentielle vaut (K_Pp + K_Pd jw) e^{-jw tau}, exactement. Elle
+    passe donc par les MEMES contraintes Ms et effort que toutes les autres
+    structures — le terme retarde n'est pas exempte du protocole commun, il y
+    entre par sa vraie FRF. C'est la condition pour que la reference « robuste
+    + retard » soit comparee au meme prix que le reste.
+    """
     f = _con_grid(plate, poles, n_modes) if f is None else np.asarray(f, float)
     pos = C.POSITIONS_DESIGN if positions is None else positions
     n = C.N_MODES_OBJ if n_modes is None else n_modes
-    K = ss_frf(ss, 2 * np.pi * f)
+    w = 2 * np.pi * f
+    K = ss_frf(ss, w)
+    if pd is not None:
+        if tau is None:
+            raise ValueError('tau est obligatoire avec pd : sans lui le terme '
+                             'retarde serait note sans son retard')
+        K = K + (float(pd[0]) + float(pd[1]) * 1j * w) * np.exp(-1j * w * tau)
     Pu, _ = plant_frf(plate, f, n)
     S = 1.0 / (1.0 - Pu * K)
     Ms = float(np.max(np.abs(S)))
@@ -115,7 +131,7 @@ def frequency_metrics(plate, ss, positions=None, f=None, n_modes=None,
     return Ms, v
 
 
-def floquet_margin(plate, ss, rpm, ap, x_pos, m=None):
+def floquet_margin(plate, ss, rpm, ap, x_pos, m=None, pd=None):
     """log(rho) de la monodromie pour un correcteur LTI donne.
 
     Le calcul est le MEME pendant l'optimisation et pour les resultats
@@ -125,7 +141,7 @@ def floquet_margin(plate, ss, rpm, ap, x_pos, m=None):
     c'est une finesse de DISCRETISATION, pas une precision d'estimateur.
     """
     m = C.M_FLOQUET_PSO if m is None else m
-    maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl=ss, pd=None,
+    maps, _ = period_maps(plate, rpm, ap, x_pos, ctrl=ss, pd=pd,
                           n_modes=C.N_MODES_OBJ, m=m, coeff_mode='time',
                           coeff_scale=C.SIGN_SIM, ae=C.AE)
     rho = spectral_radius(maps, m, maps[0][0].shape[0])
@@ -136,7 +152,7 @@ def floquet_margin(plate, ss, rpm, ap, x_pos, m=None):
 
 # ---------------------------------------------------------------------------
 def evaluate(plate, ss, rpm=None, probes=None, positions=None, m=None,
-             detail=False):
+             detail=False, pd=None):
     if ss is None:
         # `Design.build` rend None quand la SYNTHESE echoue — cas propre aux
         # structures H-infini et mu, ou il existe des ponderations pour
@@ -148,14 +164,14 @@ def evaluate(plate, ss, rpm=None, probes=None, positions=None, m=None,
                     V=np.nan, J=-1e4, max_re=np.nan)
         return (info['J'], info) if detail else info['J']
     try:
-        return _evaluate(plate, ss, rpm, probes, positions, m, detail)
+        return _evaluate(plate, ss, rpm, probes, positions, m, detail, pd)
     except (np.linalg.LinAlgError, ValueError, FloatingPointError):
         info = dict(feasible=False, reason='echec numerique', Ms=np.nan,
                     V=np.nan, J=-1e4, max_re=np.nan)
         return (info['J'], info) if detail else info['J']
 
 
-def _evaluate(plate, ss, rpm, probes, positions, m, detail):
+def _evaluate(plate, ss, rpm, probes, positions, m, detail, pd=None):
     """Note d'un correcteur. Retourne J (a MAXIMISER) et, si demande, le
     detail des contraintes."""
     rpm = C.RPM_DESIGN if rpm is None else rpm
@@ -175,16 +191,37 @@ def _evaluate(plate, ss, rpm, probes, positions, m, detail):
     # la penalite y etait plate (-1000 exactement), donc sans gradient. On ne
     # rejette plus que l'instabilite reelle, avec une penalite graduee.
     ev = nominal_poles(plate, ss)
-    mre = float(np.max(ev.real))
-    info['max_re'] = mre
-    if not np.isfinite(mre) or mre > 0.0:
-        info['reason'] = 'boucle nominale instable'
-        info['J'] = -1e3 - (mre if np.isfinite(mre) else 1e3)
-        return (info['J'], info) if detail else info['J']
+    if pd is None:
+        mre = float(np.max(ev.real))
+        info['max_re'] = mre
+        if not np.isfinite(mre) or mre > 0.0:
+            info['reason'] = 'boucle nominale instable'
+            info['J'] = -1e3 - (mre if np.isfinite(mre) else 1e3)
+            return (info['J'], info) if detail else info['J']
+    else:
+        # AVEC RETARD, LE NOMINAL N'EST PLUS UN PROBLEME AUX VALEURS PROPRES.
+        # La boucle fermee devient x' = A x + A_tau x(t - tau) : une equation
+        # differentielle A RETARD, de spectre infini. `nominal_poles` ne voit
+        # que la partie non retardee et declarerait stable une boucle que le
+        # terme retarde deteriore — exactement le mode de panne que ce
+        # controleur est cense exploiter.
+        #
+        # Le bon test existe deja : le rayon spectral de la monodromie A
+        # PROFONDEUR NULLE, ou le terme regeneratif s'annule et ou il ne reste
+        # que la plaque et la loi retardee. C'est le meme moteur que
+        # l'objectif, donc aucun estimateur supplementaire n'est introduit.
+        g0 = max(floquet_margin(plate, ss, rpm, 0.0, fr * plate.lp, m=m, pd=pd)
+                 for fr in pos)
+        info['max_re'] = float(g0)          # log rho, pas un pole : voir plus haut
+        if not np.isfinite(g0) or g0 > 0.0:
+            info['reason'] = 'boucle nominale instable (retard, log rho > 0)'
+            info['J'] = -1e3 - (g0 if np.isfinite(g0) else 1e3)
+            return (info['J'], info) if detail else info['J']
 
     # -- crible 2/3 : marge de module et effort, sur une grille resolue par
     #    les poles de boucle fermee qu'on vient justement de calculer
-    Ms, V = frequency_metrics(plate, ss, pos, poles=ev)
+    tau = 60.0 / (N_TEETH * rpm)
+    Ms, V = frequency_metrics(plate, ss, pos, poles=ev, pd=pd, tau=tau)
     info['Ms'], info['V'] = Ms, V
     pen = 0.0
     if Ms > C.MS_MAX:
@@ -197,7 +234,8 @@ def _evaluate(plate, ss, rpm, probes, positions, m, detail):
         return (info['J'], info) if detail else info['J']
 
     # -- objectif : estimation de a_p,lim par interpolation du croisement
-    margins = [max(floquet_margin(plate, ss, rpm, ap, fr * plate.lp, m=m)
+    margins = [max(floquet_margin(plate, ss, rpm, ap, fr * plate.lp, m=m,
+                                  pd=pd)
                    for fr in pos) for ap in probes]
     J = _ap_from_margins(np.asarray(probes, float),
                          np.asarray(margins, float)) * 1e3      # en mm

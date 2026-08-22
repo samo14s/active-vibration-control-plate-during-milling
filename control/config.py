@@ -280,6 +280,31 @@ BOUNDS_MU = dict(BOUNDS_HINF)
 N_DK = 3
 
 
+# Boitier du CONTROLE A RETARD ACTIF combine (Du et al. 2024, Eq. 30).
+#
+# La reference du papier n'est PAS mu-synthese seule : c'est « robust combined
+# time delay control », soit le correcteur robuste ET un controleur a retard
+# actif. Le modele du depot portait deja le terme (closed_loop.build_matrices,
+# argument `pd`), mais aucun appelant ne le reglait — tous passaient pd=None.
+# La reference etait donc INCOMPLETE : on comparait a mu seul.
+#
+# La loi est  u_d(t) = K_Pp y(t - tau) + K_Pd y'(t - tau)  avec tau LE MEME
+# retard regeneratif que la coupe (periode de dent) : c'est tout l'interet du
+# procede, le retard n'est pas subi mais EXPLOITE. tau n'est donc pas un
+# parametre libre, il vient de la vitesse de broche.
+#
+# Cinq ponderations de mu + deux gains de retard = sept parametres, comme
+# l'ADRC-FOPID et les deux observateurs : les structures a sept parametres
+# restent comparables a dimension egale.
+#
+# Les bornes des gains sont SIGNEES et symetriques : contrairement a un gain
+# de boucle direct, rien n'impose le signe d'une contre-reaction retardee — un
+# retard d'une periode de dent peut aussi bien remettre en phase qu'inverser.
+# Les fixer positifs interdirait la moitie du boitier sans raison.
+BOUNDS_MUTD = dict(BOUNDS_MU)
+BOUNDS_MUTD.update(K_Pp=(-2.0e5, 2.0e5), K_Pd=(-3.0e2, 3.0e2))
+
+
 # ---------------------------------------------------------------------------
 # Boitiers des trois references classiques (control/classical.py).
 #

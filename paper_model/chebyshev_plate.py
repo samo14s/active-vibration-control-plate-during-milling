@@ -249,6 +249,20 @@ class ChebyshevPlate:
             self._modal()
 
         # H_Pe = m_pz * int_patch (Y_xx + Y_zz) dA  (equiv. Eq. 14)
+        #
+        # POURQUOI m_pz ET NON LE C_P0 DE L'EQ. (15), qui est pourtant juste :
+        # a cause de eta, et de rien d'autre. L'Eq. (15) decrit une section
+        # composite a collage PARFAIT — toute la deformation de la pastille
+        # passe dans la plaque. eta mesure ce que la couche de colle, de
+        # raideur de cisaillement finie (G = 1 GPa, 30 um, modele de shear lag
+        # de Crawley & de Luis), en perd : ici 0.886. C'est un terme physique
+        # que l'Eq. (15) ne porte pas ; les deux formes ne sont donc pas
+        # concurrentes, l'une a un terme de plus.
+        #
+        # Et elles se rejoignent : -0.033387 N/V pour l'Eq. (15) imprimee
+        # contre -0.035316 ici, 5.5 % d'ecart entre deux derivations sans rien
+        # de commun. C'est une CORROBORATION. Tant que l'Eq. (15) etait mal
+        # transcrite (1.2 N/V), ce choix ressemblait a un contournement.
         m_pz = -eta * EPe * d31 * (self.bp + hPa) / (2 * (1 - nuPe))
         lap = Aj * (cx**2 * np.kron(vx[2], vz[0])
                     + cz**2 * np.kron(vx[0], vz[2]))

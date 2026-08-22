@@ -194,3 +194,47 @@ def sle(plate, rpm, ap, x_pos, **kw):
 # de decrochage : l'etablir demande un modele a retard dependant de l'etat
 # (Niu, Ding, Zhu & Ding, IJMS 2021), que ce depot ne possede pas. Il indique ou
 # le modele actuel cesse d'etre defendable, pas ce qui s'y passe reellement.
+
+
+# ---------------------------------------------------------------------------
+def nominal_control(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2,
+                    m=192, fz=FZ_NOM, ae=AE_NOM, coeff_scale=1.0):
+    """Tension d'actionneur exigee par la SOLUTION NOMINALE elle-meme.
+
+    Grandeur que ce depot n'avait jamais calculee, et qui n'existe que parce
+    que la phase precedente a construit la solution nominale.
+
+    Un correcteur de PERTURBATION (Pyragas, en y(t) - y(t-tau)) demande ZERO
+    volt sur la solution nominale : il ne s'active que sur le broutement.
+    L'Eq. (30) de Du et al. est un terme retarde pur, donc sur la solution
+    nominale il vaut K_Pp y(t) + K_Pd y'(t) : il tire du courant PENDANT TOUTE
+    LA COUPE, sans qu'il y ait le moindre broutement a supprimer.
+
+    Ce n'est pas une subtilite comptable. Le budget est V_MAX ; ce qui part
+    dans la solution nominale n'est plus disponible pour la perturbation. On
+    rend donc u_nom (crete et efficace) ET sa part dans V_MAX.
+    """
+    r = periodic_response(plate, rpm, ap, x_pos, ctrl=ctrl, pd=pd,
+                          n_modes=n_modes, m=m, fz=fz, ae=ae,
+                          coeff_scale=coeff_scale)
+    D_obs = np.asarray(plate.D_row(plate.lp, plate.hp), float)[:n_modes]
+    q = r['x'][:, :n_modes]
+    qd = r['x'][:, n_modes:2 * n_modes]
+    y = q @ D_obs
+    yd = qd @ D_obs
+    u_pd = np.zeros(m)
+    if pd is not None:
+        u_pd = float(pd[0]) * y + float(pd[1]) * yd      # le retard tombe
+    u_rob = np.zeros(m)
+    if ctrl is not None:
+        Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(z, float)) for z in ctrl]
+        nc = Bc.shape[0] if Bc.size else 0
+        if nc:
+            xc = r['x'][:, 2 * n_modes:]
+            u_rob = xc @ Cc.ravel()
+        u_rob = u_rob + float(Dc[0, 0]) * y
+    u = u_rob + u_pd
+    f = lambda v: dict(peak=float(np.max(np.abs(v))),
+                       rms=float(np.sqrt(np.mean(v**2))))
+    return dict(u=u, total=f(u), rob=f(u_rob), pd=f(u_pd),
+                sle=r['sle'], pv=r['pv'], t=r['t'])

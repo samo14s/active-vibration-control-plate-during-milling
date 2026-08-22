@@ -112,3 +112,60 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------
+# L'OBJECTIF CONJOINT, sous une forme utilisable par une optimisation
+# ---------------------------------------------------------------------------
+def profondeur_atteignable(plate, rpm, x_pos, ctrl=None, pd=None,
+                           tol=TOL_SLE, ap_max=AP_MAX, m_sle=96, m_flo=40,
+                           n_modes=2, n_bis=14):
+    """Plus grande profondeur qui satisfait les TROIS conditions a la fois.
+
+    On ne calcule PAS trois plafonds separement pour en prendre le minimum :
+    on bissecte une seule fois sur un predicat conjoint
+
+        stable(a_p)  ET  |SLE(a_p)| <= tol  ET  crete-a-crete(a_p) <= f_z
+
+    C'est exact (aucune extrapolation) et cela coute une bissection, pas trois.
+    L'ordre des tests est choisi pour sortir tot : les deux tests de qualite
+    partagent UNE reponse nominale, devenue tres bon marche depuis que la
+    structure invariante de A + A_tau est exploitee, et le test de stabilite —
+    de loin le plus cher — n'est fait qu'en dernier.
+    """
+    from closed_loop import is_stable
+
+    def ok(ap):
+        r = periodic_response(plate, rpm, ap, x_pos, ctrl=ctrl, pd=pd,
+                              n_modes=n_modes, m=m_sle,
+                              coeff_scale=C.SIGN_SIM)
+        if abs(r['sle']) > tol or r['pv'] > r['fz']:
+            return False
+        # is_stable rend un COUPLE (stable, rho), pas un booleen. Ecrire
+        # « return is_stable(...) » rendait un tuple non vide, donc TOUJOURS
+        # vrai : le test de stabilite n'etait jamais applique. Le defaut etait
+        # masque par les correcteurs, chez qui la validite lie de toute facon ;
+        # seule la boucle ouverte — le seul cas ou la stabilite lie — l'a
+        # revele, en rendant 0.128 mm (le plafond de validite) alors que rho
+        # y vaut 1.018.
+        stable, _ = is_stable(plate, rpm, ap, x_pos, ctrl=ctrl, pd=pd,
+                              n_modes=n_modes, m=m_flo,
+                              coeff_scale=C.SIGN_SIM)
+        return bool(stable)
+
+    lo, hi = 1e-6, ap_max
+    if ok(hi):
+        return hi, True
+    if not ok(lo):
+        return 0.0, False
+    for _ in range(n_bis):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    a = 0.5 * (lo + hi)
+    # Garde-fou : on ne rend jamais une profondeur ou rho depasse 1. Le defaut
+    # ci-dessus aurait pu passer inapercu dans une optimisation entiere.
+    st, rho = is_stable(plate, rpm, lo, x_pos, ctrl=ctrl, pd=pd,
+                        n_modes=n_modes, m=m_flo, coeff_scale=C.SIGN_SIM)
+    if not st:
+        raise AssertionError(f'profondeur rendue instable : rho = {rho:.6f}')
+    return a, False

@@ -111,28 +111,46 @@ def periodic_response(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2,
     a4 = coeff_scale * alpha4_series(rpm, ap, plate.hp, m, ae=ae,
                                      midpoint=True)[1]
 
-    A0, At0 = build_matrices(plate, DtD, D_obs, H, a4[0], ctrl, pd, n_modes)
-    nx = A0.shape[0]
-    b = np.zeros((m, nx))
-    Phi = np.empty((m, nx, nx))
-    G = np.empty((m, nx))
+    # --- LA MATRICE NOMINALE EST INVARIANTE, ET C'EST STRUCTUREL --------
+    # A porte -(K0 + a4 D'D) et A_tau porte +a4 D'D : sur la solution nominale
+    # (x(t-tau) = x(t)) leur somme ne contient PLUS alpha4 du tout. Il ne reste
+    # que -K0, -C0 et les termes de correcteur, tous constants. Seul le CORSAGE
+    # b(t) = alpha4(t) f_z D est periodique.
+    #
+    # Consequence pratique : UN SEUL expm, calcule une fois, au lieu de m. La
+    # premiere version en faisait m — environ 2 s par reponse, ce qui rendait
+    # l'objectif conjoint trop cher pour une optimisation. On verifie
+    # l'invariance au lieu de la supposer : si un jour un terme dependant du
+    # temps entre dans A ou A_tau, l'assertion tombe au lieu de rendre un
+    # resultat faux en silence.
     Ms = []
+    b = np.zeros((m, 0))
     for k in range(m):
         A, At = build_matrices(plate, DtD, D_obs, H, a4[k], ctrl, pd, n_modes)
-        Ms.append(A + At)                       # le retard tombe : x(t-tau)=x(t)
-        b[k, n_modes:2 * n_modes] = a4[k] * fz * D
+        Ms.append(A + At)
+    M0 = Ms[0]
+    ecart = max(float(np.max(np.abs(Mk - M0))) for Mk in Ms)
+    ech = max(1.0, float(np.max(np.abs(M0))))
+    if ecart / ech > 1e-10:
+        raise AssertionError(
+            f'A + A_tau depend du temps (ecart relatif {ecart/ech:.2e}) : '
+            f'alpha4 ne se simplifie plus, le chemin rapide est invalide.')
+    nx = M0.shape[0]
+    b = np.zeros((m, nx))
     for k in range(m):
-        P0, J1, J2 = step_integrals(Ms[k], h)
-        Phi[k] = P0
-        db = b[(k + 1) % m] - b[k]              # corsage interpole lineairement
-        G[k] = J1 @ b[k] + (J2 / h) @ db
+        b[k, n_modes:2 * n_modes] = a4[k] * fz * D
 
-    # x_{k+1} = Phi_k x_k + G_k ; periodicite x_m = x_0.
-    Mon = np.eye(nx)
+    P0, J1, J2 = step_integrals(M0, h)          # une seule fois
+    J2h = J2 / h
+    G = np.empty((m, nx))
+    for k in range(m):
+        G[k] = J1 @ b[k] + J2h @ (b[(k + 1) % m] - b[k])
+
+    # x_{k+1} = P0 x_k + G_k ; periodicite x_m = x_0.
+    Mon = np.linalg.matrix_power(P0, m)
     acc = np.zeros(nx)
     for k in range(m):
-        acc = Phi[k] @ acc + G[k]
-        Mon = Phi[k] @ Mon
+        acc = P0 @ acc + G[k]
     S = np.eye(nx) - Mon
     cond = float(np.linalg.cond(S))
     x0 = np.linalg.solve(S, acc)
@@ -140,7 +158,7 @@ def periodic_response(plate, rpm, ap, x_pos, ctrl=None, pd=None, n_modes=2,
     x = np.empty((m + 1, nx))
     x[0] = x0
     for k in range(m):
-        x[k + 1] = Phi[k] @ x[k] + G[k]
+        x[k + 1] = P0 @ x[k] + G[k]
     q = x[:m, :n_modes]
     w = q @ D
     t_grid = (np.arange(m) + 0.5) * h

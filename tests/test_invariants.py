@@ -997,3 +997,48 @@ def test_la_fusion_de_robustesse_ne_perd_pas_de_colonne():
         M = np.asarray(d['limits'], float)
         assert list(M[:, got.index('ancienne')]) == [1.0, 2.0]
         assert list(M[:, got.index('neuve')]) == [3.0, 4.0]
+
+
+def test_nominal_max_re_redonne_exactement_l_ancienne_voie():
+    """Le detour par `nominal_max_re` ne doit deplacer aucun chiffre.
+
+    Le tableau des poles a coupe nulle assemblait sa matrice avec
+    `closed_loop.build_matrices` ; il passe desormais par
+    `objective.nominal_max_re`, pour que la meme colonne affichee par
+    `run_compare` vienne du meme code et pour que le terme retarde soit traite
+    par la monodromie plutot que par des valeurs propres qui ne le decrivent
+    pas. Une refonte pareille doit etre un NO-OP sur les structures sans
+    retard — sinon elle change en silence une colonne deja publiee.
+
+    Le test compare les deux assemblages sur toutes les structures stockees,
+    boucle ouverte comprise. La boucle ouverte est le cas qui a effectivement
+    casse : `nominal_poles` n'acceptait pas ss = None, et le tableau levait
+    TypeError sur sa premiere colonne.
+    """
+    import numpy as np
+    import config as C
+    from plate_model import build_plate
+    from closed_loop import build_matrices
+    from objective import nominal_max_re
+    from stored_ctrl import discover
+
+    plate = build_plate(C.PATCH_SIDE, freqs=C.F_NOMINAL)
+    n = C.N_MODES
+
+    def par_build_matrices(ss):
+        D = plate.D_row(0.5 * plate.lp, plate.hp)[:n]
+        D_obs = plate.D_row(plate.lp, plate.hp)[:n]
+        H = np.asarray(plate.H_Pe_modal, float)[:n]
+        A, _ = build_matrices(plate, np.outer(D, D), D_obs, H, 0.0, ss,
+                              None, n)
+        return float(np.max(np.real(np.linalg.eigvals(A))))
+
+    cas = [('boucle ouverte', None)]
+    cas += [(k, ss) for k, (ss, pd) in discover().items() if pd is None]
+    assert len(cas) > 1, 'aucun correcteur stocke : lancer run_pso.py'
+
+    for k, ss in cas:
+        a = par_build_matrices(ss)
+        b = nominal_max_re(plate, ss, None, n_modes=n)
+        assert abs(a - b) <= 1e-9 * max(1.0, abs(a)), (
+            f'{k} : build_matrices {a:.9g} contre nominal_max_re {b:.9g}')

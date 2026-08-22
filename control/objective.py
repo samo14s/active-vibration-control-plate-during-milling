@@ -86,7 +86,17 @@ def nominal_poles(plate, ss, n_modes=None):
     """
     n = C.N_MODES_OBJ if n_modes is None else n_modes
     w, z, H, D_obs, _ = plant_vectors(plate, n)
-    Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(m, float)) for m in ss]
+    if ss is None:
+        # BOUCLE OUVERTE. Meme convention que closed_loop.build_matrices, qui
+        # accepte ctrl=None depuis toujours : sans elle, la ligne « boucle
+        # ouverte » du tableau des poles leve TypeError — et c'est exactement
+        # ce qu'elle a fait des que `robust_poles` est passe par ici.
+        Ac = np.zeros((0, 0))
+        Bc = np.zeros((0, 1))
+        Cc = np.zeros((1, 0))
+        Dc = np.zeros((1, 1))
+    else:
+        Ac, Bc, Cc, Dc = [np.atleast_2d(np.asarray(m, float)) for m in ss]
     nc = Ac.shape[0]
     A = np.zeros((2 * n + nc, 2 * n + nc))
     A[:n, n:2 * n] = np.eye(n)

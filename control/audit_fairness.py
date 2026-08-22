@@ -69,7 +69,15 @@ def main():
                     plate, sign_loop, sign_variant=var, targets=tg)
         x = d[f'{kind}__x']
         par = Dg.decode(x)
-        J, info = evaluate(plate, Dg.build(x), detail=True)
+        # `pd` EST OBLIGATOIRE ICI. Sans lui ce controle croise notait
+        # `musyn_td` sur son seul correcteur mu — J = +0.2245 la ou la
+        # campagne avait stocke +0.4483 — et c'est le controle meme qui
+        # garantit que toutes les structures sont notees par le MEME code.
+        # Il a fait son travail : les onze autres reproduisaient leur J au
+        # chiffre pres, la douzieme non, et l'ecart d'un facteur deux etait
+        # l'aveu que la moitie de sa loi n'etait pas evaluee.
+        J, info = evaluate(plate, Dg.build(x), detail=True,
+                           pd=Dg.delay_gains(x))
         rows[kind] = dict(x=x, par=par, J=J, info=info, D=Dg,
                           n_eval=int(d[f'{kind}__n_eval']),
                           seeds=d[f'{kind}__seeds'],

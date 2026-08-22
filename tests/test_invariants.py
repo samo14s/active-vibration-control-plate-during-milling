@@ -1042,3 +1042,55 @@ def test_nominal_max_re_redonne_exactement_l_ancienne_voie():
         b = nominal_max_re(plate, ss, None, n_modes=n)
         assert abs(a - b) <= 1e-9 * max(1.0, abs(a)), (
             f'{k} : build_matrices {a:.9g} contre nominal_max_re {b:.9g}')
+
+
+def test_toute_notation_d_un_correcteur_construit_passe_les_gains_de_retard():
+    """`evaluate(..., D.build(x))` sans `pd` note la moitie d'une structure.
+
+    L'invariant precedent visait le RECHARGEMENT depuis le fichier — les
+    quatre champs A, B, C, D. Il ne pouvait rien voir ici : `audit_fairness`
+    ne recharge pas un correcteur, il le RECONSTRUIT depuis le vecteur de
+    parametres, puis le note. Sa regle etait donc trop etroite d'exactement
+    un cas, et ce cas s'est produit : le controle croise « chaque structure
+    notee par le meme code » rendait pour `musyn_td` J = +0.2245 quand la
+    campagne avait stocke +0.4483. Les onze autres reproduisaient leur J au
+    chiffre pres ; l'ecart d'un facteur deux etait l'aveu que la moitie de la
+    loi n'etait pas evaluee — et il tombait dans le controle meme qui garantit
+    l'egalite de traitement entre structures.
+
+    La regle porte donc desormais sur l'APPEL : tout `evaluate(...)` dont un
+    argument contient `.build(` doit aussi recevoir `pd`. C'est verifiable a
+    la lecture du source, sans executer quoi que ce soit, et cela couvre le
+    prochain script qui reconstruira un correcteur pour le noter.
+    """
+    import ast
+    import glob
+    import os
+
+    ici = os.path.dirname(os.path.abspath(__file__))
+    fautifs = []
+    for chemin in sorted(glob.glob(os.path.join(ici, '..', 'control',
+                                                '*.py'))):
+        src = open(chemin).read()
+        try:
+            arbre = ast.parse(src)
+        except SyntaxError:                       # pragma: no cover
+            continue
+        for n in ast.walk(arbre):
+            if not isinstance(n, ast.Call):
+                continue
+            f = n.func
+            nom = f.attr if isinstance(f, ast.Attribute) else getattr(
+                f, 'id', None)
+            if nom not in ('evaluate', '_evaluate'):
+                continue
+            args = ' '.join(ast.unparse(a) for a in n.args)
+            if '.build(' not in args:
+                continue
+            if not any(k.arg == 'pd' for k in n.keywords):
+                fautifs.append(f'{os.path.basename(chemin)}:{n.lineno}')
+    assert not fautifs, (
+        'notent un correcteur reconstruit sans ses gains de retard : '
+        + ', '.join(fautifs)
+        + ' — ajouter pd=D.delay_gains(x), qui rend None pour les structures '
+          'sans terme retarde')

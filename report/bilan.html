@@ -1,0 +1,522 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+:root { --ink:#16202b; --mut:#5b6b7c; --line:#d7dee6; --acc:#1a3f8f;
+        --acc2:#16a085; }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", sans-serif; direction: rtl;
+       text-align: right; color: var(--ink); font-size: 10.2pt;
+       line-height: 1.75; margin: 0; }
+h1,h2,h3,h4 { line-height: 1.45; page-break-after: avoid; color: var(--acc); }
+h1 { font-size: 17pt; border-bottom: 2px solid var(--acc); padding-bottom: 5px;
+     margin-top: 0; }
+h2 { font-size: 13.5pt; margin-top: 22px; border-bottom: 1px solid var(--line);
+     padding-bottom: 3px; }
+h3 { font-size: 11.5pt; margin-top: 16px; color: #24303d; }
+h4 { font-size: 10.5pt; margin-top: 12px; color: #35414e; }
+p { margin: 7px 0; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.6pt;
+       background: #f2f5f8; padding: 1px 3px; border-radius: 3px;
+       direction: ltr; unicode-bidi: embed; }
+pre { background: #f2f5f8; border: 1px solid var(--line); border-radius: 4px;
+      padding: 8px 10px; overflow-x: auto; direction: ltr; text-align: left;
+      page-break-inside: avoid; }
+pre code { background: none; font-size: 8.2pt; line-height: 1.5; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0;
+        font-size: 9pt; page-break-inside: avoid; }
+th, td { border: 1px solid var(--line); padding: 4px 7px; text-align: right; }
+th { background: #eef2f7; font-weight: bold; }
+tr:nth-child(even) td { background: #fafbfc; }
+blockquote { border-right: 3px solid var(--acc2); background: #f4fbf9;
+             margin: 10px 0; padding: 7px 12px; color: #26404a;
+             page-break-inside: avoid; }
+figure { margin: 14px 0 18px; page-break-inside: avoid; text-align: center; }
+figure img { max-width: 100%; border: 1px solid var(--line); border-radius: 3px; }
+figcaption { font-size: 8.6pt; color: var(--mut); margin-top: 5px;
+             text-align: right; line-height: 1.5; }
+hr { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
+a { color: var(--acc); text-decoration: none; }
+.cover { height: 247mm; display: flex; flex-direction: column;
+         justify-content: center; text-align: center; page-break-after: always; }
+.cover .t { font-size: 24pt; font-weight: bold; color: var(--acc);
+            line-height: 1.5; }
+.cover .s { font-size: 12.5pt; color: var(--mut); margin-top: 18px;
+            line-height: 1.9; }
+.cover .ref { font-size: 10pt; color: var(--ink); margin-top: 30px;
+              direction: ltr; text-align: center; line-height: 1.7; }
+.cover .meta { font-size: 9.5pt; color: var(--mut); margin-top: 34px; }
+.cover .box { border: 1px solid var(--line); border-radius: 6px;
+              padding: 14px 18px; margin: 26px auto 0; max-width: 150mm;
+              background: #f7f9fb; font-size: 9.6pt; text-align: right;
+              line-height: 1.8; }
+.part { page-break-before: always; }
+.kv { font-size: 9.4pt; }
+</style></head><body>
+<div class="cover">
+  <div class="t">هل لدينا مساهمة؟</div>
+  <div class="s">حصيلةٌ علميّة للعمل الحالي<br/>
+    التحكّم النشط في اهتزاز صفيحةٍ رقيقة أثناء الفريزة</div>
+  <div class="box">
+    <b>لماذا هذا التقرير.</b> أربع أفكارٍ اقتُرحت في المراحل الأولى،
+    و<b>سقطت أربعتها أمام الأدبيات</b>. وما بقي هو ثلاثة قياساتٍ لم تكن
+    مخطّطة، ظهرت أثناء محاولة إثبات الأفكار الساقطة. ولأنّ الحكم على
+    المساهمة لا يصحّ إلّا بمعرفة ما سقط ولماذا، يعرض هذا التقرير السلسلة
+    كاملةً — <b>بما فيها الأخطاء المنهجيّة التي وقعتُ فيها وصُحّحت</b>،
+    وأهمّها أنّ ثلاث مراحل أنتجت أحكامًا سلبيّة بأداةٍ لم يُتحقّق قطّ من
+    أنّها تنجح على شيء.
+  </div>
+  <div class="meta">مستودع <code>active-vibration-control-plate-during-milling</code>
+    — الفرع <code>claude/adrc-fopid-comparison-woigyf</code></div>
+</div>
+<div class="part"><h2>0. السؤال الذي يجيب عنه هذا التقرير</h2>
+<blockquote>
+<p><strong>هل لدينا فكرةٌ ومساهمةٌ قابلتان للنشر، أم لا؟</strong></p>
+</blockquote>
+<p>الجواب المختصر: <strong>نعم، ولكن ليست الفكرة التي بدأنا بها.</strong> كلّ الأفكار الأربع
+التي اقترحتُها في المراحل الأولى <strong>سقطت أمام الأدبيات</strong>، وما بقي هو شيءٌ لم
+نخطّط له: <strong>ثلاثة قياسات</strong> ظهرت أثناء محاولة إثبات الأفكار الساقطة.</p>
+<p>وهذا التقرير يعرض السلسلة كاملةً — بما فيها الأخطاء التي وقعتُ فيها وصُحّحت —
+لأنّ الحكم على المساهمة لا يصحّ إلّا بمعرفة ما سقط ولماذا.</p>
+<hr />
+<h2>1. نقطة الانطلاق: ما أُعيد إنتاجه</h2>
+<p>الورقة المرجع <strong>Du, Han, Cui, Wang, Wang &amp; Wang (2024)</strong>, «Robust combined time
+delay control for milling chatter suppression of flexible workpieces»,
+<em>International Journal of Mechanical Sciences</em> (22 استشهادًا). متحكّمها المركّب
+= متحكّم متين + <strong>متحكّم تأخّرٍ نشط</strong> بالمعادلة (30):</p>
+<pre><code>u_d(t) = K_Pp · y(t − τ) + K_Pd · ẏ(t − τ) ,     τ = 60 / (N_T · rpm)
+</code></pre>
+<p>أُعيد بناء النموذج كاملًا في هذا المستودع (صفيحة تشيبيشيف–ريتز، معادلة الفريزة
+التفاضليّة المتأخّرة رقم 13، فلوكيه بالتقطيع الكامل، مونودرومي بأرنولدي،
+تنصيفٌ لحدّ العمق).</p>
+<p><strong>النتيجة عند سرعة التصميم أُعيد إنتاجها:</strong> تحسّنٌ ‎+5.6 %‎ على العمق المُنصَّف
+بفلوكيه، و‎+5.3 %‎ زمنيًّا — <strong>ومحرّكان مستقلّان يتّفقان على القيمة وعلى مقدار
+التحسّن</strong>.</p>
+<hr />
+<h2>2. القياس الأوّل: <strong>قفلُ السرعة</strong></h2>
+<p>المتحكّم نفسه، مضبوطًا <strong>ببروتوكول الورقة نفسه</strong> عند سرعة تصميمٍ واحدة، ثمّ
+مُقيَّمًا على 21 سرعة في المدى ‎3000–7000 tr/min‎:</p>
+<table>
+<thead>
+<tr>
+<th>القياس</th>
+<th>النتيجة</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>سرعات <strong>غير مستقرّة عند عمق قطعٍ صفري</strong></td>
+<td><strong>11 من 21</strong> (‎ρ = 1.03–1.16‎)</td>
+</tr>
+<tr>
+<td>النافذة المفيدة</td>
+<td>‎3200–5600‎، وفيها <strong>ثقبٌ</strong> عند ‎3800–4200‎</td>
+</tr>
+<tr>
+<td>‎μ‎ و‎H∞‎ عند السرعات نفسها</td>
+<td><strong>مستقرّان عند كلّ سرعة</strong></td>
+</tr>
+</tbody>
+</table>
+<p>«غير مستقرّ عند عمقٍ صفري» تعني: <strong>البنية غير المقطوعة</strong> تفقد استقرارها بفعل
+المتحكّم وحده. لا قطع، لا تجديد، لا رجفان — المتحكّم يُهيّج.</p>
+<p>والسبب مقروءٌ تحليليًّا: طور الحدّ المتأخّر ‎(K_Pp + K_Pd jω)·e^{−jωτ}‎ <strong>يدور
+مع ‎τ‎</strong>، فمكسبان يُخمِدان عند ‎τ‎ يُهيّجان عند آخر.</p>
+<p><strong>والورقة لا تُبلّغ بما يحدث خارج سرعة التصميم، ولا تُقدّم ضمانًا هناك.</strong></p>
+<hr />
+<h2>3. الفحص الأدبي: أربع أفكار سقطت</h2>
+<p>القاعدة المعتمدة في هذا العمل: <strong>لا يُدّعى جِدّةٌ قبل فحص الأدبيات.</strong> وقد
+أُجري الفحص على ثلاث مراحل، والثانية والثالثة <strong>نقضتا الأولى</strong>.</p>
+<h3>3.1 اعترافٌ منهجيّ</h3>
+<p>فحصُ المرحلة 0 استند إلى <strong>بحثٍ واحد</strong> على Consensus، وسجّلتُ المحرّك خطأً
+بوصفه «مستنفَدًا». <strong>لم يكن مستنفَدًا.</strong> فالفحص الذي بُنيت عليه قراراتٌ كثيرة
+قام على محرّكٍ <strong>لم أستعمله</strong>. هذا خطأٌ جسيم، وكلّ ما بُني على «هذه فجوة» في
+تلك المرحلة كان <strong>مشروطًا دون أن أقول ذلك</strong>.</p>
+<h3>3.2 ما وجده الفحص المكتمل</h3>
+<table>
+<thead>
+<tr>
+<th>الفكرة المقترحة</th>
+<th>مَن سبق إليها</th>
+<th>الحكم</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>توليف تغذيةٍ راجعة <strong>متأخّرة</strong> لتشكيل حدّ الرجفان</td>
+<td><strong>van Dijk, van de Wouw &amp; Nijmeijer 2014/15</strong>, IJRNC 25(17):3495–3514 — «we propose to employ <strong>delayed output feedback</strong> (Pyragas)»</td>
+<td><strong>مسبوق</strong></td>
+</tr>
+<tr>
+<td><strong>شهادةُ استقرارٍ على فترة سرعات</strong></td>
+<td>van Dijk، هدفهم المعلن: ضمانٌ «in an <strong>a priori defined range of spindle speeds</strong> n and depth of cut a_p»، ‎+120 %‎ على ‎[36000, 38000]‎</td>
+<td><strong>مسبوق</strong></td>
+</tr>
+<tr>
+<td><strong>الضمان على مجموعة</strong> بالطريق الطيفيّ</td>
+<td><strong>Borgioli, Hajdu, Insperger, Stépán &amp; Michiels 2020</strong>, IJNME 121(16) — نصفٌ قُطريّ شبه طيفيّ لمُشغِّل المونودرومي</td>
+<td><strong>مسبوق بأداةٍ أمتن</strong></td>
+</tr>
+<tr>
+<td><strong>LKF + LMI + تأخّر + بارامتر جدولة + مثال فريزة</strong></td>
+<td><strong>Zope, Mohammadpour, Grigoriadis &amp; Franchek 2012</strong></td>
+<td><strong>مسبوق منذ 2012</strong></td>
+</tr>
+<tr>
+<td>«المتحكّم <strong>يُعدّل معامل التجديد</strong>»</td>
+<td><strong>Mancisidor et al. 2019</strong> («distorts the regenerative effect»)؛ <strong>Du et al. 2022</strong> («by reducing the regenerative effect»)</td>
+<td><strong>مسبوق كآليّةٍ معلَنة</strong></td>
+</tr>
+<tr>
+<td>تغذية متأخّرة على <strong>جدارٍ رقيق بالكهرضغطي</strong></td>
+<td><strong>Dong et al. 2023</strong>, J. Vib. Control — «optimal <strong>delayed state feedback</strong>»، «largest stability region … least energy input»</td>
+<td><strong>مسبوق</strong></td>
+</tr>
+<tr>
+<td>متحكّمٌ <strong>متغيّرٌ مع الموضع</strong> لصفيحة رقيقة</td>
+<td><strong>Wang et al. 2019</strong>, IJAMT — «<strong>time-space varying PD</strong>»</td>
+<td><strong>مسبوق</strong></td>
+</tr>
+<tr>
+<td><strong>تحسين موضع المشغّل</strong> على الصفيحة</td>
+<td><strong>Du et al. 2022</strong>, J. Manuf. Processes — «actuator position is <strong>optimized</strong>»</td>
+<td><strong>مسبوق، ومن مجموعة الورقة نفسها</strong></td>
+</tr>
+<tr>
+<td><strong>قفلُ سرعة</strong> في الفريزة التجديديّة</td>
+<td><strong>Nakano et al. 2026</strong>, MSSP — «limited impact at <strong>half-integer multiples</strong> … pronounced near an <strong>integer multiple</strong>»</td>
+<td><strong>سابقةٌ ببنيةٍ مختلفة</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>وأخطر ما وجده الفحص:</strong> حكمُ المرحلتين 7 و8 عندنا — «Lyapunov محافظٌ هنا» —
+<strong>منشورٌ منذ 2014 كتبريرٍ منهجيّ</strong> عند van Dijk: «the resulting optimization
+problems are in the form of <strong>bilinear matrix inequalities</strong> … Moreover,
+generally, <strong>the application of a Lyapunov approach leads to conservative
+results</strong>». فما نملكه ليس الحكم، بل <strong>تكميمه</strong>.</p>
+<hr />
+<h2>4. النتائج النظريّة (المراحل 1–8)</h2>
+<h3>4.1 الاختزال الزمنيّ</h3>
+<p>بالتغيير ‎s = t/τ‎ يصير التأخّر 1 والدور 1، <strong>والمصفوفات مستقلّة عن السرعة</strong>،
+فتدخل السرعة <strong>سكالرًا أفينيًّا</strong> وحدها. مؤكَّدٌ عدديًّا إلى ‎10⁻¹⁵‎.</p>
+<h3>4.2 مثالٌ مضادّ: فحصُ الطرفين <strong>لا يكفي</strong></h3>
+<p>«إذا استقرّ النظام عند طرفَي فترةٍ من السرعات فهو مستقرّ داخلها» — <strong>باطل</strong>.
+جيبٌ غير مستقرّ عند ‎3950–4325‎ داخل فترةٍ ‎ρ‎ عند طرفيها ‎0.75‎ و‎0.87‎.</p>
+<p>نتيجةٌ صغيرة وحادّة، وتفسّر <strong>لماذا</strong> يلزم ضمانٌ على فترة بدل فحصٍ عند نقاط.</p>
+<h3>4.3 حدودُ أصنافٍ كاملة من الشهادات</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>النتيجة</th>
+<th>الرقم</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>‎P‎ ثابتة مستحيلة برهانًا</strong> فوق عمقٍ يُنصَّف</td>
+<td>لـLQG: العتبة ‎0.394 mm‎ مقابل حدٍّ حقيقي ‎0.759 mm‎ ⟵ <strong>‎48 %‎ من المدى لا يُشهَد له أبدًا</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>كلّ معيارٍ مستقلّ عن التأخّر مستحيل</strong> في المنطقة المفصّصة</td>
+<td>عند 5600 الكتلُ المتأخّرة <strong>أصغر</strong> ممّا عند 5400 (‎0.3437‎ مقابل ‎0.3522‎) والنظام غير مستقرّ هناك ومستقرّ هنا. <strong>الحجم لا يقرّر، الطور يقرّر</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>ينسن تُلغي مكسبها بالضبط حين ‎τ‎ هو الدور</strong></td>
+<td>الحدّ النافع بـ‎(1/m)F‎ والضارّ بـ‎m·ETA‎، و‎‖Fξ‖ ~ m‖ETAξ‖‎</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>التحدّب ينجو عند الخطوة ويموت عند الدور</strong></td>
+<td>‎2.8×10⁻³‎ مقابل ‎1.06‎</td>
+</tr>
+<tr>
+<td>5</td>
+<td>الشهادة الفاصليّة <strong>بلا تجديد</strong> تبلغ سقفها</td>
+<td><strong>‎99.8 %‎</strong> من الحدّ الحقيقي</td>
+</tr>
+</tbody>
+</table>
+<p><strong>وما لم يُبنَ:</strong> شهادةٌ فاصليّة <strong>مع</strong> التجديد. ثلاث طرقٍ جُرّبت وسقطت لأسبابٍ
+مقيسة. فأيّ عنوانٍ من نوع «LMI لاستقرار الفريزة المتأخّرة» <strong>غير مسنود</strong>.</p>
+<hr />
+<h2>5. المرحلة 10: من حكمٍ ثنائيّ إلى <strong>قياس</strong></h2>
+<h3>5.1 تصحيحان يسبقان كلّ رقم</h3>
+<p><strong>(أ) الاختبار الثنائيّ كان عقيمًا.</strong> «هل تُجدي الدالّة؟» لا يقول شيئًا <strong>حين
+يسقط الطرفان</strong> — وهو ما حدث عند كلّ ‎m‎ من 8 إلى 200. استُبدل به قياسٌ متّصل
+بمعامل ‎β‎ يُضخّم <strong>القناة المتأخّرة وحدها</strong>:</p>
+<pre><code>x_{k+1} = A_k x_k + β ( B_k x_{k−m} + C_k x_{k−m+1} )
+</code></pre>
+<p>وعتبتان عليه: <strong>‎β_cert‎</strong> آخرُ قيمةٍ تجتازها الـLMI، و<strong>‎β_vrai‎</strong> حيث يبلغ
+‎ρ‎ الواحد.</p>
+<p><strong>(ب) كان ينقص شاهدٌ إيجابيّ — وهذه ثغرةٌ منهجيّة استمرّت ثلاث مراحل.</strong>
+أشغلتُ أحكامًا سلبيّة بالدالّة نفسها <strong>دون التحقّق قطّ من أنّها تنجح على شيء</strong>.
+واختبارٌ لم يقل «نعم» أبدًا <strong>لا يُبرهن شيئًا</strong> حين يقول «لا» — فقد يكون معطوبًا.</p>
+<p>عولج عند ‎β = 0‎ (لا تأخّر البتّة)، حيث <strong>يجب</strong> أن تنجح:</p>
+<table>
+<thead>
+<tr>
+<th>النظام</th>
+<th>الشهادة عند ‎β = 0‎</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>المتوسَّط</td>
+<td><strong>FAISABLE</strong> ‎(−1.1×10⁻²)‎ في ‎0.3‎ ث</td>
+</tr>
+<tr>
+<td><strong>الدوريّ</strong>، بـ‎P_k‎ دوريّة</td>
+<td><strong>FAISABLE</strong> في ‎15‎ ث</td>
+</tr>
+</tbody>
+</table>
+<p><strong>وهذا يُصادق بأثرٍ رجعيّ على المرحلتين 7 و8:</strong> انعدامُ الجدوى هناك كان يحتمل
+«مسألةً عصيّة» أو «منصّةً معطوبة»، والثاني <strong>مستبعَدٌ الآن بالقياس لا بالثقة</strong>.</p>
+<h3>5.2 ‎ρ‎ مسطّحٌ ثمّ ينهار</h3>
+<p>النظام المتوسَّط، ‎m = 24‎، ‎a_p = 0.60 mm‎، ‎5200 tr/min‎:</p>
+<table>
+<thead>
+<tr>
+<th>‎β‎</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>‎ρ‎</td>
+<td>0.939672</td>
+<td>0.939671</td>
+<td>0.939670</td>
+<td><strong>1.412209</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>تضخيمُ القناة المتأخّرة الضِعفَ يُحرّك المضاعِف المهيمن بـ‎2×10⁻⁶‎</strong>، ثمّ يعبر
+الواحدَ عند ‎2.3362‎. <strong>لا انتقال تدريجيّ.</strong> هذا وجهُ <strong>اللانظاميّة</strong> الذي
+شخّصته المرحلة 7 نوعيًّا، الآن بعتبةٍ مرقّمة.</p>
+<h3>5.3 <strong>نسبة التحفّظ = 2.94</strong> — رقمُ جملةٍ بقيت بلا رقم منذ 2014</h3>
+<table>
+<thead>
+<tr>
+<th>النظام</th>
+<th>‎β_cert‎</th>
+<th>‎β_vrai‎</th>
+<th>النسبة</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>المتوسَّط</strong></td>
+<td><strong>0.7955</strong></td>
+<td><strong>2.3362</strong></td>
+<td><strong>2.94</strong></td>
+</tr>
+<tr>
+<td>الدوريّ</td>
+<td><em>(قيد القياس، ‎&lt; 1‎)</em></td>
+<td><strong>1.8969</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>صنفُ Krasovskii المعتمد على التأخّر بينسن <strong>يشهد لثلث ما يحتمله النظام</strong>.</p>
+<p>وجملة van Dijk et al. 2014 هي عندهم <strong>تبريرٌ في سطر بلا رقم</strong>؛ <strong>هذا رقمُها</strong>،
+على المسألة نفسها، وعلى <strong>النظام الذي يعمل عليه Shadkami et al. 2025 بالذات</strong>.</p>
+<blockquote>
+<p><strong>تحفّظٌ لازم:</strong> ‎β‎ يضخّم <strong>كامل</strong> ‎A_τ‎ — حدَّ القطع ‎a₄DᵀD‎ <strong>وحدَّ التحكّم
+المتأخّر معًا</strong>. فـ‎β_vrai = 2.34‎ <strong>ليس</strong> «‎2.34‎ ضعف عمق القطع»، ولا يجوز
+كتابته هكذا.</p>
+</blockquote>
+<h3>5.4 <strong>التوسيط يُخفي ‎23 %‎ من الهشاشة</strong> — بلا أيّ دالّة ليابونوف</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>‎ρ(β = 1)‎</th>
+<th>‎β_vrai‎</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>المتوسَّط</td>
+<td>0.939671</td>
+<td><strong>2.3362</strong></td>
+</tr>
+<tr>
+<td>الدوريّ</td>
+<td>0.939647</td>
+<td><strong>1.8969</strong></td>
+</tr>
+</tbody>
+</table>
+<p>النظامان <strong>متطابقان عمليًّا عند ‎β = 1‎</strong> (فرقٌ ‎2.4×10⁻⁵‎)، ثمّ <strong>يفترقان مع
+التضخيم</strong>: الدوريّ ينهار عند ‎1.90‎ والمتوسَّط يصمد إلى ‎2.34‎.</p>
+<p><strong>وهذه النتيجة مستقلّةٌ عن أيّ دالّة ليابونوف</strong> — مقارنةٌ طيفيّة صرفة.</p>
+<h3>5.5 لا يُنقذه تنقيح التقطيع</h3>
+<p>النظام المتوسَّط، ‎β = 1‎: الإشارة <strong>موجبةٌ عند كلّ ‎m‎</strong> من 16 إلى 200. فـ‎β = 1‎
+خارجُ مقدور هذا الصنف <strong>مهما نُقّح التقطيع</strong> — متّسقٌ مع ‎β_cert = 0.7955 &lt; 1‎.</p>
+<blockquote>
+<p><strong>خطأٌ وقعتُ فيه وصُحّح:</strong> قرأتُ تسلسلَ ‎+2.9×10⁴ → +1.1 → +0.33‎ بوصفه
+«اتّجاهًا نازلًا نحو الجدوى». <strong>باطل.</strong> ‎λ_max(M)‎ <strong>غير قابل للمقارنة بين
+‎m‎ مختلفة</strong>: ‎M‎ تحوي حدًّا بـ‎m·Z‎ وآخر بـ‎(1/m)·Z‎، والمتغيّرات مقيَّدةٌ من
+<strong>أسفل فقط</strong> (‎P ⪰ I‎)، فالحلّال حرٌّ في مقياسها. <strong>الإشارة وحدها لها معنى.</strong>
+و‎m = 32‎ ردّ ‎+3.2‎ فنقض القراءة.</p>
+</blockquote>
+<hr />
+<h2>6. المرحلة 11: Shadkami et al. 2025 مقروءةً كاملة</h2>
+<p><strong>Optimal memory-based feedback control for time-delayed systems with
+application to suppressing regenerative chatter.</strong> Shadkami Ahvazi, Mohammadi
+&amp; Mohammadi, <em>ISA Transactions</em> <strong>166</strong> (2025) 208–218,
+<code>10.1016/j.isatra.2025.07.037</code>.</p>
+<p>كانت <strong>أخطر تهديدٍ</strong> للمراحل 7 و8: يُعلنون توليفًا بـLMI من دالّة ليابونوف
+عامّة يوسّع منطقة الاستقرار «<strong>at each spindle speed</strong>». وقد قرأناها كاملةً
+(11 صفحة)، فتبيّنت <strong>ثلاثة فوارق بنيويّة</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>عندهم</th>
+<th>عندنا</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>نموذج التوليف <strong>ثابتٌ زمنيًّا</strong>: الملحق A يعرّف ‎Γ_d = ∫₀^τ Σᵢ Γ_{d,i} dt‎ — <strong>متوسَّطٌ على الدور</strong>؛ والمبرهنة 3.1 مُصرَّحٌ فيها: «A <strong>linear time invariant (LTI)</strong> time-delay system»</td>
+<td>نموذجٌ <strong>دوريّ</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>المكسب <strong>يُعاد حسابه لكلّ سرعة</strong>: يطبعون مكسبين مختلفين عند 2000 و5000 tr/min، بفارق <strong>2.5 إلى 8 أضعاف</strong></td>
+<td>مكسبٌ <strong>واحد</strong> يُضبط مرّةً ويُثبَّت</td>
+</tr>
+<tr>
+<td>3</td>
+<td>‎u = [u_x, u_y]ᵀ‎ تُضاف <strong>في إحداثيّات قوّة القطع نفسها</strong>، بتغذيةٍ <strong>بالحالة الكاملة</strong></td>
+<td>لصيقة كهرضغطيّة باتّجاه ‎H‎، تغذيةٌ <strong>بالخرج</strong>، و‎cos(D, D_obs) = 0.046…0.163‎ في <strong>أربعة مواضع من ستّة</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>فالتهديد لا يصمد.</strong> بل تنقلب ورقتهم حجّةً لنا: <strong>إعادةُ الضبط لكلّ سرعة هي
+بذاتها دليلٌ على الحاجة إليها</strong> — ولو كفى مكسبٌ واحد لما تغيّر بهذا القدر.</p>
+<p><strong>وفيهم ثغرةٌ منهجيّة:</strong> يُوَلِّفون على النموذج <strong>المتوسَّط</strong> ثمّ <strong>يقيّمون على
+الدوريّ</strong> (نصف-تقطيع + فلوكيه). فمخطّطهم <strong>فحصٌ تجريبيّ لا شهادة</strong> — والبند 5.4
+يقيس ثمن هذه القفزة: <strong>‎23 %‎</strong>.</p>
+<hr />
+<h2>7. الحكم: هل لدينا مساهمة؟</h2>
+<h3>7.1 ما <strong>سقط</strong> ولا يجوز تقديمه</h3>
+<ul>
+<li>«متحكّمٌ جديد» — مسبوقٌ في ستّ مكوّنات.</li>
+<li>«شهادةٌ على فترة سرعات» — van Dijk 2014، وBorgioli 2020، وZope 2012.</li>
+<li>«متحكّمٌ معتمد على الموضع/البارامتر» — Wang 2019، Du 2022.</li>
+<li>«المتحكّم يُعدّل معامل التجديد» — Mancisidor 2019، Du 2022.</li>
+</ul>
+<h3>7.2 ما <strong>صمد</strong>، مرتَّبًا بقوّته</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>النتيجة</th>
+<th>حالتها</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td><strong>نسبة التحفّظ ‎2.94‎</strong>: صنفُ ينسن يشهد لثلث ما يحتمله النظام</td>
+<td><strong>مقيسة، ومؤمَّنة بشاهدين إيجابيّين</strong></td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><strong>التوسيط يُخفي ‎23 %‎ من الهشاشة</strong> — ولا يحتاج دالّة ليابونوف أصلًا</td>
+<td><strong>مقيسة</strong></td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td><strong>قفلُ السرعة</strong>: 11 من 21 سرعة غير مستقرّة <strong>عند عمقٍ صفري</strong> ببروتوكول Du</td>
+<td><strong>مقيسة</strong>؛ أقربُ منافسٍ (Shadkami) <strong>يعيد الضبط لكلّ سرعة فلا يختبرها</strong></td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td><strong>المثال المضادّ</strong>: فحصُ الطرفين لا يكفي</td>
+<td><strong>مقيس</strong></td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td><strong>معيار المحاذاة</strong>: ‎cos(H, D)‎، ‎cos(D, D_obs)‎، ‎ωτ‎</td>
+<td><strong>غير مشتقّ بعد</strong>؛ مسنودٌ بمرجعٍ متباين (Shadkami عند الطرف المحاذي تمامًا)</td>
+</tr>
+</tbody>
+</table>
+<h3>7.3 الورقة التي تسندها الأدلّة</h3>
+<blockquote>
+<p><strong>«التحكّم بالتأخّر النشط في الفريزة: ما الذي يضمنه فعلًا؟
+تكميمُ تحفّظ الشهادة، وثمنُ التوسيط، وحدُّ الضبط أحاديّ السرعة.»</strong></p>
+</blockquote>
+<p><strong>ليست ورقة متحكّمٍ جديد. هي ورقة <em>حدود</em> — وهذا نوعٌ مشروع ومنشور.</strong></p>
+<p>مساهمتها الثلاثيّة: <strong>رقمٌ</strong> لجملةٍ يستشهد بها الحقل منذ 2014 بلا رقم؛
+<strong>ثمنٌ مقيس</strong> لقفزةٍ منهجيّة شائعة (التوليف على المتوسَّط والتقييم على الدوريّ)؛
+و<strong>حدٌّ مقيس</strong> لبروتوكولٍ منشورٍ مستشهَدٍ به.</p>
+<h3>7.4 تقديرٌ صريح للقوّة</h3>
+<p><strong>متوسّطة.</strong> ليست ورقة اختراق. ولها ثلاثة مواطن ضعف يجب إعلانها:</p>
+<ol>
+<li><strong>نتائج سلبيّة</strong>، وهي أصعب نشرًا.</li>
+<li><strong>بلا تجارب</strong> — كلّ ما سبق على نموذج، ويجب أن يقوله العنوان الفرعيّ.</li>
+<li><strong>الأرقام على نقطة تشغيلٍ واحدة</strong> (‎5200 tr/min‎، ‎a_p = 0.60 mm‎، نمطان،
+   ‎m = 24‎). لا يجوز تعميمها قبل مسحٍ على السرعات والأعماق.</li>
+</ol>
+<hr />
+<h2>8. ما يلزم لإكمالها</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>العمل</th>
+<th>الحالة</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>‎β_cert‎ للنظام <strong>الدوريّ</strong> ⟵ نسبتا التحفّظ جنبًا إلى جنب</td>
+<td><strong>قيد التشغيل</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Bessel–Legendre ‎N = 1‎</strong> (Wirtinger) بالدالّة المُوسَّعة</td>
+<td><strong>قيد التشغيل</strong> — التزامٌ من Ramírez et al. 2018، الذين لا يقفون عند ينسن</td>
+</tr>
+<tr>
+<td>3</td>
+<td>تعميم ‎β_cert‎ و‎β_vrai‎ على <strong>مسح سرعاتٍ وأعماق</strong></td>
+<td>لم يُبدأ — <strong>شرطٌ لأيّ تعميم</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>اشتقاق <strong>معيار المحاذاة</strong> واختباره على مسح السرعات</td>
+<td>لم يُبدأ</td>
+</tr>
+<tr>
+<td>5</td>
+<td>اختبار النتيجة التصميميّة: تحريك اللصيقة/المِجَسّ ⟵ هل تتقلّص ‎11/21‎؟</td>
+<td>لم يُبدأ</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>9. القيود، مُعلَنة</h2>
+<ul>
+<li><strong>لا تجارب.</strong> كلّ رقمٍ هنا من نموذجٍ عدديّ.</li>
+<li><strong>نقطةُ تشغيلٍ واحدة</strong> لأرقام المرحلة 10.</li>
+<li><strong>‎β‎ يضخّم القناة المتأخّرة بمجموعها</strong>، قطعًا وتحكّمًا.</li>
+<li><strong>الفحص الأدبي غيرُ مغلق</strong>: ورقة 2026 «spindle speed mapped» (Sheffield)
+  وWang et al. 2015 <strong>ما زالتا غير مقروءتين</strong> — ScienceDirect وWhite Rose
+  <strong>محجوبان بسياسة سَيْر الشبكة</strong> في بيئة العمل هذه. لم يُلتفّ على المنع.</li>
+<li><strong>عدمُ العثور ليس دليل العدم.</strong> كلّ «مسبوق» أعلاه مسنودٌ بمرجع؛ ولا «جديد»
+  أعلاه مسنودٌ بشيء — ولذلك لا يرد في هذا التقرير <strong>ادّعاء جِدّةٍ قاطع واحد</strong>.</li>
+</ul></div></body></html>

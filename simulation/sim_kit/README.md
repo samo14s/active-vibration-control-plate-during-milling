@@ -56,6 +56,12 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
   trois modes n'en reproduit que deux.
 * **Patch au coin inferieur gauche, capteur au coin oppose.** Deplacer l'un ou
   l'autre change le classement modal et invalide toute comparaison anterieure.
+* **Patch VERTICAL 20 x 60 mm au coin inferieur gauche.** Confirme par la photo
+  de la Fig. 11 de l'article (l'experience modale qui a produit la Fig. 12) :
+  rectangle plus haut que large, montant du bord encastre. La Section 5 le dit
+  « right lower corner of the plate back » et la Section 4.1 « left lower
+  corner » : c'est le meme coin vu des deux faces (Fig. 17, « Actuator is in
+  the back »).
 * **Convention de signe des efforts = Eq. (13) de l'article.** L'article se
   contredit entre son Eq. (13) et l'enchainement de ses Eqs. (1)(2)(5)(10)(A.4).
   Les deux conventions donnent des diagrammes de lobes quasiment
@@ -67,14 +73,21 @@ f, G = sim.receptance(lambda dt, tau: MonCtrl(dt))     # reponse frequentielle
 
 | grandeur | valeur sans controle |
 |---|---|
-| limite de stabilite a 4900 tr/min | 0.0605 mm |
-| RMS a 0.05 mm, 4900 tr/min | 0.2216 um |
-| cout multi-vitesses a 0.25 mm | 11.144 |
-| receptance au pic 536 Hz | 480.7 um/N |
+| limite de stabilite a 4900 tr/min | 0.0489 mm |
+| RMS a 0.05 mm, 4900 tr/min | 0.2250 um |
+| cout multi-vitesses a 0.25 mm | 12.000 (instable partout) |
+| receptance au pic 536 Hz | 487.5 um/N |
 | frequence de broutement simulee | 524.6 Hz (voir la note ci-dessous) |
 
-Un cout de 12.000 signifie instable aux cinq vitesses. Un correcteur utile doit
-descendre nettement sous 11.14 ; les valeurs de l'ordre de 1 sont atteignables.
+Un cout de 12.000 signifie instable aux cinq vitesses -- et c'est bien le cas
+sans controle a 0.25 mm, la limite libre valant 0.049 mm. Un correcteur utile
+doit donc descendre nettement sous 12 ; les valeurs de l'ordre de 1 sont
+atteignables.
+
+Ces reperes ont BAISSE d'environ 19 % avec la correction du critere de
+stabilite (defaut F12) : l'ancien critere, un rapport de deux demi-fenetres,
+declarait stables des coupes qui divergent plus tard. Toute valeur anterieure a
+cette correction est optimiste et n'est pas comparable a celles-ci.
 
 Un correcteur qui affiche mieux que ces reperes **sans avoir rien change au
 modele** doit etre suspecte avant d'etre publie.
@@ -103,15 +116,33 @@ tension. Elles ne valident **pas son niveau**.
 
 Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
 (1 um/N), vaut 43.8 um/N ; une plaque de Kirchhoff aux dimensions du Tableau 1
-donne 6.90 um/N par resolution statique EF exacte. Le facteur 6.36 ne vient pas
+donne 6.92 um/N par resolution statique EF exacte. Le facteur 6.34 ne vient pas
 du modele : les memes matrices reproduisent les cinq frequences a 2 % pres, et
-la souplesse est leur inverse — une raideur 6.36 fois trop faible donnerait
+la souplesse est leur inverse — une raideur 6.34 fois trop faible donnerait
 f1 = 214 Hz au lieu de 540 Hz. Les lobes de stabilite de l'article (Fig. 13)
 s'accordent d'ailleurs avec la valeur raide. L'echelle en dB de la Fig. 12 est
 donc inexploitable.
 
+La REPARTITION MODALE de `H_Pe` etait fausse elle aussi, et c'est un ecart
+distinct du niveau : les elements finis placent un seul creux de transfert a
+2818 Hz la ou la Fig. 12(b) en montre quatre (788 / 1493 / 2913 / 3609 Hz),
+soit 14.9 dB RMS d'ecart sur toute la bande. Aucun facteur scalaire ne peut le
+corriger — il se simplifie dans les rapports de residus qui fixent les zeros —
+et aucune position de patch, orientation, position de capteur, ponderation de
+couplage, couche de colle, couplage membrane-flexion ni souplesse
+d'encastrement testee n'y parvient (`verification/09` a `verification/12`).
+
+Ce n'est donc pas un mecanisme manquant : c'est une grandeur non identifiee. La
+repartition est desormais IDENTIFIEE sur la Fig. 12(b) elle-meme — ses poles
+sont les frequences mesurees, ses zeros les creux mesures, et poles + zeros
+fixent les residus a une constante pres (constante `H_IDENT`,
+`verification/14`). Le modele rend maintenant 787 / 1495 / 2907 / 3613 Hz,
+soit 0.19 % d'erreur au pire et 6.2 dB RMS — le niveau d'accord de la
+Fig. 12(a), qui etait deja juge acceptable. `SimBase(coupling='fem')` restitue
+la repartition elements finis pour comparaison.
+
 Consequence directe : **le niveau de `H_Pe` n'est pas calibre**, puisqu'il ne
-pourrait l'etre que par le rapport des deux courbes. Les 480.7 um/N du tableau
+pourrait l'etre que par le rapport des deux courbes. Les 487.5 um/N du tableau
 ci-dessus sont une sortie de modele, pas une mesure. Toute performance en
 boucle fermee herite de cette incertitude ; annoncez-la en balayant le gain :
 

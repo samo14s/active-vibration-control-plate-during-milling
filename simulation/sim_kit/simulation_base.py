@@ -17,13 +17,13 @@ la FORME de la reponse, PAS son niveau : voir la mise en garde plus bas.
 
 CE QUI EST VALIDE
   * cinq resonances mesurees   : 536.4 / 1071.8 / 2778.6 / 3358.7 / 4122.6 Hz
-    predites par le modele EF  : +0.9 / +2.0 / -1.5 / +1.2 / +1.4 %
+    predites par le modele EF  : +0.4 / +1.5 / -1.9 / +0.8 / +0.7 %
   * quatre antiresonances mesurees : 734 / 2161 / 3001 / 3805 Hz
-    modele a cinq modes calibre    : 732 / 2122 / 3006 / 3943 Hz
-    ecarts                         : +0.3 / -1.8 / +0.2 / +3.6 %
+    modele a cinq modes calibre    : 731 / 2123 / 3009 / 3938 Hz
+    ecarts                         : +0.5 / -1.8 / +0.3 / +3.5 %
     (comparaison faite sur la reception AU POINT DE FRAPPE, residus D_obs^2 :
      c'est la grandeur mesuree en Fig. 12a, marteau et capteur au meme coin.
-     Un modele a TROIS modes ne donne que deux antiresonances -- 742 / 2408 Hz,
+     Un modele a TROIS modes ne donne que deux antiresonances -- 741 / 2407 Hz,
      dont la seconde est fausse de 11 % : d'ou les cinq modes retenus.)
   * les deux premiers modes sont QUASI A EGALITE pour la criticite : par la
     theorie moyennee d'ordre 0 sur ce meme modele, mode 1 seul -> 0.0495 mm,
@@ -36,24 +36,32 @@ CE QUI EST VALIDE
         sont les deux plus grandes raies.
     La valeur de 1135 Hz publiee correspond au mode que la theorie lineaire de
     ce modele designe elle aussi : elle n'est pas refutable ici.
+  * la REPARTITION MODALE du couplage piezoelectrique, par les quatre creux de
+    la Fig. 12(b) -- le transfert tension -> capteur :
+      mesures : 788 / 1493 / 2913 / 3609 Hz
+      modele  : 787 / 1495 / 2907 / 3613 Hz   (ecart max 0.19 %)
+    Elle n'est pas PREDITE par les elements finis, elle y est IDENTIFIEE : le
+    H_Pe elements finis ne produit qu'un seul creux, a 2818 Hz, et s'ecarte de
+    14.3 dB RMS de la Fig. 12(b) contre 5.7 dB pour la version identifiee.
+    Voir la constante H_IDENT plus bas et verification/14. SimBase(coupling=
+    'fem') restitue la repartition elements finis pour comparaison.
 
 CE QUI N'EST PAS VALIDE : LE NIVEAU ABSOLU, ET DONC LE GAIN ACTIONNEUR
   Le plateau basse frequence de la Fig. 12(a), lu avec la reference annoncee
   (1 um/N), vaut 43.8 um/N. Une plaque de Kirchhoff aux dimensions du Tableau 1
-  donne 6.90 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.36.
+  donne 6.92 um/N (resolution statique EF exacte, tous ddl) : un facteur 6.34.
   Ce n'est pas une erreur du modele. Les memes matrices K et M reproduisent les
   CINQ frequences mesurees a 2 % pres ; or la souplesse est K^-1. Une raideur
-  6.36 fois trop faible donnerait f1 = 540/sqrt(6.36) = 214 Hz, pas 540 Hz. En
+  6.34 fois trop faible donnerait f1 = 540/sqrt(6.34) = 214 Hz, pas 540 Hz. En
   termes modaux, 43.8 um/N exigerait D_obs[0]^2 = 504 alors que la normalisation
   en masse du premier mode plafonne ce carre vers 45 : un facteur 11 sur une
   quantite qui n'a aucune liberte. De plus les propres lobes de stabilite de
   l'article (Fig. 13, 0.03-0.05 mm) s'accordent avec la valeur RAIDE ; une
-  plaque 6.36 fois plus souple donnerait ~0.008 mm.
+  plaque 6.34 fois plus souple donnerait ~0.008 mm.
 
   Conclusion : l'echelle en dB de la Fig. 12 n'est pas exploitable. Comme
   H_Pe ne peut se calibrer que par le rapport des deux courbes, LE NIVEAU DE
-  H_Pe RESTE NON VALIDE. Seule sa FORME l'est (repartition des creux, cf.
-  model_v2.check_patch_position). Toute conclusion de performance en boucle
+  H_Pe RESTE NON VALIDE. Toute conclusion de performance en boucle
   fermee -- limite de passe atteinte, tension necessaire -- herite donc de
   cette incertitude, et doit etre accompagnee d'un balayage :
 
@@ -79,6 +87,11 @@ leve une exception si un ecart depasse la tolerance.
   * amortissements modaux mesures (Tableau 4) : 0.31 / 0.17 / 0.27 / 0.56 / 0.35 %.
   * patch QDA60-20-0.7 dans le coin inferieur gauche, capteur au coin superieur
     droit oppose.
+  * patch COLLE, pas soude : couche d'epoxy G_adh = 1 GPa, t_adh = 30 um, d'ou
+    1/Gamma = 0.874 mm et un rendement de transfert eta = 0.886 qui reduit a la
+    fois le raidissement composite (58.3 % -> 51.7 %) et H_Pe (-11.4 %). Ni
+    G_adh ni t_adh ne sont donnes par l'article ; les annuler restitue le
+    collage parfait supposé auparavant.
 
 --------------------------------------------------------------------------------
 3. INTERFACE CORRECTEUR
@@ -142,10 +155,54 @@ F_MEASURED = [536.4, 1071.8, 2778.6, 3358.7, 4122.6]   # Hz, numerisees
 # de commande a 3359 Hz.
 ZETA_MODES = [0.0031, 0.0017, 0.0027, 0.0056, 0.0035]
 
+# Le patch n'est pas soude a la plaque : il est COLLE. La couche de colle ne
+# transmet le cisaillement que sur ~1/Gamma depuis chaque bord, d'ou un
+# rendement de transfert eta < 1 qui reduit A LA FOIS le raidissement composite
+# et le couplage piezoelectrique (plate_model.shear_lag_efficiency, theorie de
+# Crawley & de Luis 1987). Ni G_adh ni t_adh ne sont donnes par l'article :
+# valeurs d'un epoxy structural courant. Les mettre a None restitue le collage
+# parfait suppose auparavant.
 PATCH = dict(x1=0.0, x2=0.020, z1=0.0, z2=0.060,
-             d31=175e-12, thickness=0.7e-3, E=63e9, nu=0.35)
+             d31=175e-12, thickness=0.7e-3, E=63e9, nu=0.35,
+             G_adh=1.0e9, t_adh=30e-6)
 SENSOR_XZ = (0.100, 0.080)                            # coin superieur droit
 V_MAX = 150.0                                         # V, borne amplificateur
+
+# ----------------------------------------------------------------------------
+# Repartition modale du couplage piezoelectrique, IDENTIFIEE sur la Fig. 12(b).
+#
+# H_Pe etait la seule grandeur modale encore prise telle quelle des elements
+# finis : les frequences sont recalees sur la mesure (F_MEASURED), les
+# amortissements sont mesures (Tableau 4), et D_obs est valide par la Fig. 12(a)
+# -- une FRF au point d'impact, dont les residus valent D_i^2 -- a 30 % pres sur
+# les cinq modes. H_Pe, lui, n'avait jamais ete confronte a une mesure, et ne la
+# reproduisait pas :
+#
+#     creux de la Fig. 12(b)   mesure : 788 / 1493 / 2913 / 3609 Hz
+#                              EF     : 2825 Hz, et lui seul
+#     ecart courbe a courbe    EF     : 14.3 dB RMS
+#
+# La Fig. 12(b) donne pourtant exactement ce qu'il faut. G_b(w) = somme_i
+# r_i/(w_i^2 - w^2 + ...) avec r_i = D_obs,i * H_Pe,i : ses poles sont les
+# frequences mesurees, ses zeros sont les creux mesures, et poles + zeros
+# determinent les r_i A UNE CONSTANTE PRES. Les valeurs ci-dessous sont ces
+# r_i/r_1, calcules exactement (racines du polynome), pas ajustes :
+#
+#     r_i/r_1 identifie      1   0.959   1.646   3.728   10.111  -> 5.7 dB RMS
+#     r_i/r_1 elements finis 1  -1.538   0.164   3.625   -4.035  -> 14.3 dB
+#
+# Ils tombent dans la region de confiance d'un ajustement LIBRE des cinq residus
+# (16 motifs de signe x 60 graines, toutes les solutions a moins de 0.5 dB du
+# meilleur) sur leurs cinq composantes ; la lecture concurrente, qui ne compte
+# que les trois creux profonds et rejette le 4e hors bande, en sort sur quatre
+# composantes sur cinq. Voir verification/14_coupling_identification.py.
+#
+# Le NIVEAU n'est PAS identifie (defaut F9 : le niveau absolu des figures de
+# l'article n'est pas exploitable) ; set_identified_coupling conserve donc la
+# norme du couplage EF et ne corrige que la repartition. `gain_H` balaie le
+# niveau, comme avant.
+H_IDENT = (1.0, 0.95943, 1.64565, 3.72754, 10.11124)
+COUPLING = 'ident'                                    # 'ident' | 'fem'
 
 N_TEETH, D_TOOL = 3, 0.010                            # fraise 3 dents, 10 mm
 HELIX = np.deg2rad(35.0)
@@ -156,15 +213,50 @@ STEPS_PER_TOOTH = 82                                  # dt = tau/82, NON MODIFIA
 
 SPEEDS_DEFAULT = [3000, 4200, 4900, 6000, 7200]       # tr/min
 AP_TEST = 0.25e-3                                     # m, profondeur de reference
-GROWTH_MAX = 1.15                                     # garde de croissance
+GROWTH_MAX = 1.15                                     # garde de croissance (F12)
+
+# Critere de stabilite : TAUX DE CROISSANCE, et non rapport de deux demi-fenetres.
+#
+# Defaut F12. Le critere d'origine comparait la RMS de la seconde moitie de la
+# fenetre a celle de la premiere et declarait instable si le rapport depassait
+# GROWTH_MAX. Ce test est AVEUGLE a un mode qui croit lentement sous une reponse
+# forcee plus grande que lui : le rapport reste proche de 1 tant que le mode
+# instable n'a pas rattrape le regime force. Sur 144 cas dont la verite a ete
+# etablie en rejouant chaque simulation jusqu'a T = 1.20 s, il se trompait 16
+# fois -- et TOUJOURS dans le meme sens, en declarant STABLE ce qui diverge
+# ensuite. Exemple : ESO sous H x2.00 a 6000 tr/min, ap = 0.10 mm : rapport
+# 1.070 donc "stable" a T = 0.28 s, et 22.6 um a T = 1.20 s.
+#
+# On ajuste desormais une DROITE sur log(RMS par blocs) le long de la fenetre,
+# ce qui donne un taux de croissance exponentiel sigma [1/s]. C'est une PENTE :
+# elle voit un mode lent bien avant qu'il ne domine l'amplitude. Sur la meme
+# base de 144 cas, sigma <= SIGMA_MAX se trompe 3 fois, et les trois erreurs
+# sont CONSERVATRICES (declare instable ce qui tenait) : l'erreur bascule du
+# cote sur.
+#
+# SIGMA_MAX = 0.05 /s : un mode qui croit de moins de 5 % par seconde est tenu
+# pour stable. Sur l'horizon T_LIMIT cela fait 1.4 % de croissance, sous la
+# resolution de l'essai. La valeur est au milieu du palier [0.034, 0.060] ou le
+# nombre d'erreurs est minimal. Voir verification/15_stability_criterion.py.
+SIGMA_MAX = 0.05                                      # 1/s
 
 # Horizons d'integration. CE SONT DES CONSTANTES DE MESURE, pas des details :
 # pres du seuil, allonger T abaisse la limite mesuree (~20 % entre 0.30 et
 # 0.40 s), parce qu'une instabilite lente a besoin de temps pour se voir. Une
 # limite de stabilite n'a donc de sens qu'accompagnee de son horizon. Tout
 # resultat destine a etre compare a un autre doit utiliser LE MEME.
-T_RUN = 0.20        # essai unique et cout multi-vitesses
-T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
+# UN SEUL horizon (F12). Il y en avait deux, 0.20 s pour les essais courts et
+# 0.28 s pour la bissection, et cet ecart a produit un resultat faux : le crible
+# de robustesse de retune.py, qui tournait a T_RUN, laissait passer un reglage
+# que run_demo declarait ensuite instable a T_LIMIT. Le verdict de stabilite
+# DEPEND de l'horizon ; deux horizons, c'est deux criteres.
+# 0.60 s, et non 0.28 : le verdict de stabilite exige que la reponse forcee
+# soit ETABLIE, faute de quoi on mesure sa montee. A 0.28 s les cas vraiment
+# stables et vraiment instables ne se separent pas (sigma 0.19 contre -0.07) ;
+# a 0.60 s ils sont separes de deux decades (|sigma| < 0.02 contre > 2.6).
+# Le cout est 2.1 fois celui d'avant. C'est le prix d'un verdict fiable.
+T_RUN = 0.60
+T_LIMIT = 0.60
 
 # Convention de signe des efforts de coupe. L'article de Du et al. se contredit :
 #   * son Eq. (13) s'ecrit  M q" + C q' + (K + a4 DtD) q(t) - a4 DtD q(t-tau)
@@ -192,6 +284,31 @@ T_LIMIT = 0.28      # recherche de limite de stabilite par bissection
 FORCE_SIGN = +1.0
 
 
+def _growth_rate(y, t, nblock=12):
+    """Taux de croissance exponentiel sigma [1/s] sur la fenetre d'analyse.
+
+    On decoupe la fenetre en blocs, on prend la RMS de chaque bloc, et on ajuste
+    au moindre carre log(RMS) contre le temps : la pente EST sigma. Passer au
+    log rend la mesure insensible a l'amplitude, donc au niveau de la reponse
+    forcee -- c'est ce qui permet de voir un mode instable encore petit devant
+    elle. Voir SIGMA_MAX pour la calibration et le defaut F12 qu'il corrige.
+    """
+    y = np.asarray(y, float)
+    t = np.asarray(t, float)
+    n = len(y)
+    if n < 8:
+        return 0.0
+    nb = max(3, min(nblock, n//4))
+    idx = np.array_split(np.arange(n), nb)
+    tb = np.array([t[k].mean() for k in idx])
+    rb = np.array([np.sqrt(np.mean(y[k]**2)) for k in idx])
+    m = rb > 0
+    if int(m.sum()) < 3 or (tb[m].max() - tb[m].min()) <= 0:
+        return 0.0
+    A = np.vstack([tb[m], np.ones(int(m.sum()))]).T
+    return float(np.linalg.lstsq(A, np.log(rb[m]), rcond=None)[0][0])
+
+
 class SimBase:
     """Plaque + patch + capteur + coupe. Le correcteur est fourni a l'appel.
 
@@ -210,24 +327,43 @@ class SimBase:
         incertitude. Construire la plaque nominale (gain_H = 1) pour SYNTHETISER
         le correcteur, puis une plaque perturbee pour le SIMULER, donne un vrai
         essai de robustesse a l'erreur de gain actionneur.
+    coupling : 'ident' (defaut) prend la repartition modale de H_Pe identifiee
+        sur la Fig. 12(b) de l'article (constante H_IDENT) ; 'fem' garde celle
+        des elements finis, qui ne reproduit aucun des creux mesures. Dans les
+        deux cas la NORME de H_Pe est la meme, seule sa repartition change.
     """
 
     def __init__(self, verbose=False, patch=None, zeta=None, gain_H=1.0,
-                 force_sign=None):
+                 force_sign=None, coupling=None):
         patch = PATCH if patch is None else patch
         zeta = ZETA_MODES if zeta is None else zeta
+        coupling = COUPLING if coupling is None else coupling
+        if coupling not in ('ident', 'fem'):
+            raise ValueError("coupling doit valoir 'ident' ou 'fem'")
         p = PlateModel(PLATE_L, PLATE_H, PLATE_T, RHO, YOUNG, POISSON,
                        N1=MESH_N1, N2=MESH_N2, n_modes=N_MODES,
                        zeta_modes=zeta, verbose=False)
         p.precompute_Dp(zp_pos=PLATE_H - 0.15e-3, n_pos=2001)
         p.set_observation(*SENSOR_XZ)
         p.add_piezo_patch(patch['x1'], patch['x2'], patch['z1'], patch['z2'],
-                          patch['d31'], patch['thickness'], patch['E'], patch['nu'])
+                          patch['d31'], patch['thickness'], patch['E'], patch['nu'],
+                          G_adh=patch.get('G_adh'), t_adh=patch.get('t_adh'))
+        if coupling == 'ident':
+            if p.n_modes > len(H_IDENT):
+                raise ValueError(
+                    f"H_IDENT n'est identifie que sur {len(H_IDENT)} modes "
+                    f"(les cinq de la Fig. 12) ; construire une base a "
+                    f"{p.n_modes} modes impose coupling='fem'")
+            # Troncature : sur un modele reduit a n < 5 modes, on garde les n
+            # premiers residus identifies. C'est la meme troncature que celle
+            # deja subie par les frequences et les amortissements.
+            p.set_identified_coupling(H_IDENT[:p.n_modes])
         if gain_H != 1.0:
             p.H_Pe_modal = np.asarray(p.H_Pe_modal, float)*gain_H
         p.calibrate_frequencies(F_MEASURED)
         self.plate = p
         self.patch_cfg = patch
+        self.coupling = coupling
         self.gain_H = gain_H
         self.force_sign = FORCE_SIGN if force_sign is None else float(force_sign)
         self.k1c, self.k2c = cutting_coefficients(KN, MU_C, HELIX, RAKE)
@@ -310,8 +446,17 @@ class SimBase:
         n2 = max(1, len(y2)//2)
         growth = (np.sqrt(np.mean(y2[n2:]**2))
                   / max(np.sqrt(np.mean(y2[:n2]**2)), 1e-18))
-        stable = (not diverged) and growth <= GROWTH_MAX
-        out = dict(stable=bool(stable), diverged=bool(diverged),
+        # sigma se mesure sur la DERNIERE MOITIE du releve : la reponse forcee
+        # d'une plaque a zeta = 0.17 % met ~0.3 s a s'etablir, et tant qu'elle
+        # monte encore une droite ajustee sur log(RMS) lit cette montee comme
+        # une croissance. Sur la premiere moitie sigma vaut ~1 /s meme pour une
+        # coupe parfaitement stable ; sur la seconde il tombe a |sigma| < 0.02.
+        yv = r['y'][:i+1]
+        tv = r['t'][:i+1]
+        h = len(yv)//2
+        sigma = _growth_rate(yv[h:], tv[h:])
+        stable = (not diverged) and sigma <= SIGMA_MAX
+        out = dict(stable=bool(stable), diverged=bool(diverged), sigma=sigma,
                    rms_um=float(np.sqrt(np.mean(y2**2))*1e6),
                    peak_um=float(np.abs(r['y'][:i+1]).max()*1e6),
                    rms_u=float(np.sqrt(np.mean(r['u'][i0:i+1]**2))),
@@ -353,7 +498,22 @@ class SimBase:
     # -- limite de stabilite par bissection ---------------------------------
     def stability_limit(self, make_ctrl, rpm=4900, lo=0.02e-3, hi=1.5e-3,
                         T=T_LIMIT, tol=2e-5):
-        """Plus grande profondeur de passe stable. make_ctrl=None -> boucle ouverte."""
+        """Plus grande profondeur de passe stable. make_ctrl=None -> boucle ouverte.
+
+        RESOLUTION -- a lire avant de comparer deux valeurs. La bissection
+        s'arrete quand hi - lo <= tol et rend 0.5*(lo+hi) : la valeur rendue vit
+        donc sur une GRILLE de pas tol/2, et deux correcteurs dont les limites
+        vraies different de moins de tol/2 rendent EXACTEMENT le meme nombre.
+        Avec les reglages employes par run_demo (lo = 0.02 mm, hi = 4.0 mm,
+        tol = 2e-6 m) le pas vaut 0.00194 mm.
+
+        Consequence pratique : les valeurs publiees a quatre decimales n'ont de
+        sens qu'a +/- 0.001 mm pres, et un ecart inferieur a 0.002 mm entre deux
+        colonnes N'EST PAS un ecart. Cela a deja produit une affirmation fausse
+        dans ce depot -- deux correcteurs affichant tous deux 0.3241 alors que
+        leurs limites valent 0.32479 et 0.32436 mm, et qu'aucune des deux n'est
+        0.3241. Pour departager, resserrer tol.
+        """
         def ok(ap):
             tau = 60.0/(N_TEETH*rpm)
             dt = tau/STEPS_PER_TOOTH
@@ -421,10 +581,14 @@ class SimBase:
 # ============================================================================
 # VERIFICATION DU MODELE
 # ============================================================================
-def check_model(verbose=True):
+def check_model(verbose=True, sim=None):
     """Refait les controles de validation. Leve AssertionError si un ecart
-    depasse la tolerance. A lancer une fois au debut d'une session."""
-    sim = SimBase()
+    depasse la tolerance. A lancer une fois au debut d'une session.
+
+    sim : base a controler. Par defaut SimBase(), c.-a-d. la base nominale ;
+        passer SimBase(coupling='fem') montre ce que le controle 4 attrape."""
+    if sim is None:
+        sim = SimBase()
     ok = True
 
     f = sim.freqs
@@ -498,14 +662,47 @@ def check_model(verbose=True):
     assert 1.0 < C_exact/C_beam < 3.0, \
         "souplesse statique hors des bornes physiques d'une plaque encastree"
 
+    # Repartition modale du couplage. Les checks 2 et 3 ne portent que sur
+    # D_obs (leurs residus valent D_i^2) : ils passeraient tels quels avec un
+    # H_Pe entierement faux, ce qui a longtemps ete le cas. Ce test-ci ferme
+    # cette porte. Les zeros de la fonction de transfert tension -> capteur
+    # sont une signature de SIGNE, insensible a toute mise a l'echelle de H_Pe
+    # -- donc au niveau non valide de la section 1.
+    r_c = np.asarray(sim.plate.H_Pe_modal).ravel()*np.asarray(sim.plate.D_obs)
+    s2 = np.asarray(sim.plate.omega_n).ravel()**2
+    P = sum(r_c[i]*np.poly(np.delete(s2, i)) for i in range(len(r_c)))
+    zr = np.roots(P)
+    zr = zr[np.abs(zr.imag) <= 1e-6*max(np.abs(zr.real).max(), 1e-30)].real
+    zc = np.sort(np.sqrt(zr[zr > 0]))/(2*np.pi)
+    NOTCH_MEAS = np.array([787.5, 1493.4, 2912.8, 3608.9])   # Fig. 12(b)
+    if verbose:
+        print("4. creux de la Fig. 12(b) (tension -> capteur) : "
+              "repartition modale de H_Pe")
+        print(f"   mesures : {np.round(NOTCH_MEAS, 0)}")
+        print(f"   modele  : {np.round(zc, 0)}")
+    if len(zc) != len(NOTCH_MEAS):
+        ok = False
+        if verbose:
+            print(f"   ATTENTION : {len(zc)} creux calcules contre "
+                  f"{len(NOTCH_MEAS)} mesures — la repartition modale de H_Pe "
+                  f"est fausse (coupling='fem' ?)")
+    else:
+        e = np.abs(zc - NOTCH_MEAS)/NOTCH_MEAS*100
+        if verbose:
+            print(f"   ecarts  : {np.round(e, 2)} %  (max {e.max():.2f} %)")
+        if e.max() > 3.0:
+            ok = False
+            if verbose:
+                print("   ATTENTION : creux mal reproduits")
+
     lim = sim.stability_limit(None, rpm=4900)
     if verbose:
-        print(f"4. limite de stabilite en boucle ouverte a 4900 tr/min : "
-              f"{lim*1e3:.4f} mm  (reference de cette base : 0.0605 mm)")
+        print(f"5. limite de stabilite en boucle ouverte a 4900 tr/min : "
+              f"{lim*1e3:.4f} mm  (reference de cette base : 0.0489 mm)")
         print("   cette valeur depend de l'horizon T et de la fenetre de mesure ;")
         print("   c'est la reference de CETTE base, a ne pas comparer a une valeur")
         print("   obtenue avec d'autres reglages d'evaluation.")
-    assert abs(lim*1e3 - 0.0605) < 0.008, "limite libre hors tolerance"
+    assert abs(lim*1e3 - 0.0489) < 0.008, "limite libre hors tolerance"
 
     if verbose:
         print("\nbase valide." if ok else "\nbase utilisable, voir avertissements.")

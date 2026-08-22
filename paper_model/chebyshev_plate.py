@@ -179,7 +179,8 @@ class ChebyshevPlate:
            l'Eq. (14) du papier ecrite par le theoreme de la divergence —
            avec le moment par volt m_pz = -eta E_Pe d31 (b_P + h_Pa)/(2(1-nu_Pe)).
            Le coefficient C_P0 de l'Eq. (15) est aussi calcule et stocke
-           (self.CP0) a titre de reference papier.
+           (self.CP0) a titre de reference papier, avec les deux signes moins
+           de l'equation imprimee.
         """
         eta, Gam = (1.0, np.inf) if G_adh is None else \
             self.shear_lag_efficiency(0.5 * (x2 - x1), 0.5 * (z2 - z1),
@@ -190,22 +191,22 @@ class ChebyshevPlate:
         # C_P0, Eq. (15) du papier — VALEUR DE REFERENCE, non utilisee par le
         # couplage (H_Pe est construit a partir de m_pz plus bas).
         #
-        # ECART ASSUME PAR RAPPORT A L'EQUATION IMPRIMEE : le signe devant P_M.
-        # Telle qu'elle est ecrite, l'Eq. (15) est numeriquement pathologique
-        # avec les donnees des Tableaux 1-2 : P_M = 0.932580 alors que le pole
-        # du denominateur est en P_M = 0.985185, soit 5.6 % plus loin
-        # seulement ; le denominateur vaut 0.071017 et la sensibilite
-        # d ln C_P0 / d ln P_M atteint +18.7. Elle donne alors
-        # -C_P0 d31/hPa = -1.2171 N/V, soit 34.5 fois le modele classique du
-        # moment equivalent — un moment de 1.2 N par volt pour une pastille
-        # PZT de 0.7 mm avec d31 = 175 pm/V est physiquement impossible.
-        # Avec le signe ci-dessous (equivalent a lire le denominateur comme
-        # 1+nu_P + (1+nu_Pe)|P_M|) la quasi-annulation disparait et l'on
-        # obtient -C_P0 d31/hPa = -0.033387 N/V, a 5.8 % du moment equivalent
-        # avec collage reel (et +19 % avec collage parfait). C'est la lecture
-        # numeriquement saine, mais c'est une lecture : l'equation imprimee est
-        # tres probablement mal transcrite dans le papier.
-        # (verification/15_piezo_coupling_eq14_15.py chiffre tout ceci.)
+        # LES DEUX SIGNES MOINS SONT CEUX DE L'ARTICLE. Ce commentaire a
+        # longtemps dit le contraire : il presentait le signe devant P_M comme
+        # un « ecart assume par rapport a l'equation imprimee » et concluait
+        # que l'Eq. (15) etait « tres probablement mal transcrite dans le
+        # papier ». C'etait faux, et l'erreur venait d'ici : la couche texte du
+        # PDF rend le glyphe moins par une espace, la transcription de
+        # verification/15_piezo_coupling_eq14_15.py l'avait donc perdu, et la
+        # lecture P_M > 0 qui en resultait etait effectivement pathologique
+        # (denominateur a 5.6 % d'un pole, sensibilite +18.7, 1.2 N par volt
+        # pour une pastille PZT de 0.7 mm). La page est rendue en image dans
+        # verification/figures/eq15_imprimee.png : les deux signes s'y lisent.
+        #
+        # Le code n'a jamais bouge et n'avait pas a bouger : l'Eq. (15) telle
+        # qu'imprimee donne -C_P0 d31/hPa = -0.033387 N/V, soit exactement ce
+        # que calcule la ligne ci-dessous, et 5.8 % du moment equivalent
+        # classique avec collage reel. Seule la description etait fausse.
         PM = -(EPe / self.E) * ((1 - self.nu**2) / (1 - nuPe**2)) \
             * (3 * hPa * self.bp * (self.bp + hPa)) \
             / (0.5 * self.bp**3 + 4 * hPa**3 + 3 * self.bp * hPa**2)

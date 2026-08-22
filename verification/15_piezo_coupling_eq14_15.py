@@ -13,15 +13,29 @@ Ce que dit le papier (texte brut, Eqs. 14-15) :
                                    - int_{x~1}^{x~2} D_Pz(x~, z~1) dx~ ] } U_Pj
   avec D_Px = dD_P/dx~, D_Pz = dD_P/dz~ (coordonnees NON DIMENSIONNELLES).
 
-  C_P0 = (1/6) * (1+nu_Pe)/(1-nu_P) * E_P b_P^2 * P_M / (1 + nu_P - (1+nu_Pe) P_M)
-  P_M  = (E_Pe/E_P) * (1-nu_P^2)/(1-nu_Pe^2)
+  C_P0 = -(1/6) * (1+nu_Pe)/(1-nu_P) * E_P b_P^2 * P_M / (1 + nu_P - (1+nu_Pe) P_M)
+  P_M  = -(E_Pe/E_P) * (1-nu_P^2)/(1-nu_Pe^2)
          * 3 h_Pa b_P (b_P + h_Pa) / (0.5 b_P^3 + 4 h_Pa^3 + 3 b_P h_Pa^2)
 
+  LES DEUX SIGNES MOINS SONT IMPRIMES DANS L'ARTICLE. Une premiere version de
+  ce script les avait perdus a la transcription — la couche texte du PDF rend
+  le glyphe moins par une espace — et evaluait donc P_M positif. Cette lecture
+  place le denominateur a 5.6 % d'un pole et donne un moment de 1.2 N par volt,
+  ce qui est absurde ; d'ou une conclusion, ecrite ici puis reprise dans
+  chebyshev_plate.py et MODELE_PAPIER.md, selon laquelle l'Eq. (15) serait mal
+  transcrite dans l'article. Elle ne l'est pas : c'est la transcription faite
+  ICI qui l'etait. La page est rendue en image dans
+  verification/figures/eq15_imprimee.png — les deux signes s'y lisent.
+  Le depot, lui, a toujours implante les deux signes ; ses NOMBRES n'ont jamais
+  bouge, seule la description qu'on en donnait etait fausse.
+
 Contenu de ce script :
-  1. evaluation LITTERALE de l'Eq. (15) avec Tableau 1 + Tableau 2, valeurs
-     intermediaires (P_M, denominateur) et finale, plus le moment par volt
-     -C_P0 d31/h_Pa [N/V] ; sensibilite du resultat (le denominateur est une
-     quasi-annulation) ;
+  1. evaluation de l'Eq. (15) TELLE QU'IMPRIMEE (les deux signes moins) avec
+     Tableau 1 + Tableau 2, valeurs intermediaires (P_M, denominateur) et
+     finale, plus le moment par volt -C_P0 d31/h_Pa [N/V] ;
+  1b. la lecture SANS le signe moins de P_M, conservee parce qu'elle a ete
+     publiee dans ce depot : elle montre pourquoi elle etait intenable
+     (quasi-annulation du denominateur, sensibilite +18.7, 1.2 N/V) ;
   2. comparaison au modele classique du moment equivalent utilise par le depot
      m_piezo = -eta E_Pe d31 (b_P + h_Pa) / (2 (1-nu_Pe)), avec eta = 1 et avec
      le rendement de collage par cisaillement decale (Crawley & de Luis) ;
@@ -70,15 +84,15 @@ G_ADH, T_ADH = 1.0e9, 30e-6                # colle (defaut du depot)
 
 
 def PM_paper(EPe=E_PE, EP=E_P, nuP=NU_P, nuPe=NU_PE, bP=B_P, hPa=H_PA):
-    """P_M de l'Eq. (15), litteralement comme imprime."""
-    return ((EPe / EP) * ((1 - nuP**2) / (1 - nuPe**2))
-            * (3 * hPa * bP * (bP + hPa))
-            / (0.5 * bP**3 + 4 * hPa**3 + 3 * bP * hPa**2))
+    """P_M de l'Eq. (15), telle qu'imprimee — SIGNE MOINS COMPRIS."""
+    return -((EPe / EP) * ((1 - nuP**2) / (1 - nuPe**2))
+             * (3 * hPa * bP * (bP + hPa))
+             / (0.5 * bP**3 + 4 * hPa**3 + 3 * bP * hPa**2))
 
 
 def CP0_from_PM(PM, EP=E_P, nuP=NU_P, nuPe=NU_PE, bP=B_P):
-    """C_P0 de l'Eq. (15) pour un P_M donne (signe de P_M laisse libre)."""
-    return ((1.0 / 6.0) * ((1 + nuPe) / (1 - nuP)) * EP * bP**2
+    """C_P0 de l'Eq. (15) pour un P_M donne, signe moins global compris."""
+    return (-(1.0 / 6.0) * ((1 + nuPe) / (1 - nuP)) * EP * bP**2
             * PM / (1 + nuP - (1 + nuPe) * PM))
 
 
@@ -95,57 +109,56 @@ print('patch  : 60 x 20 mm  h_Pa=%.1f mm  E_Pe=%.0f GPa  nu_Pe=%.2f  '
       'd31=%.0f pm/V' % (1e3 * H_PA, 1e-9 * E_PE, NU_PE, 1e12 * D31))
 
 # --------------------------------------------------------------------------
-# 1. Eq. (15) litterale
+# 1. Eq. (15) telle qu'imprimee, puis la lecture fautive
 # --------------------------------------------------------------------------
-sep('1. Eq. (15) evaluee LITTERALEMENT (Tableau 1 + Tableau 2)')
+sep('1. Eq. (15) TELLE QU IMPRIMEE (Tableau 1 + Tableau 2)')
 
 fac_E = E_PE / E_P
 fac_nu = (1 - NU_P**2) / (1 - NU_PE**2)
 num_geo = 3 * H_PA * B_P * (B_P + H_PA)
 den_geo = 0.5 * B_P**3 + 4 * H_PA**3 + 3 * B_P * H_PA**2
 fac_geo = num_geo / den_geo
-PM_lit = PM_paper()
-den_lit = 1 + NU_P - (1 + NU_PE) * PM_lit
-CP0_lit = CP0_from_PM(PM_lit)
-mom_lit = -CP0_lit * D31 / H_PA
+PM_pap = PM_paper()
+den_pap = 1 + NU_P - (1 + NU_PE) * PM_pap
+CP0_pap = CP0_from_PM(PM_pap)
+mom_pap = -CP0_pap * D31 / H_PA
 
 print('  E_Pe/E_P                                  = %.6f  [-]' % fac_E)
 print('  (1-nu_P^2)/(1-nu_Pe^2)                    = %.6f  [-]' % fac_nu)
 print('  3 h_Pa b_P (b_P+h_Pa)                     = %.6e  [m^3]' % num_geo)
 print('  0.5 b_P^3 + 4 h_Pa^3 + 3 b_P h_Pa^2       = %.6e  [m^3]' % den_geo)
-print('  rapport geometrique                       = %.6f  [-]' % fac_geo)
-print('  P_M (Eq. 15, litteral)                    = %.6f  [-]' % PM_lit)
-print('  1 + nu_P                                  = %.6f' % (1 + NU_P))
-print('  (1 + nu_Pe) P_M                           = %.6f' % ((1 + NU_PE) * PM_lit))
-print('  denominateur 1+nu_P-(1+nu_Pe)P_M          = %.6f  <-- QUASI-ANNULATION'
-      % den_lit)
-print('  C_P0 (Eq. 15, litteral)                   = %.6e  [N]  (= Pa*m^2)' % CP0_lit)
-print('  moment par volt  -C_P0 d31 / h_Pa         = %+.6f  [N/V]' % mom_lit)
+print('  P_M (Eq. 15, signe moins imprime)         = %+.6f  [-]' % PM_pap)
+print('  denominateur 1+nu_P-(1+nu_Pe)P_M          = %+.6f  (pas de '
+      'quasi-annulation)' % den_pap)
+print('  C_P0 (Eq. 15 imprimee)                    = %+.6e  [N]  (= Pa*m^2)'
+      % CP0_pap)
+print('  moment par volt  -C_P0 d31 / h_Pa         = %+.6f  [N/V]' % mom_pap)
+print('  valeur implantee dans chebyshev_plate.py  = -0.033387 N/V   '
+      'ecart = %+.3f %%' % (100 * (mom_pap / -0.033387 - 1)))
 
-# sensibilite : d ln C_P0 / d ln P_M
-sens = 1.0 + (1 + NU_PE) * PM_lit / den_lit
+sep('1b. La lecture SANS le signe moins de P_M — pourquoi elle etait intenable')
+print('  Conservee parce qu elle a ete publiee ici : la couche texte du PDF')
+print('  rend le glyphe moins par une espace, et cette version-la du script')
+print('  avait donc evalue P_M positif, puis conclu que l article etait mal')
+print('  transcrit. Voir verification/figures/eq15_imprimee.png.\n')
+PM_sans = -PM_pap
+den_sans = 1 + NU_P - (1 + NU_PE) * PM_sans
+CP0_sans = CP0_from_PM(PM_sans)
+mom_sans = -CP0_sans * D31 / H_PA
+sens = 1.0 + (1 + NU_PE) * PM_sans / den_sans
 PM_pole = (1 + NU_P) / (1 + NU_PE)
+print('  P_M (signe moins perdu)                   = %+.6f' % PM_sans)
+print('  denominateur                              = %.6f  <-- QUASI-ANNULATION'
+      % den_sans)
+print('  C_P0                                      = %.6e  [N]' % CP0_sans)
+print('  moment par volt                           = %+.6f  [N/V]' % mom_sans)
 print('  d ln C_P0 / d ln P_M                      = %+.2f   '
       '(1 %% sur P_M -> %.0f %% sur C_P0)' % (sens, abs(sens)))
 print('  P_M annulant le denominateur (pole)       = %.6f  '
-      '(soit +%.2f %% au-dessus du P_M calcule)'
-      % (PM_pole, 100 * (PM_pole / PM_lit - 1)))
+      '(soit +%.2f %% au-dessus)' % (PM_pole, 100 * (PM_pole / PM_sans - 1)))
+print('  rapport  lecture fautive / equation imprimee = %.2f x'
+      % (CP0_sans / CP0_pap))
 
-sep('1b. Variante implantee dans le depot (chebyshev_plate.py:193-195)')
-PM_repo = -PM_paper()          # le depot met un signe - devant P_M
-den_repo = 1 + NU_P - (1 + NU_PE) * PM_repo
-CP0_repo = -CP0_from_PM(PM_repo)   # et un signe - global
-mom_repo = -CP0_repo * D31 / H_PA
-print('  P_M (depot, signe inverse)                = %+.6f' % PM_repo)
-print('  denominateur                              = %+.6f  (pas de '
-      'quasi-annulation)' % den_repo)
-print('  C_P0 (depot)                              = %+.6e  [N]' % CP0_repo)
-print('  moment par volt  -C_P0 d31 / h_Pa         = %+.6f  [N/V]' % mom_repo)
-print('  reference VERIFICATION.md sec. 3.4        = -0.033387 N/V   '
-      'ecart = %+.3f %%' % (100 * (mom_repo / -0.033387 - 1)))
-print('  rapport litteral / depot                  = %.2f x' % (CP0_lit / CP0_repo))
-
-# --------------------------------------------------------------------------
 # 2. Moment equivalent classique
 # --------------------------------------------------------------------------
 sep('2. Modele du moment equivalent utilise par le depot')
@@ -160,14 +173,18 @@ print('  Gamma (shear lag, G=%.0e Pa, t=%.0f um)   = %.1f  1/m'
 print('  eta (collage reel, defaut du depot)       = %.4f  [-]' % eta)
 print('  m_piezo avec eta                          = %+.6f  [N/V]' % m_bond)
 print('')
-print('  rapport m_piezo(eta=1)   / (-C_P0 d31/h_Pa) litteral = %.4f'
-      % (m_eta1 / mom_lit))
-print('  rapport m_piezo(eta)     / (-C_P0 d31/h_Pa) litteral = %.4f'
-      % (m_bond / mom_lit))
+print('  rapport m_piezo(eta=1)   / Eq.(15) imprimee          = %.4f'
+      % (m_eta1 / mom_pap))
+print('  rapport m_piezo(eta)     / Eq.(15) imprimee          = %.4f'
+      % (m_bond / mom_pap))
+print('  rapport m_piezo(eta=1)   / lecture sans le moins     = %.4f'
+      % (m_eta1 / mom_sans))
+print('  rapport m_piezo(eta)     / lecture sans le moins     = %.4f'
+      % (m_bond / mom_sans))
 print('  rapport m_piezo(eta=1)   / (-C_P0 d31/h_Pa) depot    = %.4f'
-      % (m_eta1 / mom_repo))
+      % (m_eta1 / mom_pap))
 print('  rapport m_piezo(eta)     / (-C_P0 d31/h_Pa) depot    = %.4f'
-      % (m_bond / mom_repo))
+      % (m_bond / mom_pap))
 
 # --------------------------------------------------------------------------
 # 3. Identite de la divergence, verifiee numeriquement sur la base reelle
@@ -373,10 +390,10 @@ print('')
 print('  controle : H_Pe recalcule ici vs plate.H_Pe_modal du depot —')
 print('  ecart relatif max = %.2e (droit), %.2e (gauche)' % (d_r, d_l))
 print('  effet du choix de coefficient sur H_Pe (facteur multiplicatif) :')
-print('    Eq.(15) litterale / m_piezo(eta collage) = %.2f x'
-      % (mom_lit / m_bond))
-print('    Eq.(15) variante depot / m_piezo(eta)    = %.4f x'
-      % (mom_repo / m_bond))
+print('    Eq.(15) imprimee / m_piezo(eta collage)  = %.4f x'
+      % (mom_pap / m_bond))
+print('    lecture sans le moins / m_piezo(eta)     = %.2f x'
+      % (mom_sans / m_bond))
 
 # --------------------------------------------------------------------------
 # Figure
@@ -416,7 +433,7 @@ a.grid(alpha=0.3, axis='y')
 a = ax[1, 0]
 labels = ['Eq.(15)\nliteral', 'Eq.(15)\nrepo variant',
           'equiv. moment\n$\\eta=1$', 'equiv. moment\nbonded $\\eta$=%.3f' % eta]
-vals = [abs(mom_lit), abs(mom_repo), abs(m_eta1), abs(m_bond)]
+vals = [abs(mom_sans), abs(mom_pap), abs(m_eta1), abs(m_bond)]
 cols = ['#a03030', '#c89040', '#4878a8', '#3a7a4a']
 b = a.bar(range(4), vals, 0.62, color=cols)
 a.set_yscale('log')

@@ -45,7 +45,18 @@ def _fit(D, plate):
     cinq ponderations mu SEULES, puis stockerait a cote deux gains que rien
     n'a regles. L'erreur ne leve rien et ne se voit dans aucun tableau : la
     structure porterait le nom du correcteur du papier en n'en evaluant que
-    la moitie."""
+    la moitie.
+
+    OBJECTIF=conjoint bascule vers `objective_joint.evaluate_joint`, ou J n'est
+    plus a_p,lim mais min(a_p,lim, a_p,qual, a_p,val) — la profondeur
+    reellement atteignable. Le basculement se fait ICI, dans le meme
+    programme, avec les memes bornes, les memes graines et le meme PSO :
+    l'unique difference entre les deux campagnes doit etre l'objectif, sans
+    quoi la comparaison ne dit rien. Un script parallele aurait diverge."""
+    if os.environ.get('OBJECTIF') == 'conjoint':
+        from objective_joint import evaluate_joint
+        return lambda u: evaluate_joint(plate, D.build(u),
+                                        pd=D.delay_gains(u))
     return lambda u: evaluate(plate, D.build(u), pd=D.delay_gains(u))
 
 

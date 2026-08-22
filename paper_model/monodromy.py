@@ -84,7 +84,17 @@ def apply_period(maps, Z, m):
 
 
 def _explicit(maps, m, nx):
-    """Monodromie assemblee — reference exacte, reservee aux petites tailles."""
+    """Monodromie assemblee — reference exacte, pour les tests.
+
+    Ce chemin a longtemps servi de RACCOURCI automatique sous dim <= 64. Le
+    raccourci a ete retire : il ne se declenchait jamais dans le depot (dim
+    vaut au moins 250 des que la plaque a cinq modes), mais il se declenchait
+    dans `tests/`, ou m = 4 et nx = 6 donnent dim = 30. Le test cense verifier
+    qu'Arnoldi rend le multiplicateur dominant EXACT comparait donc en fait
+    cet assemblage-ci a l'assemblage ecrit dans le test — deux fois la meme
+    idee, jamais ARPACK. Un seuil qui fait changer de moteur selon la taille
+    du probleme ne rend pas seulement le resultat discontinu : il choisit,
+    sans le dire, quel moteur les tests exercent."""
     dim = (m + 1) * nx
     Phi = np.eye(dim)
     for P0, C_lo, C_hi in maps:
@@ -99,7 +109,7 @@ def _explicit(maps, m, nx):
     return Phi
 
 
-def dominant(maps, m, nx, k=4, seed=0, tol=1e-9):
+def dominant(maps, m, nx, k=4, seed=0, tol=0.0):
     """Les k multiplicateurs de Floquet dominants, AVEC leur phase.
 
     Rend un tableau complexe, ou [inf] si l'application diverge
@@ -110,12 +120,6 @@ def dominant(maps, m, nx, k=4, seed=0, tol=1e-9):
         if not (np.all(np.isfinite(P0)) and np.all(np.isfinite(C_lo))
                 and np.all(np.isfinite(C_hi))):
             return np.array([np.inf])
-    # En dessous de cette taille l'assemblage explicite coute moins qu'ARPACK
-    # et rend le spectre COMPLET ; c'est aussi le seul regime ou la contrainte
-    # k < dim - 1 d'ARPACK devient genante.
-    if dim <= 64:
-        w = np.linalg.eigvals(_explicit(maps, m, nx))
-        return w[np.argsort(-np.abs(w))][:k]
     k = int(min(k, dim - 2))
     rng = np.random.default_rng(seed)
     v0 = rng.standard_normal(dim)
@@ -136,7 +140,7 @@ def dominant(maps, m, nx, k=4, seed=0, tol=1e-9):
     return w[np.argsort(-np.abs(w))]
 
 
-def spectral_radius(maps, m, nx, seed=0, k=4, tol=1e-9):
+def spectral_radius(maps, m, nx, seed=0, k=4, tol=0.0):
     """Rayon spectral de la monodromie."""
     w = dominant(maps, m, nx, k=k, seed=seed, tol=tol)
     if w.size == 0:

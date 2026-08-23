@@ -63,6 +63,27 @@ I, Z0 = np.eye(N), np.zeros((N, N))
 KAP = (M + 1.0) / (M - 1.0)
 C1 = 2.0 / (M + 1.0)
 
+# ---------------------------------------------------------------------------
+# POURQUOI LA MOYENNE ET NON LA SOMME — un defaut de formulation, attrape par
+# le garde-fou du script.
+# ---------------------------------------------------------------------------
+# Premiere version : etat augmente zeta = [x ; S] avec S = SOMME des m derniers
+# etats, et P >= I sur toute la matrice 2N x 2N. Resultat : N = 1 ECHOUAIT a
+# beta = 0 (+1.3e+02) la ou N = 0 certifiait (-6.0e-03). Impossible en theorie,
+# puisque l'inegalite de Wirtinger est strictement plus fine que Jensen : la
+# LMI de N = 1 doit etre PLUS FACILE, jamais plus dure.
+#
+# La faute etait dans la normalisation, pas dans l'inegalite. Exiger P >= I sur
+# TOUT zeta impose la definie-positivite dans la direction S — ce que le
+# theoreme de Krasovskii ne demande pas, S etant une fonctionnelle de
+# l'historique et non un etat independant — et S, somme de m etats, est d'ordre
+# m fois x : la contrainte pesait donc environ m^2 fois trop lourd dans ce bloc.
+#
+# On prend donc la MOYENNE Sbar = S / m, du meme ordre que x, ce qui rend
+# P >= I comparable entre les deux ordres. La recurrence devient
+# Sbar_k = Sbar_{k-1} + (x_k - x_{k-m}) / m, et
+# Om1 = (1 - c1) x_k + x_{k-m} - c1 m Sbar_{k-1}.
+
 
 def blocs(ordre):
     n = 4 if ordre else 3
@@ -71,7 +92,8 @@ def blocs(ordre):
         E1 = col('I', '0', '0', '0'); Exm = col('0', 'I', '0', '0')
         Ex1 = col('0', '0', 'I', '0'); Es = col('0', '0', '0', 'I')
         return (n, E1, Exm, Ex1, np.vstack([E1, Es]),
-                col('I', '-I', '0', '0'), (1.0-C1)*E1 + Exm - C1*Es)
+                col('I', '-I', '0', '0'),
+                (1.0 - C1) * E1 + Exm - C1 * M * Es)   # Es porte Sbar
     E1 = col('I', '0', '0'); Exm = col('0', 'I', '0'); Ex1 = col('0', '0', 'I')
     return n, E1, Exm, Ex1, E1, col('I', '-I', '0'), None
 
@@ -91,7 +113,7 @@ def certifie(beta, ordre):
         b, c = beta * b, beta * c
         if ordre:
             G = np.vstack([np.hstack([a, b, c, Z0]),
-                           np.hstack([I, -I, Z0, I])])
+                           np.hstack([I/M, -I/M, Z0, I])])   # Sbar
             ETA = np.hstack([a - I, b, c, Z0])
         else:
             G = np.hstack([a, b, c])
@@ -138,14 +160,14 @@ def certifie(beta, ordre):
     return pire < 0, pire
 
 
-GRILLE = [0.0, 0.40, 0.60, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00,
+GRILLE = [0.0, 0.40, 0.70, 0.75, 0.80, 0.85, 0.90, 1.00, 1.10, 1.25]
           1.10, 1.25, 1.50]
 print(f'  vpa, {NM} modes, a_p = {AP*1e3:.2f} mm, {R0:.0f} tr/min, '
       f'systeme {MODE}, m = {M}, N = {N}', flush=True)
 print(f'  reference phase 10-D (Jensen, bissection) : beta_cert = 0.7955\n',
       flush=True)
 seuil = {}
-for ordre, nom in ((0, 'JENSEN  N=0'), (1, 'WIRTINGER N=1')):
+for ordre, nom in ((1, 'WIRTINGER N=1'),):
     print(f'===== {nom} =====', flush=True)
     print(f'{"beta":>6s} {"verdict":>24s} {"t [s]":>8s}', flush=True)
     dernier = None

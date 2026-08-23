@@ -24,13 +24,23 @@ profondeur atteignable. S'il est faible, le cadre propose ne vaut pas sa
 complexite et il vaut mieux le savoir maintenant.
 
 Les deux reponses sortent de la MEME table : on evalue l'objectif conjoint sur
-une grille de parametres x une grille de vitesses, puis
+un ensemble de parametres x une grille de vitesses, puis
 
     ORDONNANCE(v) = max_u  J(u, v)
     FIXE          = max_u  min_v J(u, v)
 
-Aucun optimiseur, donc aucun doute sur la convergence : la grille est
-exhaustive, et les deux protocoles voient EXACTEMENT les memes points.
+Aucun optimiseur, donc aucun doute sur la convergence, et les deux protocoles
+voient EXACTEMENT les memes points.
+
+ECHANTILLONNAGE. En dimension 2 (dvf) la grille est exhaustive. Au-dela elle ne
+l'est plus — 15^5 fait 760 000 points pour le LQG — mais la vertu du montage
+n'est pas l'exhaustivite, c'est que les DEUX protocoles partagent les memes
+candidats. On passe donc a un hypercube latin a graine fixe, qui la conserve
+entierement. Et la question posee n'est pas « ou est l'optimum global » mais
+« l'optimum SE DEPLACE-T-IL avec la vitesse » : pour cela un echantillon
+couvrant suffit, puisque c'est le meme echantillon a toutes les vitesses.
+
+KIND=lqg NS=900 pour la version a cinq parametres.
 """
 import os
 import sys
@@ -48,7 +58,9 @@ from pso import Design                                               # noqa
 from objective_joint import evaluate_joint                           # noqa
 
 SPEEDS = (3000, 3600, 4200, 4800, 5400, 6000, 6600, 7000)
+KIND = os.environ.get('KIND', 'dvf')
 NG = int(os.environ.get('NG', 15))          # grille NG x NG sur [0,1]^2
+NS = int(os.environ.get('NS', 0))           # >0 : hypercube latin de NS points
 
 
 def main():
@@ -56,12 +68,18 @@ def main():
     _, _, _, _, sign_loop = plant_vectors(plate, C.N_MODES_DESIGN)
     grille = []
     for sv in (+1.0, -1.0):                 # les deux conventions de signe
-        D = Design('dvf', plate, sign_loop, sign_variant=sv)
-        for a in np.linspace(0.0, 1.0, NG):
-            for b in np.linspace(0.0, 1.0, NG):
-                grille.append((D, np.array([a, b])))
-    print(f'  dvf, grille {NG}x{NG} x 2 conventions = {len(grille)} '
-          f'correcteurs, {len(SPEEDS)} vitesses', flush=True)
+        D = Design(KIND, plate, sign_loop, sign_variant=sv)
+        if NS > 0:
+            from scipy.stats import qmc
+            u = qmc.LatinHypercube(d=D.n, seed=12345).random(NS)
+            grille += [(D, u[k]) for k in range(NS)]
+        else:
+            for a in np.linspace(0.0, 1.0, NG):
+                for b in np.linspace(0.0, 1.0, NG):
+                    grille.append((D, np.array([a, b])))
+    quoi = (f'hypercube latin {NS}' if NS > 0 else f'grille {NG}x{NG}')
+    print(f'  {KIND} ({grille[0][0].n} parametres), {quoi} x 2 conventions = '
+          f'{len(grille)} correcteurs, {len(SPEEDS)} vitesses', flush=True)
     J = np.full((len(grille), len(SPEEDS)), -np.inf)
     t0 = time.time()
     for i, (D, u) in enumerate(grille):
@@ -72,8 +90,9 @@ def main():
         if (i + 1) % 50 == 0:
             print(f'    {i+1}/{len(grille)}  ({time.time()-t0:.0f} s)',
                   flush=True)
-    np.savez_compressed(os.path.join(ROOT, 'results', 'ordonnancement.npz'),
-                        J=J, speeds=np.array(SPEEDS), ng=NG)
+    np.savez_compressed(os.path.join(ROOT, 'results',
+                                 f'ordonnancement_{KIND}.npz'),
+                    J=J, speeds=np.array(SPEEDS), ng=NG, ns=NS)
 
     ok = J > 0.0                            # J <= 0 : crible non franchi
     ordo = np.where(ok.any(axis=0), J.max(axis=0), np.nan)
@@ -82,6 +101,10 @@ def main():
     fixe_pire = float(pire_par_u[i_fixe])
     fixe = J[i_fixe]
 
+    am = [int(np.argmax(J[:, j])) for j in range(len(SPEEDS))]
+    print(f'\n  optimum par vitesse : indices {am}')
+    print(f'  se deplace-t-il ? {"OUI" if len(set(am)) > 1 else "NON"} '
+          f'({len(set(am))} candidat(s) distinct(s))')
     print(f'\n{"rpm":>5s} {"ORDONNANCE":>11s} {"FIXE":>8s} {"gain":>8s}')
     for j, v in enumerate(SPEEDS):
         g = (ordo[j] / fixe[j]) if fixe[j] > 0 else np.nan

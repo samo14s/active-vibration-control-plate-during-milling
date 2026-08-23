@@ -59,6 +59,14 @@ from objective_joint import evaluate_joint                           # noqa
 
 SPEEDS = (3000, 3600, 4200, 4800, 5400, 6000, 6600, 7000)
 KIND = os.environ.get('KIND', 'dvf')
+# AXE=position : meme montage, mais l'axe balaye n'est plus la vitesse de
+# broche — c'est la POSITION de l'outil le long de la plaque. C'est l'autre
+# moitie de la variation invoquee par le cadre propose (« spatiale ET
+# temporelle ») et elle n'avait jamais ete testee. La question est identique :
+# un correcteur PAR POSITION bat-il un correcteur unique choisi pour le pire
+# des positions ?
+AXE = os.environ.get('AXE', 'vitesse')
+POSITIONS = (0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0)
 NG = int(os.environ.get('NG', 15))          # grille NG x NG sur [0,1]^2
 NS = int(os.environ.get('NS', 0))           # >0 : hypercube latin de NS points
 
@@ -79,19 +87,24 @@ def main():
                     grille.append((D, np.array([a, b])))
     quoi = (f'hypercube latin {NS}' if NS > 0 else f'grille {NG}x{NG}')
     print(f'  {KIND} ({grille[0][0].n} parametres), {quoi} x 2 conventions = '
-          f'{len(grille)} correcteurs, {len(SPEEDS)} vitesses', flush=True)
-    J = np.full((len(grille), len(SPEEDS)), -np.inf)
+          f'{len(grille)} correcteurs, axe = {AXE}', flush=True)
+    axe = POSITIONS if AXE == 'position' else SPEEDS
+    J = np.full((len(grille), len(axe)), -np.inf)
     t0 = time.time()
     for i, (D, u) in enumerate(grille):
         ss = D.build(u)
-        for j, v in enumerate(SPEEDS):
-            J[i, j] = evaluate_joint(plate, ss, pd=D.delay_gains(u),
-                                     rpm=float(v))
+        for j, v in enumerate(axe):
+            if AXE == 'position':
+                J[i, j] = evaluate_joint(plate, ss, pd=D.delay_gains(u),
+                                         positions=(float(v),))
+            else:
+                J[i, j] = evaluate_joint(plate, ss, pd=D.delay_gains(u),
+                                         rpm=float(v))
         if (i + 1) % 50 == 0:
             print(f'    {i+1}/{len(grille)}  ({time.time()-t0:.0f} s)',
                   flush=True)
     np.savez_compressed(os.path.join(ROOT, 'results',
-                                 f'ordonnancement_{KIND}.npz'),
+                                 f'ordonnancement_{KIND}_{AXE}.npz'),
                     J=J, speeds=np.array(SPEEDS), ng=NG, ns=NS)
 
     ok = J > 0.0                            # J <= 0 : crible non franchi
@@ -101,17 +114,19 @@ def main():
     fixe_pire = float(pire_par_u[i_fixe])
     fixe = J[i_fixe]
 
-    am = [int(np.argmax(J[:, j])) for j in range(len(SPEEDS))]
+    am = [int(np.argmax(J[:, j])) for j in range(len(axe))]
     print(f'\n  optimum par vitesse : indices {am}')
     print(f'  se deplace-t-il ? {"OUI" if len(set(am)) > 1 else "NON"} '
           f'({len(set(am))} candidat(s) distinct(s))')
-    print(f'\n{"rpm":>5s} {"ORDONNANCE":>11s} {"FIXE":>8s} {"gain":>8s}')
-    for j, v in enumerate(SPEEDS):
+    lbl = 'x/lp' if AXE == 'position' else 'rpm'
+    print(f'\n{lbl:>6s} {"ORDONNANCE":>11s} {"FIXE":>8s} {"gain":>8s}')
+    for j, v in enumerate(axe):
         g = (ordo[j] / fixe[j]) if fixe[j] > 0 else np.nan
-        print(f'{v:5d} {ordo[j]:11.3f} {fixe[j]:8.3f} {g:7.2f}x')
-    print(f'\n  FIXE   : pire des vitesses = {fixe_pire:.3f} mm '
+        vv = f'{v:6.3f}' if AXE == 'position' else f'{int(v):6d}'
+        print(f'{vv} {ordo[j]:11.3f} {fixe[j]:8.3f} {g:7.2f}x')
+    print(f'\n  FIXE   : pire du balayage = {fixe_pire:.3f} mm '
           f'(moyenne {np.mean(fixe):.3f})')
-    print(f'  ORDONN : pire des vitesses = {np.nanmin(ordo):.3f} mm '
+    print(f'  ORDONN : pire du balayage = {np.nanmin(ordo):.3f} mm '
           f'(moyenne {np.nanmean(ordo):.3f})')
     if fixe_pire > 0:
         print(f'\n  VALEUR DE L ORDONNANCEMENT : '

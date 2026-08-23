@@ -161,7 +161,6 @@ def certifie(beta, ordre):
 
 
 GRILLE = [0.0, 0.40, 0.70, 0.75, 0.80, 0.85, 0.90, 1.00, 1.10, 1.25]
-          1.10, 1.25, 1.50]
 print(f'  vpa, {NM} modes, a_p = {AP*1e3:.2f} mm, {R0:.0f} tr/min, '
       f'systeme {MODE}, m = {M}, N = {N}', flush=True)
 print(f'  reference phase 10-D (Jensen, bissection) : beta_cert = 0.7955\n',
